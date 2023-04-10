@@ -27,8 +27,16 @@ message("VTK_VERSION: " ${VTK_VERSION})
 
 
 add_executable(xpm_project
+  
+
   "mywidg.ui"
   "main.cpp"
+
+
+  #"threedvis.hpp"  
+  
+  
+  
 )
 
 

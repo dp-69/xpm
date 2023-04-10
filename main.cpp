@@ -1,3 +1,7 @@
+// import threedvisMODULE;
+
+#include "threedvis.hpp"
+
 #include <vtkActor.h>
 #include <vtkCamera.h>
 #include <vtkCylinderSource.h>
@@ -9,14 +13,19 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderer.h>
 
+#include <QWidget>
+
 #include <array>
 
-#include <ui_mywidg.h>
+#include "ui_mywidg.h"
 
 
 int main(int argc, char* argv[])
 {
+  // foo f;
+  // f.helloworld();
 
+  
   std::cout << "LUL";
   QApplication app(argc, argv);
   QWidget widget;
