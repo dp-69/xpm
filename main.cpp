@@ -15,6 +15,7 @@
 
 #include <QWidget>
 
+
 #include <array>
 
 #include "ui_mywidg.h"
@@ -26,12 +27,19 @@ int main(int argc, char* argv[])
   // f.helloworld();
 
   
+  
+  
   std::cout << "LUL";
   QApplication app(argc, argv);
-  QWidget widget;
-  Ui::MainWindow ui;
-  ui.setupUi(&widget);
+  // QWidget widget;
+  xpm::XPMWidget widget;
+  widget.Init();
+  
+  // Ui::MainWindow ui;
+  // ui.setupUi(&widget);
 
+  widget.resize(1400, 1000);
+  
   widget.show();
   return app.exec();
 

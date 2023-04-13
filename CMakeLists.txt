@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
+set(CMAKE_AUTOMOC ON)
+
 project(xpm_project)
 
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGLWidgets)
 qt_standard_project_setup()
 
 message("Qt6_DIR: " ${Qt6_DIR})
@@ -20,6 +22,7 @@ find_package(VTK REQUIRED COMPONENTS
   RenderingFreeType
   RenderingGL2PSOpenGL2
   RenderingOpenGL2
+  GUISupportQt
 )
 
 message("VTK_DIR: " ${VTK_DIR})
@@ -27,23 +30,24 @@ message("VTK_VERSION: " ${VTK_VERSION})
 
 
 add_executable(xpm_project
-  
+  "threedvis.hpp"  
 
   "mywidg.ui"
   "main.cpp"
 
 
-  #"threedvis.hpp"  
+  
   
   
   
 )
 
+# target_include_directories(xpm_project PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_compile_features(xpm_project PUBLIC cxx_std_20)
 
 
-target_link_libraries(xpm_project PRIVATE Qt::Core Qt::Gui Qt::Widgets)
+target_link_libraries(xpm_project PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets)
 if(WIN32)
   add_custom_command(
     TARGET xpm_project POST_BUILD
