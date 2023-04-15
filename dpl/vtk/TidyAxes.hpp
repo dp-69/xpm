@@ -377,7 +377,7 @@ namespace dpl::vtk
 
           #ifdef __cpp_lib_format
             mapper->SetInput(
-              std::format("{:.0f}", (min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim]).c_str()
+              std::format("{:.2e}", (min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim]).c_str()
             );
           #else
             mapper->SetInput((boost::format("%.0f") %
@@ -407,7 +407,7 @@ namespace dpl::vtk
 
             #ifdef __cpp_lib_format
               mapper->SetInput(
-                std::format("{:.0f}", r[run_dim]/scale_[run_dim]).c_str()
+                std::format("{:.2e}", r[run_dim]/scale_[run_dim]).c_str()
               );
             #else
               mapper->SetInput((boost::format("%.0f") % (r[run_dim]/scale_[run_dim])).str().c_str());

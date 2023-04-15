@@ -15,13 +15,13 @@ message("Qt6_VERSION: " ${Qt6_VERSION})
 find_package(VTK REQUIRED COMPONENTS 
   CommonColor
   CommonCore
-  FiltersSources
-  InteractionStyle
-  RenderingContextOpenGL2
-  RenderingCore
-  RenderingFreeType
-  RenderingGL2PSOpenGL2
-  RenderingOpenGL2
+  #FiltersSources
+  #InteractionStyle
+  #RenderingContextOpenGL2
+  #RenderingCore
+  #RenderingFreeType
+  #RenderingGL2PSOpenGL2
+  #RenderingOpenGL2
   GUISupportQt
 )
 
@@ -29,22 +29,24 @@ message("VTK_DIR: " ${VTK_DIR})
 message("VTK_VERSION: " ${VTK_VERSION})
 
 
-add_executable(xpm_project
+add_executable(xpm_project WIN32
   "threedvis.hpp"  
 
   "mywidg.ui"
   "main.cpp"
-
-
-  
-  
   
   
 )
 
-# target_include_directories(xpm_project PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
+target_include_directories(xpm_project PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_compile_features(xpm_project PUBLIC cxx_std_20)
+
+
+add_subdirectory(dpl)
+target_link_libraries(xpm_project PRIVATE dpl)
+
+
+
 
 
 target_link_libraries(xpm_project PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets)
@@ -65,3 +67,8 @@ endif()
 
 target_link_libraries(xpm_project PRIVATE ${VTK_LIBRARIES})
 vtk_module_autoinit(TARGETS xpm_project MODULES ${VTK_LIBRARIES})
+
+
+
+find_package(Boost REQUIRED COMPONENTS iostreams)
+target_link_libraries(xpm_project PRIVATE Boost::iostreams)
