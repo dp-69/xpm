@@ -7,7 +7,9 @@
 
 #include <concepts>
 #include <filesystem>
+// #include <fstream>
 #include <vector>
+#include <cstring>
 
 #include <stdint.h>
 
@@ -38,19 +40,46 @@ namespace xpm
         ++ptr;
     }
     
-    static void parse(char* &ptr, int& val) {
+    static void parse_text(char* &ptr, int& val) {
       val = strtol(ptr, &ptr, 10);
     }
     
-    static void parse(char* &ptr, long long& val) {
+    static void parse_text(char* &ptr, long long& val) {
       val = strtoll(ptr, &ptr, 10);
     }
 
-    static void parse(char* &ptr, double& val) {
+    static void parse_text(char* &ptr, double& val) {
       val = strtod(ptr, &ptr);
     }
 
-    void reset() {      
+    static void parse_text(char* &ptr, dpl::vector3d& val) {
+      parse_text(ptr, val.x());
+      parse_text(ptr, val.y());
+      parse_text(ptr, val.z());
+    }
+
+    static void parse_bin(char* &ptr, auto& val) {
+      std::memcpy(&val, ptr, sizeof val);
+      ptr += sizeof val;
+    }
+
+    // template <typename T>
+    // static void parse_bin(char* &ptr, std::vector<T>& vec, size_t count) {
+    //   vec.resize(count);
+    //   auto total_size = sizeof(T)*count;
+    //   std::memcpy(vec.data(), ptr, total_size);
+    //   ptr += total_size;
+    // }
+
+    template <typename T>
+    static void parse_bin(char* &ptr, T* ptr_out, size_t count) {
+      auto total_size = sizeof(T)*count;
+      std::memcpy(ptr_out, ptr, total_size);
+      ptr += total_size;
+    }
+    
+
+    void reset() {      // TODO: Not good function
       throats.resize(throat_count_);
       lengthThroat.resize(throat_count_);
       _length0.resize(throat_count_, 0);
@@ -83,11 +112,11 @@ namespace xpm
       return idx - 1;
     }
 
-    pnm_idx node_count_; // includes inlet and outlet nodes
-    pnm_idx throat_count_;
+    pnm_idx node_count_ = 2; // includes inlet and outlet nodes
+    pnm_idx throat_count_ = 0;
     
   public:
-    dpl::vector3d physical_size;
+    dpl::vector3d physical_size{1};
     
     std::vector<std::pair<pnm_idx, pnm_idx>> throats;        
 
@@ -122,25 +151,52 @@ namespace xpm
       return r_ins_[throat_count_ + i];
     }
 
+    void read_from_binary_file(const std::filesystem::path& network_path) {
+      boost::iostreams::mapped_file_source file(network_path.string());
+      auto* ptr = const_cast<char*>(file.data());
+
+
+      
+      // parse(ptr, k);
+      
+      parse_bin(ptr, node_count_);
+      parse_bin(ptr, throat_count_);
+      
+      node_pos.resize(node_count_);
+      r_ins_.resize(node_count_ + throat_count_);
+      parse_bin(ptr, node_pos.data(), node_count_);
+      parse_bin(ptr, r_ins_.data() + throat_count_, node_count_);
+      
+      for (pnm_idx i = 0; i < throat_count_; ++i) {
+        dpl::vector2i pair;
+        parse_bin(ptr, pair);
+        throats.emplace_back(pair.x(), pair.y());
+      }
+
+      parse_bin(ptr, r_ins_.data(), throat_count_);
+
+      for (pnm_idx i = 0; i < throat_count_; ++i)
+        r_ins_[i] /= 2;
+
+      node_count_ += 2;
+
+
+      reset();
+    }
+    
     void read_from_text_file(const std::filesystem::path& network_path) {
       auto network_path_str = network_path.string();
       
       {
         boost::iostreams::mapped_file_source node1_file(network_path_str + "_node1.dat");
         auto* node1_ptr = const_cast<char*>(node1_file.data());
-        parse(node1_ptr, node_count_);  
-        
-
-        parse(node1_ptr, physical_size.x());
-        parse(node1_ptr, physical_size.y());
-        parse(node1_ptr, physical_size.z());
+        parse_text(node1_ptr, node_count_);  
+        parse_text(node1_ptr, physical_size);
 
         for (pnm_idx i = 0; i < node_count_; ++i) {
           dpl::vector3d p;
           skip_word(node1_ptr);
-          parse(node1_ptr, p.x());
-          parse(node1_ptr, p.y());
-          parse(node1_ptr, p.z());
+          parse_text(node1_ptr, p);
           skip_line(node1_ptr);
           node_pos.push_back(p);
         }
@@ -152,7 +208,7 @@ namespace xpm
       {
         boost::iostreams::mapped_file_source throat1_file(network_path_str + "_link1.dat");
         auto* throat1_ptr = const_cast<char*>(throat1_file.data());
-        parse(throat1_ptr, throat_count_);   
+        parse_text(throat1_ptr, throat_count_);   
 
         reset();
 
@@ -161,14 +217,14 @@ namespace xpm
         for (pnm_idx i = 0; i < throat_count_; ++i) {       
           skip_word(throat1_ptr);
 
-          parse(throat1_ptr, param_int);
+          parse_text(throat1_ptr, param_int);
           throats[i].first = parse_statoil_text_idx(param_int); 
 
-          parse(throat1_ptr, param_int);
+          parse_text(throat1_ptr, param_int);
           throats[i].second = parse_statoil_text_idx(param_int);        
 
-          parse(throat1_ptr, r_ins_[i]);
-          parse(throat1_ptr, shapeFactor[i]);
+          parse_text(throat1_ptr, r_ins_[i]);
+          parse_text(throat1_ptr, shapeFactor[i]);
 
           skip_line(throat1_ptr);
         }        
@@ -183,10 +239,10 @@ namespace xpm
             skip_word(throat2_ptr);  
           });
                     
-          parse(throat2_ptr, _length0[i]);
-          parse(throat2_ptr, _length1[i]);
-          parse(throat2_ptr, lengthThroat[i]);
-          parse(throat2_ptr, volume[i]);
+          parse_text(throat2_ptr, _length0[i]);
+          parse_text(throat2_ptr, _length1[i]);
+          parse_text(throat2_ptr, lengthThroat[i]);
+          parse_text(throat2_ptr, volume[i]);
           skip_line(throat2_ptr);
         }  
       }
@@ -201,9 +257,9 @@ namespace xpm
 
         for (pnm_idx i = 0; i < node_count_ - 2; i++) {          
           skip_word(node2_ptr);
-          parse(node2_ptr, volume_node[i]);
-          parse(node2_ptr, r_ins_node[i]);
-          parse(node2_ptr, shape_factor_node[i]);
+          parse_text(node2_ptr, volume_node[i]);
+          parse_text(node2_ptr, r_ins_node[i]);
+          parse_text(node2_ptr, shape_factor_node[i]);
           skip_line(node2_ptr);
         }        
       }        

@@ -27,8 +27,13 @@
 #include <vtkDoubleArray.h>
 #include <vtkFloatArray.h>
 #include <vtkLookupTable.h>
+#include <vtkImageData.h>
+#include <vtkDataSetMapper.h>
+#include <vtkTransform.h>
 
 #include <algorithm>
+
+#undef LoadImage
 
 namespace xpm
 {
@@ -49,7 +54,13 @@ namespace xpm
     vtkRenderWindowInteractor* interactor_;
     QVTKWidgetRef* qvtk_widget_;
     dpl::vtk::TidyAxes tidy_axes_;
-    vtkNew<vtkLookupTable> lut_;
+    vtkNew<vtkLookupTable> lut_continuous_;
+    vtkNew<vtkLookupTable> lut_discrete_;
+    vtkNew<vtkImageData> image_data_;
+
+    vtkNew<vtkActor> image_actor_;
+
+    pore_network_info pni_;
 
 
     static dpl::vector3d angles_for_j_norm(const dpl::vector3d& dir) {
@@ -62,36 +73,26 @@ namespace xpm
       };
     }
 
+    using v3i = dpl::vector3i;
     using v3d = dpl::vector3d;
     
   public:
-
-    void Init() {
-
-
-      pore_network_info pni;
-      pni.read_from_text_file(
-        // R"(E:\hwu\research126\d\modelling\networks\3D_network\10x10x10\10x10x10)"
-        R"(E:\hwu\research126\d\modelling\networks\SS-1000\XNet)"
-        // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
+    void LoadPoreNetwork() {
+      pni_.read_from_binary_file(
+        R"(C:\dev\.temp\_MY_TEST_FILE.bin)"
+        // R"(C:\dev\.temp\_MY_TEST_FILE_2.bin)"
       );
+      pni_.physical_size = {252};
       
+      // pni_.read_from_text_file(
+      //   // R"(E:\hwu\research126\d\modelling\networks\3D_network\10x10x10\10x10x10)"
+      //   R"(C:\dev\.temp\images\SS-1000\XNet)"
+      //   // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
+      // );
 
-
-      dpl::vtk::PopulateLutRedWhiteBlue(lut_);
-      auto [min, max] = std::minmax_element(pni.r_ins_.begin(), pni.r_ins_.begin() + pni.throat_count() + pni.inner_node_count());
-      lut_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-      
-      
-      qvtk_widget_ = new QVTKWidgetRef;
-      qvtk_widget_->setRenderWindow(render_window_);
-      render_window_->AddRenderer(renderer_);
-      interactor_ = render_window_->GetInteractor();
-
-      renderer_->SetBackground(v3d{1});
-
-      this->setCentralWidget(qvtk_widget_);
-
+      dpl::vtk::PopulateLutRedWhiteBlue(lut_continuous_);
+      auto [min, max] = std::minmax_element(pni_.r_ins_.begin(), pni_.r_ins_.begin() + pni_.throat_count() + pni_.inner_node_count());
+      lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
 
       {
         vtkNew<vtkPolyData> polydata;
@@ -105,10 +106,7 @@ namespace xpm
         vtkNew<vtkGlyph3DMapper> throat_glyphs;
         throat_glyphs->SetSourceConnection(cylinder->GetOutputPort());
         throat_glyphs->SetInputData(polydata);
-        
-
-
-       
+                       
         
 
         vtkNew<vtkFloatArray> orient_array;
@@ -137,26 +135,26 @@ namespace xpm
         color_array->SetNumberOfComponents(1);
         polydata->GetPointData()->SetScalars(color_array);
 
-        throat_glyphs->SetLookupTable(lut_);
+        throat_glyphs->SetLookupTable(lut_continuous_);
         throat_glyphs->SetColorModeToMapScalars();
         throat_glyphs->UseLookupTableScalarRangeOn();
         throat_glyphs->SetScalarModeToUsePointData();
 
         vtkNew<vtkPoints> points;
 
-        for (pnm_idx i = 0, count = pni.throat_count(); i < count; ++i)
-          if (auto [n0, n1] = pni.throats[i];
-            pni.inner_node(n0) && pni.inner_node(n1)) {
-            auto& n0_pos = pni.node_pos[n0];
+        for (pnm_idx i = 0, count = pni_.throat_count(); i < count; ++i)
+          if (auto [n0, n1] = pni_.throats[i];
+            pni_.inner_node(n0) && pni_.inner_node(n1)) {
+            auto& n0_pos = pni_.node_pos[n0];
 
             points->InsertNextPoint(n0_pos);
-            orient_array->InsertNextTuple(angles_for_j_norm(pni.node_pos[n1] - n0_pos));
+            orient_array->InsertNextTuple(angles_for_j_norm(pni_.node_pos[n1] - n0_pos));
 
             scale_array->InsertNextTuple(v3d{
-              pni.r_ins_[i], (pni.node_pos[n1] - n0_pos).length(), pni.r_ins_[i]
+              pni_.r_ins_[i], (pni_.node_pos[n1] - n0_pos).length(), pni_.r_ins_[i]
             });
 
-            color_array->InsertNextTuple1(pni.r_ins_[i]);
+            color_array->InsertNextTuple1(pni_.r_ins_[i]);
           }
 
         polydata->SetPoints(points);
@@ -166,7 +164,7 @@ namespace xpm
         
 
         actor->GetProperty()->SetSpecularColor(1, 1, 1);
-        actor->GetProperty()->SetSpecular(1);
+        actor->GetProperty()->SetSpecular(0);
         actor->GetProperty()->SetSpecularPower(75);
         actor->GetProperty()->SetAmbient(0.15);
         actor->GetProperty()->SetDiffuse(0.9);
@@ -210,17 +208,17 @@ namespace xpm
         color_array->SetNumberOfComponents(1);
         polydata->GetPointData()->SetScalars(color_array);
 
-        node_glyphs->SetLookupTable(lut_);
+        node_glyphs->SetLookupTable(lut_continuous_);
         node_glyphs->SetColorModeToMapScalars();
         node_glyphs->UseLookupTableScalarRangeOn();
         node_glyphs->SetScalarModeToUsePointData();
         
         vtkNew<vtkPoints> points;
         
-        for (pnm_idx i = 0, count = pni.inner_node_count(); i < count; ++i) {
-          points->InsertNextPoint(pni.node_pos[i]);
-          scale_array->InsertNextTuple1(pni.node_r_ins(i));
-          color_array->InsertNextTuple1(pni.node_r_ins(i));
+        for (pnm_idx i = 0, count = pni_.inner_node_count(); i < count; ++i) {
+          points->InsertNextPoint(pni_.node_pos[i]);
+          scale_array->InsertNextTuple1(pni_.node_r_ins(i));
+          color_array->InsertNextTuple1(pni_.node_r_ins(i));
         }
         
         polydata->SetPoints(points);
@@ -229,7 +227,7 @@ namespace xpm
         actor->SetMapper(node_glyphs);
 
         actor->GetProperty()->SetSpecularColor(1, 1, 1);
-        actor->GetProperty()->SetSpecular(1);
+        actor->GetProperty()->SetSpecular(0);
         actor->GetProperty()->SetSpecularPower(75);
         actor->GetProperty()->SetAmbient(0.15);
         actor->GetProperty()->SetDiffuse(0.9);
@@ -238,6 +236,127 @@ namespace xpm
         actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
         renderer_->AddActor(actor);
       }
+    }
+
+    void LoadImage() {
+      lut_discrete_->IndexedLookupOn();
+      
+      lut_discrete_->SetNumberOfTableValues(2);
+      
+
+      lut_discrete_->SetTableValue(0, 0.6, 0.6, 0.6);
+      lut_discrete_->SetAnnotation(vtkVariant(0), "PORE");
+
+      lut_discrete_->SetTableValue(1, 0, 0, 0);
+      lut_discrete_->SetAnnotation(vtkVariant(1), "THROAT");
+      // lut_discrete_->SetTableRange(0, 1);
+      
+      lut_discrete_->Modified();
+
+
+      // Open the stream
+      std::ifstream is(
+        // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
+        R"(C:\dev\.temp\images\Bmps252_6um.raw)"
+      );
+      // Determine the file length
+      is.seekg(0, std::ios_base::end);
+      size_t size = is.tellg();
+      is.seekg(0, std::ios_base::beg);
+      std::vector<unsigned char> v(size);
+      is.read(reinterpret_cast<char*>(v.data()), size);
+      // Close the file
+      is.close();
+
+
+      vtkNew<vtkUnsignedCharArray> vtkarr;
+      for (size_t i = 0; i < size; ++i)
+        vtkarr->InsertNextTuple1(/*i<(size/2) ? 1 : 0*/v[i] == 0 ? 0 : 1);
+      vtkarr->SetName("indicator");
+      
+      auto dim_side = std::round(std::cbrt(size));
+      image_data_->SetDimensions(v3i{dim_side + 1});
+      image_data_->SetSpacing(v3d{1.0/dim_side});
+      image_data_->SetOrigin(v3d{0});
+
+      image_data_->GetCellData()->SetScalars(vtkarr);
+      
+
+      
+
+      vtkNew<vtkDataSetMapper> mapper;
+
+      mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, vtkarr->GetName());
+      mapper->SetColorModeToMapScalars();
+      // mapper->ColorByArrayComponent(vtkarr->GetName(), 0);
+      // mapper->colo
+      
+      mapper->SetInputData(image_data_);
+      mapper->SetScalarModeToUseCellData();
+      // mapper->SetScalarModeToUseCellData();
+      mapper->UseLookupTableScalarRangeOn();
+      mapper->SetLookupTable(lut_discrete_);
+
+      // image_data_->Modified();
+      // mapper->Modified();
+      // mapper->Update();
+      
+
+      
+      
+      image_actor_->SetMapper(mapper);
+      image_actor_->GetProperty()->SetEdgeVisibility(false);
+      image_actor_->GetProperty()->SetEdgeColor(0, 0, 0);
+      
+      image_actor_->GetProperty()->SetAmbient(0.5);
+      image_actor_->GetProperty()->SetDiffuse(0.4);
+      image_actor_->GetProperty()->BackfaceCullingOn();
+      
+
+      renderer_->AddActor(image_actor_);
+    }
+
+    
+    void Init() {
+
+      
+
+      
+
+
+      
+      
+      
+
+
+      
+      
+      
+      qvtk_widget_ = new QVTKWidgetRef;
+      qvtk_widget_->setRenderWindow(render_window_);
+      render_window_->AddRenderer(renderer_);
+      interactor_ = render_window_->GetInteractor();
+
+      renderer_->SetBackground(v3d{1});
+
+      this->setCentralWidget(qvtk_widget_);
+
+
+
+
+      
+      LoadPoreNetwork();
+      
+      LoadImage();
+
+      // image_actor_->SetUserTransform()
+      vtkNew<vtkTransform> trans;
+      trans->PostMultiply();
+      trans->Scale(v3d{pni_.physical_size.x()});
+      trans->Translate(pni_.physical_size.x(), 0, 0);
+      image_actor_->SetUserTransform(trans);
+      
+      
 
       renderer_->ResetCamera();
       
