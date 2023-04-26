@@ -23,7 +23,7 @@ namespace xpm
   
   using pnm_idx = int64_t;
   
-  class pore_network_info
+  class pore_network_model
   {
     static void skip_until(char* &ptr, char val) {   
       while (*ptr != '\0' && *ptr++ != val) {}    
@@ -131,13 +131,46 @@ namespace xpm
     std::vector<double> _length0;
     std::vector<double> _length1;
 
+    enum class file_format
+    {
+      statoil,
+      binary_dp69
+    };
 
+    pore_network_model(const pore_network_model& other) = default;
+    pore_network_model(pore_network_model&& other) noexcept = default;
+    pore_network_model& operator=(const pore_network_model& other) = default;
+    pore_network_model& operator=(pore_network_model&& other) noexcept = default;
+
+    pore_network_model(const std::filesystem::path& p, file_format ff) {
+      if (ff == file_format::statoil)
+        read_from_text_file(p);
+      else if (ff == file_format::binary_dp69)
+        read_from_binary_file(p);
+    }
+
+
+    
+    
     auto inner_node_count() const {
       return node_count_ - 2;
     }
 
     auto throat_count() const {
       return throat_count_;
+    }
+
+    auto inner_count() const {
+      return inner_node_count() + throat_count();
+    }
+
+    void scale(double x) {
+      for (auto& p : node_pos)
+        p = p*x;
+
+      for (pnm_idx i = 0, count = inner_count(); i < count; ++i) {
+        r_ins_[i] *= x;
+      }
     }
     
     /**
@@ -175,8 +208,11 @@ namespace xpm
 
       parse_bin(ptr, r_ins_.data(), throat_count_);
 
-      for (pnm_idx i = 0; i < throat_count_; ++i)
-        r_ins_[i] /= 2;
+      for (auto& r : r_ins_)
+        r = r/2;
+
+      // for (pnm_idx i = 0; i < throat_count_ + node_count_; ++i)
+      //   r_ins_[i] /= 2;
 
       node_count_ += 2;
 
