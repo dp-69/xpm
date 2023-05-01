@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
+project(xpm_project)
+
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 set(CMAKE_AUTOMOC ON)
 
-project(xpm_project)
+
+
+
 
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGLWidgets)
@@ -29,13 +35,14 @@ message("VTK_DIR: " ${VTK_DIR})
 message("VTK_VERSION: " ${VTK_VERSION})
 
 
-add_executable(xpm_project WIN32
+add_executable(xpm_project # WIN32
   "threedvis.hpp"  
 
   "mywidg.ui"
   "main.cpp"
   
   
+ "functions.cpp"
 )
 
 target_include_directories(xpm_project PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")

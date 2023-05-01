@@ -1,13 +1,12 @@
 #pragma once
 
-#include "xpm/pore_network_model.hpp"
+#include "xpm/functions.h"
 
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
 
 // #include <QWidget>
 #include <QMainWindow>
-
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkCylinderSource.h>
 #include <vtkFieldData.h>
@@ -61,161 +60,17 @@ namespace xpm
 
     vtkNew<vtkActor> image_actor_;
 
-    // pore_network_model pnm_;
 
 
-    static dpl::vector3d angles_for_j_norm(const dpl::vector3d& dir) {
-      auto norm = dir.normalise();
-      
-      return {
-        asin(norm.z())/3.141592654*180.0, 
-        0.0f,                                                  
-        (atan2(-norm.x(), norm.y())/3.141592654*180.0)      
-      };
-    }
-
-    using v3i = dpl::vector3i;
-    using v3d = dpl::vector3d;
-
-    static auto CreateNodeActor(const pore_network_model& pnm, vtkLookupTable* lut) {
-      vtkNew<vtkPolyData> polydata;
-        
-      vtkNew<vtkSphereSource> cylinder;
-      cylinder->SetPhiResolution(10);
-      cylinder->SetThetaResolution(10);
-      cylinder->SetCenter(0, 0, 0);
-      cylinder->SetRadius(1);
-        
-      vtkNew<vtkGlyph3DMapper> node_glyphs;
-      node_glyphs->SetSourceConnection(cylinder->GetOutputPort());
-      node_glyphs->SetInputData(polydata);
-      node_glyphs->OrientOff();
-
-      vtkNew<vtkFloatArray> scale_array;
-      scale_array->SetName("scale");
-      scale_array->SetNumberOfComponents(1);
-
-      polydata->GetPointData()->AddArray(scale_array);
-      node_glyphs->SetScaleArray(scale_array->GetName());
-      node_glyphs->SetScaleModeToScaleByMagnitude();
-
-
-
-      vtkNew<vtkFloatArray> color_array;
-      color_array->SetName("color");
-      color_array->SetNumberOfComponents(1);
-      polydata->GetPointData()->SetScalars(color_array);
-
-      node_glyphs->SetLookupTable(lut);
-      node_glyphs->SetColorModeToMapScalars();
-      node_glyphs->UseLookupTableScalarRangeOn();
-      node_glyphs->SetScalarModeToUsePointData();
-        
-      vtkNew<vtkPoints> points;
-        
-      for (pnm_idx i = 0, count = pnm.inner_node_count(); i < count; ++i) {
-        points->InsertNextPoint(pnm.node_pos[i]);
-        scale_array->InsertNextTuple1(pnm.node_r_ins(i));
-        color_array->InsertNextTuple1(pnm.node_r_ins(i));
-      }
-        
-      polydata->SetPoints(points);
-        
-      auto actor = vtkSmartPointer<vtkActor>::New();
-      actor->SetMapper(node_glyphs);
-
-      actor->GetProperty()->SetSpecularColor(1, 1, 1);
-      actor->GetProperty()->SetSpecular(0);
-      actor->GetProperty()->SetSpecularPower(75);
-      actor->GetProperty()->SetAmbient(0.15);
-      actor->GetProperty()->SetDiffuse(0.9);
-        
-      vtkNew<vtkNamedColors> colors;
-      actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
-      return actor;
-    }
 
     
-    static auto CreateThroatActor(const pore_network_model& pnm, vtkLookupTable* lut) {
-      vtkNew<vtkPolyData> polydata;
-        
-      vtkNew<vtkCylinderSource> cylinder;
-      cylinder->SetResolution(20);
-      cylinder->SetCenter(0.0, 0.5, 0.0);
-      cylinder->SetRadius(1);
-      cylinder->SetHeight(1);
-        
-      vtkNew<vtkGlyph3DMapper> throat_glyphs;
-      throat_glyphs->SetSourceConnection(cylinder->GetOutputPort());
-      throat_glyphs->SetInputData(polydata);
-                       
-
-      vtkNew<vtkFloatArray> orient_array;
-      orient_array->SetName("orient");
-      orient_array->SetNumberOfComponents(3);
-
-      polydata->GetPointData()->AddArray(orient_array);
-      throat_glyphs->SetOrientationArray(orient_array->GetName());
-      throat_glyphs->SetOrientationModeToRotation();
-
-      vtkNew<vtkFloatArray> scale_array;
-      scale_array->SetName("scale");
-      scale_array->SetNumberOfComponents(3);
-
-      polydata->GetPointData()->AddArray(scale_array);
-      throat_glyphs->SetScaleArray(scale_array->GetName());
-      throat_glyphs->SetScaleModeToScaleByVectorComponents();
 
 
+    
+    
 
-        
-        
+    
 
-      vtkNew<vtkFloatArray> color_array;
-      color_array->SetName("color");
-      color_array->SetNumberOfComponents(1);
-      polydata->GetPointData()->SetScalars(color_array);
-
-      throat_glyphs->SetLookupTable(lut);
-      throat_glyphs->SetColorModeToMapScalars();
-      throat_glyphs->UseLookupTableScalarRangeOn();
-      throat_glyphs->SetScalarModeToUsePointData();
-
-      vtkNew<vtkPoints> points;
-
-      for (pnm_idx i = 0, count = pnm.throat_count(); i < count; ++i)
-        if (auto [n0, n1] = pnm.throats[i];
-          pnm.inner_node(n0) && pnm.inner_node(n1)) {
-          auto& n0_pos = pnm.node_pos[n0];
-
-          points->InsertNextPoint(n0_pos);
-          orient_array->InsertNextTuple(angles_for_j_norm(pnm.node_pos[n1] - n0_pos));
-
-          scale_array->InsertNextTuple(v3d{
-            pnm.r_ins_[i], (pnm.node_pos[n1] - n0_pos).length(), pnm.r_ins_[i]
-          });
-
-          color_array->InsertNextTuple1(pnm.r_ins_[i]);
-        }
-
-      polydata->SetPoints(points);
-        
-      auto actor = vtkSmartPointer<vtkActor>::New();
-      actor->SetMapper(throat_glyphs);
-        
-
-      actor->GetProperty()->SetSpecularColor(1, 1, 1);
-      actor->GetProperty()->SetSpecular(0);
-      actor->GetProperty()->SetSpecularPower(75);
-      actor->GetProperty()->SetAmbient(0.15);
-      actor->GetProperty()->SetDiffuse(0.9);
-
-        
-        
-      vtkNew<vtkNamedColors> colors;
-      actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
-      return actor;        
-    }
 
     static auto CreateNetworkAssembly(const pore_network_model& pnm, vtkLookupTable* lut) {
       auto net = vtkSmartPointer<vtkAssembly>::New();
@@ -305,14 +160,22 @@ namespace xpm
 
     
     void Init() {
-
-      
-
-      
-
-
-      
-      
+      // std::cout << "LUL1";
+      //
+      //
+      // pore_network_model pnm;
+      // auto velems = pnm.read_icl_velems(R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)");
+      // std::map<int, int> group;
+      // for (pnm_idx i = 0, count = velems.size(); i < count; ++i) {
+      //   ++group[velems[i]];
+      // }
+      //
+      //
+      //
+      //
+      //
+      //
+      // std::cout << "LUL";
       
 
 
@@ -343,69 +206,69 @@ namespace xpm
         // R"(E:\hwu\research126\d\modelling\networks\3D_network\10x10x10\10x10x10)"
         // R"(C:\dev\.temp\images\SS-1000\XNet)"
         // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
-        R"(C:\dev\pnextract\out\build\x64-Release\IMAGE1_INV\)"
+        R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
       
         , pore_network_model::file_format::statoil
       };
 
       
       
-
-      auto [min, max] = std::minmax_element(
-        icl_pnm_inv.r_ins_.begin(),
-        icl_pnm_inv.r_ins_.begin() + icl_pnm_inv.throat_count() + icl_pnm_inv.inner_node_count());
+      auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
       
-      lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*2.1);
+      lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
 
 
       
       renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
 
       
-      pore_network_model icl_pnm{
-        R"(C:\dev\pnextract\out\build\x64-Release\IMAGE1\)",
-        pore_network_model::file_format::statoil
-      };
+      // pore_network_model icl_pnm{
+      //   R"(C:\dev\pnextract\out\build\x64-Release\IMAGE1\)",
+      //   pore_network_model::file_format::statoil
+      // };
       
-      {
-        auto vtk_pnm = CreateNetworkAssembly(icl_pnm, lut_continuous_);
-        vtkNew<vtkTransform> trans;
-        trans->PostMultiply();
-        // trans->Scale(v3d{icl_pnm_inv.physical_size.x()});
-        trans->Translate(2*icl_pnm_inv.physical_size.x(), 0, 0);
-        vtk_pnm->SetUserTransform(trans);
-        renderer_->AddActor(vtk_pnm);
-      }
+      // {
+      //   auto vtk_pnm = CreateNetworkAssembly(icl_pnm, lut_continuous_);
+      //   vtkNew<vtkTransform> trans;
+      //   trans->PostMultiply();
+      //   // trans->Scale(v3d{icl_pnm_inv.physical_size.x()});
+      //   trans->Translate(2*icl_pnm_inv.physical_size.x(), 0, 0);
+      //   vtk_pnm->SetUserTransform(trans);
+      //   renderer_->AddActor(vtk_pnm);
+      // }
 
-      pore_network_model uow_pnm{
-        R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE.bin)",
-        pore_network_model::file_format::binary_dp69
-      };
-      uow_pnm.scale(icl_pnm_inv.physical_size.x()/252.0);
 
-      {
-        auto vtk_pnm = CreateNetworkAssembly(uow_pnm, lut_continuous_);
-        vtkNew<vtkTransform> trans;
-        trans->PostMultiply();
-        trans->Translate(0, -1.1*icl_pnm_inv.physical_size.y(), 0);
-        vtk_pnm->SetUserTransform(trans);
-        renderer_->AddActor(vtk_pnm);
-      }
 
-      pore_network_model uow_pnm_inv{
-        R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE_INV.bin)",
-        pore_network_model::file_format::binary_dp69
-      };
-      uow_pnm_inv.scale(icl_pnm_inv.physical_size.x()/252.0);
-      
-      {
-        auto vtk_pnm = CreateNetworkAssembly(uow_pnm_inv, lut_continuous_);
-        vtkNew<vtkTransform> trans;
-        trans->PostMultiply();
-        trans->Translate(2*icl_pnm_inv.physical_size.x(), -1.1*icl_pnm_inv.physical_size.y(), 0);
-        vtk_pnm->SetUserTransform(trans);
-        renderer_->AddActor(vtk_pnm);
-      }
+                
+                pore_network_model uow_pnm{
+                  R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE.bin)",
+                  pore_network_model::file_format::binary_dp69
+                };
+                uow_pnm.scale(icl_pnm_inv.physical_size.x()/252.0);
+                
+                {
+                  auto vtk_pnm = CreateNetworkAssembly(uow_pnm, lut_continuous_);
+                  vtkNew<vtkTransform> trans;
+                  trans->PostMultiply();
+                  trans->Translate(0, -1.1*icl_pnm_inv.physical_size.y(), 0);
+                  vtk_pnm->SetUserTransform(trans);
+                  renderer_->AddActor(vtk_pnm);
+                }
+                //
+                // pore_network_model uow_pnm_inv{
+                //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE_INV.bin)",
+                //   pore_network_model::file_format::binary_dp69
+                // };
+                // uow_pnm_inv.scale(icl_pnm_inv.physical_size.x()/252.0);
+                //
+                // {
+                //   auto vtk_pnm = CreateNetworkAssembly(uow_pnm_inv, lut_continuous_);
+                //   vtkNew<vtkTransform> trans;
+                //   trans->PostMultiply();
+                //   trans->Translate(2*icl_pnm_inv.physical_size.x(), -1.1*icl_pnm_inv.physical_size.y(), 0);
+                //   vtk_pnm->SetUserTransform(trans);
+                //   renderer_->AddActor(vtk_pnm);
+                // }
       
       
       LoadImage();
@@ -431,93 +294,3 @@ namespace xpm
     }
   };
 }
-
-
-
-
-
-// vtkNew<vtkPoints> points;
-        // points->InsertNextPoint(0, 0, 0.0);
-        // points->InsertNextPoint(3, -2, 0.0);
-        // points->InsertNextPoint(6, 2, -4);
-        
-        
-
-        // vtkNew<vtkCylinderSource> cylinder;
-        // cylinder->SetResolution(8);
-        //
-        //
-        // cylinder->SetCenter(0.0, 0.5, 0.0);
-        // cylinder->SetHeight(1);
-        //
-        // vtkNew<vtkGlyph3DMapper> glyph3DMapper;
-        // glyph3DMapper->SetSourceConnection(cylinder->GetOutputPort());
-        // glyph3DMapper->SetInputData(polydata);
-        //
-        //
-        //
-        // vtkNew<vtkFloatArray> orient_array;
-        // orient_array->SetName("orient");
-        // orient_array->SetNumberOfComponents(3);
-        //
-        //
-        //
-        // orient_array->InsertNextTuple(angles_for_j_norm({1, 0, 0}));
-        // orient_array->InsertNextTuple(angles_for_j_norm({0, 1, 0}));
-        // orient_array->InsertNextTuple(angles_for_j_norm({0, 0, -1}));
-        //
-        // polydata->GetPointData()->AddArray(orient_array);
-        // glyph3DMapper->SetOrientationArray(orient_array->GetName());
-        // glyph3DMapper->SetOrientationModeToRotation();
-        
-
-        // vtkNew<vtkFloatArray> scale_array;
-        // scale_array->SetName("scale");
-        // scale_array->SetNumberOfComponents(3);
-        // scale_array->InsertNextTuple(v3d{1, 1, 1});
-        // scale_array->InsertNextTuple(v3d{1, 3, 1});
-        // scale_array->InsertNextTuple(v3d{1, 2, 1});
-        //
-        // polydata->GetPointData()->AddArray(scale_array);
-        // glyph3DMapper->SetScaleArray(scale_array->GetName());
-        // glyph3DMapper->SetScaleModeToScaleByVectorComponents();
-
-
-
-
-
-
-// // Global module fragment where #includes can happen
-// module;
-// #include <iostream>
-//
-// // first thing after the Global module fragment must be a module command
-// export module fooMODULE;
-//
-// // char const* world() { return "hello world\n"; }
-//
-// export class foo {
-// public:
-//   foo();
-//   ~foo();
-//   void helloworld();
-// };
-//
-// foo::foo() = default;
-// foo::~foo() = default;
-// void foo::helloworld() { std::cout << "hello world\n"; }
-//
-// // export module threedvisMODULE;
-// //
-// // #include <QWidget>;
-// //
-// //
-// //
-// //
-// // namespace xpm
-// // {
-// //   export class FDWidget : public QWidget
-// //   {
-// //     
-// //   };
-// // }

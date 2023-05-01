@@ -29,6 +29,10 @@
 #include <memory>
 #include <vector>
 
+#ifdef __cpp_lib_ranges
+  #include <ranges>    
+#endif
+
 
 namespace dpl
 {
@@ -65,6 +69,8 @@ namespace dpl
   {
     using size_type = std::size_t;
 
+    size_type size_ = 0;
+    
     template <typename T>
     static void resize_(std::unique_ptr<T[]>& uptr, size_type size) {
       uptr = std::make_unique<T[]>(size);
@@ -93,13 +99,40 @@ namespace dpl
     explicit soa_impl_(Args...) {}
     
     void resize(const size_type count) {
+      size_ = count;
       this->apply([=](auto& attrib) { resize_(attrib, count); });
     }
 
     template <typename T>
     void assign(const size_type count, const T& v) {
+      size_ = count;
       this->apply([=](auto& attrib) { assign_(attrib, count, v); });
     }
+
+    template <typename Key, std::enable_if_t<!std::is_base_of_v<lookup_item_tag, Key>, int> = 0>
+    const auto* ptr(Key k) const {
+      static constexpr auto lookup = static_map_rec_<Args...>::find(k);
+      static_assert(lookup, "Type key is not available");
+      return lookup(this).get();
+    }
+
+    template <typename Key, std::enable_if_t<!std::is_base_of_v<lookup_item_tag, Key>, int> = 0>
+    auto* ptr(Key k) {
+      static constexpr auto lookup = static_map_rec_<Args...>::find(k);
+      static_assert(lookup, "Type key is not available");
+      return lookup(this).get();
+    }
+
+    #ifdef __cpp_lib_ranges
+    template <typename Key, std::enable_if_t<!std::is_base_of_v<lookup_item_tag, Key>, int> = 0>
+    auto range(Key k) const {
+      static constexpr auto lookup = static_map_rec_<Args...>::find(k);
+      static_assert(lookup, "Type key is not available");
+      auto* ptr = lookup(this).get();
+      return std::ranges::subrange{ptr, ptr + size_};
+    }    
+    #endif
+    
   };
 
 
@@ -114,4 +147,7 @@ namespace dpl
   
   template <typename... Args>
   class soa : public soa_impl_<type_map::unique_ptr_array, Args...> {};
+
+  // template <typename... Args>
+  // class soa_size : public soa_impl_<type_map::unique_ptr_array, Args...> {};
 }
