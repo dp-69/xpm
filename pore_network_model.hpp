@@ -29,6 +29,7 @@ namespace xpm
   using mapped_file_source = boost::iostreams::mapped_file_source;
   
   using pnm_idx = int64_t;
+  using pnm_3idx = dpl::vector_n<pnm_idx, 3>;
   
   class pore_network_model
   {
@@ -150,7 +151,14 @@ namespace xpm
   public:
     dpl::vector3d physical_size{1};
 
-    pnm_idx node_count_ = 0; // inner node count, disregards inlet and outlet, INLET_IDX = node_count_, OUTLET_IDX = node_count_ + 1
+    /**
+     * \brief
+     *    inner node count \n
+     *    disregards inlet and outlet \n
+     *    INLET_IDX = node_count_ \n
+     *    OUTLET_IDX = node_count_ + 1
+     */
+    pnm_idx node_count_ = 0;
     pnm_idx throat_count_ = 0;
 
 
@@ -350,13 +358,41 @@ namespace xpm
       }        
     }
 
-    auto read_icl_velems(const std::filesystem::path& network_path) const {
+    // auto read_icl_velems(const std::filesystem::path& network_path) const {
+    //   mapped_file_source file(network_path.string() + "_VElems.raw");
+    //   auto* ptr = const_cast<char*>(file.data());
+    //   auto size = file.size()/4;
+    //   std::vector<std::int32_t> map(size);
+    //   parse_bin(ptr, map.data(), size);
+    //   return map;
+    // }
+
+    auto read_icl_velems(const std::filesystem::path& network_path, const pnm_3idx& dim) const {
       mapped_file_source file(network_path.string() + "_VElems.raw");
-      auto* ptr = const_cast<char*>(file.data());
-      auto size = file.size()/4;
-      std::vector<std::int32_t> map(size);
-      parse_bin(ptr, map.data(), size);
-      return map;
+      const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
+
+      std::vector<std::int32_t> velems(dim.prod());
+
+      auto* velems_ptr = velems.data();
+
+      auto velems_dim = dim + 2;
+      dpl::vector_n<pnm_idx, 3> ijk;
+      
+      for (ijk.z() = 0; ijk.z() < dim.z(); ++ijk.z()) {
+        auto QQQQ = 2;
+
+        for (ijk.y() = 0; ijk.y() < dim.y(); ++ijk.y()) {
+          auto w = 2;
+
+          for (ijk.x() = 0; ijk.x() < dim.x(); ++ijk.x()) {
+
+
+            *velems_ptr++ = file_ptr[velems_dim.dot(ijk + 1)];
+          }
+        }
+      }
+
+      return velems;
     }
   };
 }
