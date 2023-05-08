@@ -36,9 +36,9 @@ namespace dpl::vtk
     auto curr = prev;
     
     while (++curr != entries.end()) {
-      double width = curr->first - prev->first;
-      for (auto i = prev->first; i < curr->first; ++i) {        
-        auto coef = (i - prev->first)/width;          
+      double width = curr->first - prev->first;               // NOLINT(clang-diagnostic-implicit-int-float-conversion, bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
+      for (auto i = prev->first; i < curr->first; ++i) {          
+        auto coef = (i - prev->first)/width;                  // NOLINT(clang-diagnostic-implicit-int-float-conversion, bugprone-narrowing-conversions)
         auto interp = lerp(prev->second, curr->second, coef);
         lut->SetTableValue(i, interp.x(), interp.y(), interp.z());
       }

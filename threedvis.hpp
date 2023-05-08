@@ -96,9 +96,9 @@ namespace xpm
 
       lut_pore_solid_->SetTableValue(1, 0, 0, 0);
       lut_pore_solid_->SetAnnotation(vtkVariant(1), "PORE");
-      // lut_discrete_->SetTableRange(0, 1);
       
-      lut_pore_solid_->Modified();
+      // lut_pore_solid_->SetTableRange(0, 230);
+      // lut_pore_solid_->Modified();
 
 
       vtkNew<vtkUnsignedCharArray> phase_array;
@@ -121,8 +121,12 @@ namespace xpm
         std::vector<unsigned char> v(size);
         is.read(reinterpret_cast<char*>(v.data()), size);
 
+
+        
         for (size_t i = 0; i < size; ++i)
-          phase_array->InsertNextTuple1(/*i<(size/2) ? 1 : 0*/v[i] == 0 ? 0 : 1);
+          phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 0 : 1);
+          // phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 230 : 99);
+          // phase_array->InsertNextTuple1(/*i<(size/2) ? 1 : 0*/v[i] == 0 ? 230 : 99);
         phase_array->SetName("phase");
         image_data_->GetCellData()->SetScalars(phase_array);
       }
@@ -136,23 +140,44 @@ namespace xpm
 
         std::map<int, int> group;
         for (pnm_idx i = 0, count = velems.size(); i < count; ++i) {
-          ++group[velems[i]];
+          auto val = velems[i];
+
+          ++group[val];
+
+          velem_array->InsertTypedComponent(i, 0, val);
         }    
         
-
-        int i = 0;
-        for (auto& x : velems) {
-          // x = ++i;
-          velem_array->InsertNextTuple1(x);
-        }
+        // int i = 0;
+        // for (auto& x : velems) {
+        //   // x = ++i;
+        //   // velem_array->InsertNextTuple1(x);
+        //   phase_array->InsertTypedComponent(i++, 0, x);
+        // }
         velem_array->SetName("velem");
         image_data_->GetCellData()->AddArray(velem_array);
         
 
         auto [min, max] = std::ranges::minmax_element(velems);
+        auto count = *max + 1;
 
-        dpl::vtk::PopulateLutRedWhiteBlue(lut_velem_);
-        lut_velem_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
+        
+        lut_velem_->IndexedLookupOn();
+        lut_velem_->SetNumberOfTableValues(count);
+        for (int32_t i = 0; i < count; ++i) {
+          auto coef = static_cast<double>(i*45%count)/count;
+
+          auto color = QColor::fromHsl(coef*255, 122, 122);
+          lut_velem_->SetTableValue(i, color.redF(), color.greenF(), color.blueF());  // NOLINT(clang-diagnostic-double-promotion)
+          lut_velem_->SetAnnotation(vtkVariant(i), std::to_string(i));
+        }
+
+        lut_velem_->SetTableValue(0, 0, 0, 0);
+        lut_velem_->SetTableValue(1, 0.4, 0.4, 0.4);
+        
+
+        
+        // dpl::vtk::PopulateLutRedWhiteBlue(lut_velem_);
+        // lut_velem_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
 
         
         
@@ -174,27 +199,25 @@ namespace xpm
       
       
 
-      image_data_->GetCellData()->SetActiveScalars(velem_array->GetName());
 
-
+      vtkDataArray* selected_arr = velem_array;
       
+      
+      image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
+
 
       vtkNew<vtkDataSetMapper> mapper;
 
-      mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, velem_array->GetName());
+      mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName());
       mapper->SetColorModeToMapScalars();
-      // mapper->ColorByArrayComponent(vtkarr->GetName(), 0);
-      // mapper->colo
-      
       mapper->SetInputData(image_data_);
       mapper->SetScalarModeToUseCellData();
-      // mapper->SetScalarModeToUseCellData();
       mapper->UseLookupTableScalarRangeOn();
-      mapper->SetLookupTable(lut_velem_);
+      mapper->SetLookupTable(image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : lut_velem_);
 
-      // image_data_->Modified();
-      // mapper->Modified();
-      // mapper->Update();
+
+      
+      
       
 
       

@@ -372,25 +372,18 @@ namespace xpm
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
       std::vector<std::int32_t> velems(dim.prod());
-
+      
       auto* velems_ptr = velems.data();
 
-      auto velems_dim = dim + 2;
-      dpl::vector_n<pnm_idx, 3> ijk;
+      pnm_3idx velems_factor{1, dim.x() + 2, (dim.x() + 2)*(dim.y() + 2)};
+      pnm_3idx ijk;
       
-      for (ijk.z() = 0; ijk.z() < dim.z(); ++ijk.z()) {
-        auto QQQQ = 2;
-
-        for (ijk.y() = 0; ijk.y() < dim.y(); ++ijk.y()) {
-          auto w = 2;
-
+      for (ijk.z() = 0; ijk.z() < dim.z(); ++ijk.z())
+        for (ijk.y() = 0; ijk.y() < dim.y(); ++ijk.y())
           for (ijk.x() = 0; ijk.x() < dim.x(); ++ijk.x()) {
-
-
-            *velems_ptr++ = file_ptr[velems_dim.dot(ijk + 1)];
+            auto val = file_ptr[velems_factor.dot(ijk + 1)];
+            *velems_ptr++ = val < 0 ? val + 2 : val;
           }
-        }
-      }
 
       return velems;
     }
