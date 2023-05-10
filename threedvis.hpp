@@ -29,7 +29,9 @@
 #include <vtkImageData.h>
 #include <vtkDataSetMapper.h>
 #include <vtkTransform.h>
+#include <vtkThreshold.h>
 #include <vtkAssembly.h>
+#include <vtkUnstructuredGrid.h>
 
 #include <algorithm>
 
@@ -62,6 +64,9 @@ namespace xpm
     
     
     vtkNew<vtkImageData> image_data_;
+    vtkNew<vtkThreshold> threshold_;
+
+
 
     vtkNew<vtkActor> image_actor_;
 
@@ -128,7 +133,7 @@ namespace xpm
           // phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 230 : 99);
           // phase_array->InsertNextTuple1(/*i<(size/2) ? 1 : 0*/v[i] == 0 ? 230 : 99);
         phase_array->SetName("phase");
-        image_data_->GetCellData()->SetScalars(phase_array);
+        // image_data_->GetCellData()->SetScalars(phase_array);
       }
 
       dim = std::round(std::cbrt(size));
@@ -171,8 +176,8 @@ namespace xpm
           lut_velem_->SetAnnotation(vtkVariant(i), std::to_string(i));
         }
 
-        lut_velem_->SetTableValue(0, 0, 0, 0);
-        lut_velem_->SetTableValue(1, 0.4, 0.4, 0.4);
+        lut_velem_->SetTableValue(0, 0.4, 0.4, 0.4);
+        lut_velem_->SetTableValue(1, 0.7, 0.7, 0.7);
         
 
         
@@ -206,17 +211,33 @@ namespace xpm
       image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
 
 
+
+      threshold_->SetInputData(image_data_);
+      threshold_->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName());
+      // threshold_->SetLowerThreshold(2);
+      // threshold_->SetUpperThreshold(100000);
+      threshold_->SetLowerThreshold(0);
+      threshold_->SetUpperThreshold(1);
+
+
+
       vtkNew<vtkDataSetMapper> mapper;
 
-      mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName());
-      mapper->SetColorModeToMapScalars();
-      mapper->SetInputData(image_data_);
-      mapper->SetScalarModeToUseCellData();
+      mapper->SetInputData(threshold_->GetOutput());
+      
+      // mapper->SetInputData(image_data_);
+      // mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName()); // This is needed only for vtkImageData without vtkThreshold
+
+      mapper->SetColorModeToMapScalars(); 
       mapper->UseLookupTableScalarRangeOn();
+      mapper->SetScalarModeToUseCellData();
       mapper->SetLookupTable(image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : lut_velem_);
 
 
-      
+
+       image_data_->Modified();
+    threshold_->Modified();
+    threshold_->Update();
       
       
 
