@@ -108,6 +108,10 @@ namespace xpm
 
       vtkNew<vtkUnsignedCharArray> phase_array;
       vtkNew<vtkIntArray> velem_array;
+
+      vtkNew<vtkIntArray> velem_adjacent_array;
+
+      
       
       size_t size;
       dpl::vector_n<pnm_idx, 3> dim;
@@ -132,8 +136,10 @@ namespace xpm
           phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 0 : 1);
           // phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 230 : 99);
           // phase_array->InsertNextTuple1(/*i<(size/2) ? 1 : 0*/v[i] == 0 ? 230 : 99);
+
         phase_array->SetName("phase");
         // image_data_->GetCellData()->SetScalars(phase_array);
+        image_data_->GetCellData()->AddArray(phase_array);
       }
 
       dim = std::round(std::cbrt(size));
@@ -152,12 +158,7 @@ namespace xpm
           velem_array->InsertTypedComponent(i, 0, val);
         }    
         
-        // int i = 0;
-        // for (auto& x : velems) {
-        //   // x = ++i;
-        //   // velem_array->InsertNextTuple1(x);
-        //   phase_array->InsertTypedComponent(i++, 0, x);
-        // }
+        
         velem_array->SetName("velem");
         image_data_->GetCellData()->AddArray(velem_array);
         
@@ -171,7 +172,7 @@ namespace xpm
         for (int32_t i = 0; i < count; ++i) {
           auto coef = static_cast<double>(i*45%count)/count;
 
-          auto color = QColor::fromHsl(coef*255, 122, 122);
+          auto color = QColor::fromHsl(coef*255, 175, 122);
           lut_velem_->SetTableValue(i, color.redF(), color.greenF(), color.blueF());  // NOLINT(clang-diagnostic-double-promotion)
           lut_velem_->SetAnnotation(vtkVariant(i), std::to_string(i));
         }
@@ -184,14 +185,90 @@ namespace xpm
         // dpl::vtk::PopulateLutRedWhiteBlue(lut_velem_);
         // lut_velem_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
 
-        
-        
+
+        {
+          pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
+          pnm_3idx ijk;
+
+          pnm_idx idx1d = 0;
+
+          auto& i = ijk.x();
+          auto& j = ijk.y();
+          auto& k = ijk.z();
+
+          for (k = 0; k < dim.z(); ++k)
+            for (j = 0; j < dim.y(); ++j)
+              for (i = 0; i < dim.x(); ++i, ++idx1d) {
+                int32_t adj = 1;
+                
+                if (velems[idx1d] < 2) {
+                  if (i > 0) {
+                    auto adj_idx = (ijk - pnm_3idx{1, 0, 0}).dot(map_idx);
+                    if (velems[adj_idx] > 1)
+                      adj = velems[adj_idx];
+                  }
+
+                  if (i < dim.x() - 1) {
+                    auto adj_idx = (ijk + pnm_3idx{1, 0, 0}).dot(map_idx);
+                    if (velems[adj_idx] > 1)
+                      adj = velems[adj_idx];
+                  }
+
+
+                  if (j > 0) {
+                    auto adj_idx = (ijk - pnm_3idx{0, 1, 0}).dot(map_idx);
+                    if (velems[adj_idx] > 1)
+                      adj = velems[adj_idx];
+                  }
+
+                  if (j < dim.y() - 1) {
+                    auto adj_idx = (ijk + pnm_3idx{0, 1, 0}).dot(map_idx);
+                    if (velems[adj_idx] > 1)
+                      adj = velems[adj_idx];
+                  }
+
+
+                  if (k > 0) {
+                    auto adj_idx = (ijk - pnm_3idx{0, 0, 1}).dot(map_idx);
+                    if (velems[adj_idx] > 1)
+                      adj = velems[adj_idx];
+                  }
+
+                  if (k < dim.z() - 1) {
+                    auto adj_idx = (ijk + pnm_3idx{0, 0, 1}).dot(map_idx);
+                    if (velems[adj_idx] > 1)
+                      adj = velems[adj_idx];
+                  }
+                }
+                else {
+                  adj = 0;
+                }
+
+                velem_adjacent_array->InsertTypedComponent(idx1d, 0, adj);
+                // ++idx;
+
+                // auto val = file_ptr[velems_factor.dot(ijk + 1)];
+                // *velems_ptr++ = val < 0 ? val + 2 : val;
+              }
+
+
+          velem_adjacent_array->SetName("velem_adj");
+          image_data_->GetCellData()->AddArray(velem_adjacent_array);
+        }
             
       }
 
 
 
+     
 
+      
+
+      
+
+
+
+      
 
       
       
@@ -205,7 +282,9 @@ namespace xpm
       
 
 
-      vtkDataArray* selected_arr = velem_array;
+      vtkDataArray* selected_arr = velem_adjacent_array;
+
+      // vtkDataArray* selected_arr = velem_array;
       
       
       image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
@@ -213,11 +292,13 @@ namespace xpm
 
 
       threshold_->SetInputData(image_data_);
-      threshold_->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName());
+      threshold_->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, velem_adjacent_array->GetName());
+      
       // threshold_->SetLowerThreshold(2);
       // threshold_->SetUpperThreshold(100000);
-      threshold_->SetLowerThreshold(0);
-      threshold_->SetUpperThreshold(1);
+      
+      threshold_->SetLowerThreshold(1);
+      threshold_->SetUpperThreshold(1e9);
 
 
 
@@ -235,17 +316,17 @@ namespace xpm
 
 
 
-       image_data_->Modified();
-    threshold_->Modified();
-    threshold_->Update();
+      image_data_->Modified();
+      threshold_->Modified();
+      threshold_->Update();
       
       
 
       
       
       image_actor_->SetMapper(mapper);
-      image_actor_->GetProperty()->SetEdgeVisibility(false);
-      image_actor_->GetProperty()->SetEdgeColor(0, 0, 0);
+      image_actor_->GetProperty()->SetEdgeVisibility(true);
+      image_actor_->GetProperty()->SetEdgeColor(v3d{0.5} /*0, 0, 0*/);
       
       image_actor_->GetProperty()->SetAmbient(0.5);
       image_actor_->GetProperty()->SetDiffuse(0.4);
@@ -315,20 +396,22 @@ namespace xpm
 
 
                 
-                pore_network_model uow_pnm{
-                  R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE.bin)",
-                  pore_network_model::file_format::binary_dp69
-                };
-                uow_pnm.scale(icl_pnm_inv.physical_size.x()/252.0);
-                
-                {
-                  auto vtk_pnm = CreateNetworkAssembly(uow_pnm, lut_continuous_);
-                  vtkNew<vtkTransform> trans;
-                  trans->PostMultiply();
-                  trans->Translate(0, -1.1*icl_pnm_inv.physical_size.y(), 0);
-                  vtk_pnm->SetUserTransform(trans);
-                  renderer_->AddActor(vtk_pnm);
-                }
+                // pore_network_model uow_pnm{
+                //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE.bin)",
+                //   pore_network_model::file_format::binary_dp69
+                // };
+                // uow_pnm.scale(icl_pnm_inv.physical_size.x()/252.0);
+                //
+                // {
+                //   auto vtk_pnm = CreateNetworkAssembly(uow_pnm, lut_continuous_);
+                //   vtkNew<vtkTransform> trans;
+                //   trans->PostMultiply();
+                //   trans->Translate(0, -1.1*icl_pnm_inv.physical_size.y(), 0);
+                //   vtk_pnm->SetUserTransform(trans);
+                //   renderer_->AddActor(vtk_pnm);
+                // }
+
+      
                 //
                 // pore_network_model uow_pnm_inv{
                 //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE_INV.bin)",
@@ -354,7 +437,7 @@ namespace xpm
         vtkNew<vtkTransform> trans;
         trans->PostMultiply();
         trans->Scale(v3d{icl_pnm_inv.physical_size.x()});
-        trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
+        // trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
         image_actor_->SetUserTransform(trans);
       }
       
@@ -363,6 +446,7 @@ namespace xpm
       renderer_->ResetCamera();
       
       tidy_axes_.Init(renderer_.Get());
+      tidy_axes_.SetFormat(".2e");
       tidy_axes_.Build();
 
       // renderer_->ResetCamera();

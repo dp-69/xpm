@@ -278,6 +278,17 @@ namespace dpl::vtk
       if (!this->Face(f0).gridlines_actor_->GetVisibility() &&
           !this->Face(f1).gridlines_actor_->GetVisibility())
         return;
+
+      #ifdef __cpp_lib_format
+        auto std_format = "{:" + format_ + "}";
+        // const auto* std_format_ptr = std_format.c_str();
+      #else
+        auto boost_format = "%" + format_;
+        const auto* boost_format_ptr = boost_format.c_str();
+      #endif
+
+      
+      
       
       static constexpr auto run_dim = f0.dim.cross(f1.dim);
 
@@ -375,12 +386,15 @@ namespace dpl::vtk
           auto& text_actor = label_actors_[500 - 1]; // last text to test size
           auto* mapper = static_cast<vtkTextMapper*>(text_actor->GetMapper());
 
+          
+          
           #ifdef __cpp_lib_format
             mapper->SetInput(
-              std::format("{:.2e}", (min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim]).c_str()
+              std::vformat(std_format, 
+                std::make_format_args((min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim])).c_str()
             );
           #else
-            mapper->SetInput((boost::format("%.0f") %
+            mapper->SetInput((boost::format(boost_format_ptr) %
               ((min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim])).str().c_str());
           #endif
 
@@ -407,10 +421,11 @@ namespace dpl::vtk
 
             #ifdef __cpp_lib_format
               mapper->SetInput(
-                std::format("{:.2e}", r[run_dim]/scale_[run_dim]).c_str()
+                std::vformat(std_format, 
+                  std::make_format_args(r[run_dim]/scale_[run_dim])).c_str()
               );
             #else
-              mapper->SetInput((boost::format("%.0f") % (r[run_dim]/scale_[run_dim])).str().c_str());
+              mapper->SetInput((boost::format(boost_format_ptr) % (r[run_dim]/scale_[run_dim])).str().c_str());
             #endif
             
             mapper->GetTextProperty()->SetJustification(alignment.x());
@@ -497,6 +512,8 @@ namespace dpl::vtk
     
     vtkNew<vtkActor2D> title_actors_[12];
     int visible_titles_ = 0;
+
+    std::string format_ = ".0f";
   
   public:
     TidyAxes() {
@@ -508,6 +525,10 @@ namespace dpl::vtk
       axes_box_.actor_->UseBoundsOff();
     }
 
+    void SetFormat(const std::string& f) {
+      format_ = f;
+    }
+    
     void Init(
       vtkRenderer* renderer,
       // const StartupSettings& settings,
