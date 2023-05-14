@@ -24,7 +24,7 @@
  */
 
 #pragma once
-#include "dpl/static_map.hpp"
+#include <dpl/static_map.hpp>
 
 #include <memory>
 #include <vector>

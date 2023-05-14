@@ -1,12 +1,16 @@
 #pragma once
 
+
 #include "xpm/functions.h"
 
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
-
+#include <dpl/qt/property_editor/QPropertyTreeView.hpp>
+  
 // #include <QWidget>
 #include <QMainWindow>
+#include <QSplitter>
+
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkCylinderSource.h>
 #include <vtkFieldData.h>
@@ -50,6 +54,13 @@ namespace xpm
   {
   Q_OBJECT
 
+    using QPropertyTreeView = dpl::qt::property_editor::QPropertyTreeView;
+    
+    std::unique_ptr<QPropertyTreeView> tree_view_factory_;
+    QPropertyTreeView* tree_view_ = nullptr; 
+
+    
+    
     vtkNew<vtkRenderer> renderer_; 
     vtkNew<vtkGenericOpenGLRenderWindow> render_window_;
     
@@ -333,7 +344,7 @@ namespace xpm
       image_actor_->GetProperty()->BackfaceCullingOn();
       
 
-      renderer_->AddActor(image_actor_);
+      // renderer_->AddActor(image_actor_);
     }
 
     
@@ -345,7 +356,31 @@ namespace xpm
 
       renderer_->SetBackground(v3d{1});
 
-      this->setCentralWidget(qvtk_widget_);
+
+      tree_view_ = new QPropertyTreeView;
+
+
+
+      auto* hsplit = new QSplitter{Qt::Horizontal};
+      hsplit->addWidget(tree_view_);
+      hsplit->addWidget(qvtk_widget_);
+      hsplit->setStretchFactor(0, 0);
+      hsplit->setStretchFactor(1, 1);
+
+      // hsplit_->setSizes({100, 1});
+      // vsplit_->setSizes({1, 100});
+
+      setCentralWidget(hsplit);
+
+
+
+      
+
+
+      
+
+      
+      // this->setCentralWidget(qvtk_widget_);
 
 
 

@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "dpl/general.hpp"
+#include <dpl/general.hpp>
 
 #include <ostream>
 

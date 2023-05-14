@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "dpl/static_vector.hpp"
+#include <dpl/static_vector.hpp>
 
 #include <vtkActor.h>
 #include <vtkActor2D.h>

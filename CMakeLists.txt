@@ -43,6 +43,10 @@ add_executable(xpm_project # WIN32
   
   
  "functions.cpp"
+
+ "dpl/qt/property_editor/Editors.hpp"
+ "dpl/qt/property_editor/PropertyEntities.hpp"
+ "dpl/qt/property_editor/QPropertyTreeView.hpp"
 )
 
 target_include_directories(xpm_project PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")

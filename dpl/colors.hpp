@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "dpl/static_vector.hpp"
+#include <dpl/static_vector.hpp>
 
 inline dpl::vector3d hsb_to_rgb(double hue, double sat, double bright) {
   if (hue > 360 || hue < 0 || sat > 100 || sat < 0 || bright > 100 || bright < 0) {
