@@ -26,11 +26,26 @@ int main(int argc, char* argv[])
   // foo f;
   // f.helloworld();
 
+
+  auto format = xpm::QVTKWidgetRef::defaultFormat();
+
+  #ifdef _WIN32
+    format.setProfile(QSurfaceFormat::CompatibilityProfile);
+  #else
+    format.setProfile(QSurfaceFormat::CoreProfile);
+  #endif
+  
+
+  QSurfaceFormat::setDefaultFormat(format);
+  
+  QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
+  
+  QApplication app(argc, argv);  
+
   
   
   
   std::cout << "LUL";
-  QApplication app(argc, argv);
   // QWidget widget;
   xpm::XPMWidget widget;
   widget.Init();

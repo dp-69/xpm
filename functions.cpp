@@ -93,6 +93,7 @@ namespace xpm
     vtkNew<vtkGlyph3DMapper> throat_glyphs;
     throat_glyphs->SetSourceConnection(cylinder->GetOutputPort());
     throat_glyphs->SetInputData(polydata);
+    
                      
 
     vtkNew<vtkFloatArray> orient_array;
@@ -164,5 +165,5 @@ namespace xpm
     vtkNew<vtkNamedColors> colors;
     actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
     return actor;        
-    }
+  }
 }

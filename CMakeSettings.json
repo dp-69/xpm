@@ -10,7 +10,7 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "cmakeToolchain": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake"
     },
     {
       "name": "x64-Release",
@@ -22,7 +22,7 @@
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
       "inheritEnvironments": [ "msvc_x64_x64" ],
-      "cmakeToolchain": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      "cmakeToolchain": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake"
     },
     {
       "name": "x64-RelWithDebInfo",
@@ -33,9 +33,8 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
-      "inheritEnvironments": [ "msvc_x64_x64" ],
-      "variables": []
+      "cmakeToolchain": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake",
+      "inheritEnvironments": [ "msvc_x64_x64" ]
     }
   ]
 }
