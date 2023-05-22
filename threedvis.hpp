@@ -263,10 +263,10 @@ namespace xpm
             pos[e2_dim] = (e2 + 0.5)*cell_size[e2_dim];
             pos[e3_dim] = (e3 + 0.5)*cell_size[e3_dim];
 
-            points->InsertNextPoint(pos);
-
-            orient_array->InsertNextTuple(orient_vec_opp);
-            post(idx1d);
+            // points->InsertNextPoint(pos);
+            //
+            // orient_array->InsertNextTuple(orient_vec_opp);
+            // post(idx1d);
           }
           
           for (; e1 < e1_count - 1; ++e1) {
@@ -281,15 +281,20 @@ namespace xpm
               pos[e2_dim] = (e2 + 0.5)*cell_size[e2_dim];
               pos[e3_dim] = (e3 + 0.5)*cell_size[e3_dim];
 
-              points->InsertNextPoint(pos);
+              
 
               if (idx1d_filter) {
+                points->InsertNextPoint(pos);
+                
                 orient_array->InsertNextTuple(orient_vec);
                 post(idx1d);
               }
               else {
-                orient_array->InsertNextTuple(orient_vec_opp);
-                post(adj_idx1d);
+                // points->InsertNextPoint(pos);
+                //
+                // // TODO
+                // orient_array->InsertNextTuple(orient_vec_opp);
+                // post(adj_idx1d);
               }
             }
           }
@@ -890,11 +895,11 @@ namespace xpm
 
               // return true;
               
-              return phase_in->GetTypedComponent(idx, 0) == 2;
+              // return phase_in->GetTypedComponent(idx, 0) == 2;
 
 
               
-              // return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+              return velems_arr_in->GetTypedComponent(idx, 0) < 2;
               // ;/
               //
 
@@ -921,8 +926,8 @@ namespace xpm
             };
             
             FilterFacesGlyph<0>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
-            FilterFacesGlyph<1>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
-            FilterFacesGlyph<2>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
+            // FilterFacesGlyph<1>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
+            // FilterFacesGlyph<2>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
 
 
 
@@ -969,6 +974,7 @@ namespace xpm
 
           polydata->SetPoints(points);
 
+          
           vtkNew<vtkActor> actor;
           actor->SetMapper(glyphs);
             
@@ -984,9 +990,34 @@ namespace xpm
           
           actor->GetProperty()->SetAmbient(0.5);
           actor->GetProperty()->SetDiffuse(0.4);
-          actor->GetProperty()->BackfaceCullingOn();
+          actor->GetProperty()->BackfaceCullingOff();
+
+
           
-          renderer_->AddActor(actor);
+          // actor->buffer();
+          
+          
+          // renderer_->AddActor(actor);
+
+          std::cout << "PRE UPD\n";
+
+          
+          
+          glyphs->Update();
+          // glyphs->MaskingOff();
+          glyphs->OrientOff();
+          
+          actor->DragableOff();
+          actor->DebugOff();
+          actor->PickableOff();
+          actor->UseBoundsOff();
+
+          render_window_->Initialize();
+          
+          // renderer_->Render();
+          
+          std::cout << "POST UPD\n";
+          
         }
         
       }
