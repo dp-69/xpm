@@ -14,11 +14,12 @@
 #include <vtkRenderer.h>
 
 #include <QWidget>
+// #include <QStyleFactory>
 
 
 #include <array>
 
-#include "ui_mywidg.h"
+// #include "ui_mywidg.h"
 
 
 int main(int argc, char* argv[])
@@ -40,8 +41,11 @@ int main(int argc, char* argv[])
   
   QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
   
-  QApplication app(argc, argv);  
+  QApplication app(argc, argv);
 
+  // qDebug() << QStyleFactory::keys();
+  
+  // QApplication::setStyle(QStyleFactory::create("Windows"));
   
   
   
