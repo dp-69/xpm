@@ -43,13 +43,8 @@ int main(int argc, char* argv[])
   
   QApplication app(argc, argv);
 
-  // qDebug() << QStyleFactory::keys();
-  
-  // QApplication::setStyle(QStyleFactory::create("Windows"));
   
   
-  
-  std::cout << "LUL";
   // QWidget widget;
   xpm::XPMWidget widget;
   widget.Init();

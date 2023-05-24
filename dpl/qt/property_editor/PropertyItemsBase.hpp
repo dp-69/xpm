@@ -32,7 +32,8 @@ namespace dpl::qt::property_editor
   struct DefaultFormat
   {
     static std::string Format(const Scalar& x) {
-      return ScalarConvert<Scalar>::ToQString(x).toStdString();
+      return std::to_string(x);
+      // return ScalarConvert<Scalar>::ToQString(x).toStdString();
     }
   };
   

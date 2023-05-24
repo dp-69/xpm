@@ -3,9 +3,10 @@
 
 #include "xpm/functions.h"
 
+#include <dpl/qt/property_editor/PropertyItemsBase.hpp>
+#include <dpl/qt/property_editor/QPropertyTreeView.hpp>
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
-#include <dpl/qt/property_editor/QPropertyTreeView.hpp>
   
 // #include <QWidget>
 #include <QMainWindow>
@@ -20,29 +21,29 @@
 #endif
 
 
-#include <vtkCylinderSource.h>
-#include <vtkFieldData.h>
+#include <vtkAssembly.h>
 #include <vtkCellData.h>
+#include <vtkConeSource.h>
+#include <vtkCylinderSource.h>
+#include <vtkDataSetMapper.h>
+#include <vtkDoubleArray.h>
+#include <vtkFieldData.h>
+#include <vtkFloatArray.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkGlyph3DMapper.h>
+#include <vtkImageData.h>
+#include <vtkLookupTable.h>
 #include <vtkNamedColors.h>
 #include <vtkNew.h>
+#include <vtkPointData.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
 #include <vtkSphereSource.h>
-#include <vtkConeSource.h>
-#include <vtkVersionMacros.h>
-#include <vtkPointData.h>
-#include <vtkDoubleArray.h>
-#include <vtkFloatArray.h>
-#include <vtkLookupTable.h>
-#include <vtkImageData.h>
-#include <vtkDataSetMapper.h>
-#include <vtkTransform.h>
 #include <vtkThreshold.h>
-#include <vtkAssembly.h>
+#include <vtkTransform.h>
 #include <vtkUnstructuredGrid.h>
+#include <vtkVersionMacros.h>
 
 #include <algorithm>
 
@@ -104,6 +105,7 @@ namespace xpm
     vtkNew<vtkGlyph3DMapper> glyphs_;
     vtkNew<vtkIntArray> velems_arr_out_;
     vtkNew<vtkPoints> points_;
+    vtkNew<vtkActor> actor_;
     
     void Init(double half_length = 0.5) {
       InitQuad(glyphs_);
@@ -306,7 +308,7 @@ namespace xpm
 
 
 
-    
+    ImageDataGlyphMapper img_mapper;
 
 
     
@@ -834,18 +836,57 @@ namespace xpm
       renderer_->SetBackground(v3d{1});
 
 
-      // {
-      //   tree_view_ = new QPropertyTreeView;
-      //
-      //   auto* hsplit = new QSplitter{Qt::Horizontal};
-      //   hsplit->addWidget(tree_view_);
-      //   hsplit->addWidget(qvtk_widget_);
-      //   hsplit->setStretchFactor(0, 0);
-      //   hsplit->setStretchFactor(1, 1);
-      //
-      //   setCentralWidget(hsplit);
-      // }
-      setCentralWidget(qvtk_widget_);
+      {
+        tree_view_ = new QPropertyTreeView;
+
+
+        auto* model = tree_view_->model();
+        // auto* cat_vis = model->AddCategory("Visualisation");
+
+
+        dpl::qt::property_editor::ItemFunctor<bool> fnctr;
+
+        fnctr.name = "Edges";
+        fnctr.get = [this] {
+          return std::get<0>(img_mapper.faces_).actor_->GetProperty()->GetEdgeVisibility();
+        };
+
+        fnctr.set = [this](bool v) {
+          dpl::sfor<6>([this, v](auto i) {
+            std::get<i>(img_mapper.faces_).actor_->GetProperty()->SetEdgeVisibility(v);
+            render_window_->Render();
+          });
+        };
+        
+        
+        model->AddItem(/*cat_vis, */fnctr);
+        
+        // model.AddItem(cat_vis,
+        //   FunctorPropertyItem(fd_widget_, "Show",
+        //     [this](wptr) {
+        //       return static_cast<bool>(plane_actor_->GetVisibility());
+        //     },
+        //     [this](wptr, bool v) {
+        //       plane_actor_->SetVisibility(v);
+        //       fd_widget_->RefreshCubeAxesBounds();
+        //       fd_widget_->Render();
+        //     }
+        // ));
+
+        // tree_view_factory_
+        
+
+        
+        auto* hsplit = new QSplitter{Qt::Horizontal};
+        hsplit->addWidget(tree_view_);
+        hsplit->addWidget(qvtk_widget_);
+        hsplit->setStretchFactor(0, 0);
+        hsplit->setStretchFactor(1, 1);
+      
+        setCentralWidget(hsplit);
+      }
+      
+      // setCentralWidget(qvtk_widget_);
 
 
       
@@ -929,7 +970,7 @@ namespace xpm
           auto scale_factor = /*1.0*/icl_pnm_inv.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
           
           
-          ImageDataGlyphMapper img_mapper;
+          
           img_mapper.Init(scale_factor);
           
 
@@ -939,9 +980,9 @@ namespace xpm
             auto pred = [&, this](pnm_idx idx) {
               // return true;
               
-              // return phase_in->GetTypedComponent(idx, 0) == 2;
+              return phase_in->GetTypedComponent(idx, 0) == 2;
 
-              return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+              // return velems_arr_in->GetTypedComponent(idx, 0) < 2;
               // ;/
               //
 
@@ -972,21 +1013,22 @@ namespace xpm
 
 
             dpl::sfor<6>([&](auto i) {
-              auto* glyphs_ = std::get<i>(img_mapper.faces_).glyphs_.Get();
-            
+              auto& mapper = std::get<i>(img_mapper.faces_);
+              
+              vtkGlyph3DMapper* glyphs = mapper.glyphs_.Get();
+              vtkActor* actor = mapper.actor_.Get();
 
 
 
-              glyphs_->SetLookupTable(lut_velem_);
-              glyphs_->SetColorModeToMapScalars();
-              glyphs_->UseLookupTableScalarRangeOn();
-              glyphs_->SetScalarModeToUsePointData();
+              glyphs->SetLookupTable(lut_velem_);
+              glyphs->SetColorModeToMapScalars();
+              glyphs->UseLookupTableScalarRangeOn();
+              glyphs->SetScalarModeToUsePointData();
 
 
-              vtkNew<vtkActor> actor;
-              actor->SetMapper(glyphs_);
+              actor->SetMapper(glyphs);
 
-              actor->GetProperty()->SetEdgeVisibility(/*false*/true);
+              actor->GetProperty()->SetEdgeVisibility(/*false*/false);
               actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
               
               actor->GetProperty()->SetAmbient(0.5);
