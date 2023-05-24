@@ -462,8 +462,9 @@ namespace xpm
     void LoadImage() {
       auto image_path = 
         // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
+        
         // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
-        R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\EstNorm_500x500x500_4p0um.raw)"
+        R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
       ;
 
       auto velems_path = 
@@ -814,12 +815,17 @@ namespace xpm
         // R"(E:\hwu\research126\d\modelling\networks\3D_network\10x10x10\10x10x10)"
         // R"(C:\dev\.temp\images\SS-1000\XNet)"
         // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
+
         // R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
         R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
       ;
 
       // v3i dim = 252;
       v3i dim = 500;
+
+
+     
+      
 
       
       qvtk_widget_ = new QVTKWidgetRef;
@@ -979,17 +985,16 @@ namespace xpm
           {
             auto pred = [&, this](pnm_idx idx) {
               // return true;
-              
-              return phase_in->GetTypedComponent(idx, 0) == 2;
 
-              // return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+              // return phase_in->GetTypedComponent(idx, 0) == 2;
+
+              return velems_arr_in->GetTypedComponent(idx, 0) < 2;
               // ;/
-              //
 
-              int z = idx/(dim.x()*dim.y());
-              int y = (idx - z*dim.x()*dim.y())/dim.x();
-              int x = idx - z*dim.x()*dim.y() - y*dim.x();
-              
+              int z = idx / (dim.x() * dim.y());
+              int y = (idx - z * dim.x() * dim.y()) / dim.x();
+              int x = idx - z * dim.x() * dim.y() - y * dim.x();
+
               // int z = i%dim.z();
               // int y = (i/dim.z())%dim.y();
               // int x = i/(dim.y()*dim.z()); 

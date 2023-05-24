@@ -37,7 +37,11 @@ int main(int argc, char* argv[])
   #endif
   
 
-  QSurfaceFormat::setDefaultFormat(format);
+  #if (VTK_MAJOR_VERSION == 8)
+    QSurfaceFormat::setDefaultFormat(format);
+  #elif (VTK_MAJOR_VERSION == 9)
+  #endif
+  
   
   QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
   
