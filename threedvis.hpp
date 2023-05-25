@@ -46,6 +46,8 @@
 #include <vtkVersionMacros.h>
 
 #include <algorithm>
+#include <future>
+
 
 #undef LoadImage
 
@@ -126,8 +128,6 @@ namespace xpm
     template<typename Filter, typename Post>
     void Populate(
       const v3i& dims, const v3d& cell_size, const Filter& filter, const Post& post) {
-
-      using face = dpl::face_cubic<face_idx>;
       
       static constexpr auto e1_dim = dpl::sdim<3, face::dim>{};
       static constexpr auto e2_dim = e1_dim.next();
@@ -199,6 +199,7 @@ namespace xpm
 
           if constexpr (face::is_upper) {
             idx1d = ijk.dot(map_idx);
+            
             if (filter(idx1d)) {
               pos[e1_dim] = (e1_count)*cell_size[e1_dim];
               pos[e2_dim] = (e2 + 0.5)*cell_size[e2_dim];
@@ -233,24 +234,95 @@ namespace xpm
     void Populate(
       const v3i& dims, const v3d& cell_size, const Filter& filter, vtkIntArray* velems_adj_arr)
     {
+      
 
-      dpl::sfor<6>([&](auto i) {
 
-        auto& face_mapper = std::get<i>(faces_);
-        
-        // std::get<i>(faces_).Init(half_length);
+      auto start = std::chrono::high_resolution_clock::now();
 
-        auto post = [&](pnm_idx idx) {
-          auto val = velems_adj_arr->GetTypedComponent(idx, 0);
-          face_mapper.velems_arr_out_->InsertNextTypedTuple(&val);
-        };
 
-        face_mapper.Populate(dims, cell_size, filter, post);
+      dpl::psfor<6>([=, this](auto i) {
+        auto* face_mapper = &std::get<i>(faces_);
+
+        face_mapper->Populate(dims, cell_size, filter, 
+          [=](pnm_idx idx) {
+            auto val = velems_adj_arr->GetTypedComponent(idx, 0);
+            face_mapper->velems_arr_out_->InsertNextTypedTuple(&val);
+          }
+        );
 
         std::cout << "\n\nFaces " << i;
       });
+
+      // std::list<std::future<void>> queue;
+      //
+      // dpl::sfor<6>([=, this, &queue](auto i) {
+      //   auto* face_mapper = &std::get<i>(faces_);
+      //   
+      //   queue.push_back(
+      //     std::async(std::launch::async, [=]() {
+      //       face_mapper->Populate(dims, cell_size, filter, 
+      //         [=](pnm_idx idx) {
+      //           auto val = velems_adj_arr->GetTypedComponent(idx, 0);
+      //           face_mapper->velems_arr_out_->InsertNextTypedTuple(&val);
+      //         }
+      //       );
+      //
+      //       std::cout << "\n\nFaces " << i;
+      //     })
+      //   );
+      //
+      //   // (--queue.end())->wait();
+      //
+      //   
+      // });
+      //
+      //
+      // for (auto& f : queue)
+      //   f.wait();
+
+
+      auto stop = std::chrono::high_resolution_clock::now();
+
+
+ 
+      cout << "\n\nFaces total time " <<
+        duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
+
+      // queue.push_back(
+      //   std::async(std::launch::async, [&]() {
+      //     std::get<0>(faces_).Populate(dims, cell_size, filter, 
+      //       [&](pnm_idx idx) {
+      //         auto val = velems_adj_arr->GetTypedComponent(idx, 0);
+      //         std::get<0>(faces_).velems_arr_out_->InsertNextTypedTuple(&val);
+      //       });
+      //   })
+      // );
+      //
+      // queue.push_back(
+      //   std::async(std::launch::async, [&]() {
+      //     std::get<1>(faces_).Populate(dims, cell_size, filter, 
+      //       [&](pnm_idx idx) {
+      //         auto val = velems_adj_arr->GetTypedComponent(idx, 0);
+      //         std::get<1>(faces_).velems_arr_out_->InsertNextTypedTuple(&val);
+      //       });
+      //   })
+      // );
+      //
+      // queue.push_back(
+      //   std::async(std::launch::async, [&]() {
+      //     std::get<2>(faces_).Populate(dims, cell_size, filter, 
+      //       [&](pnm_idx idx) {
+      //         auto val = velems_adj_arr->GetTypedComponent(idx, 0);
+      //         std::get<2>(faces_).velems_arr_out_->InsertNextTypedTuple(&val);
+      //       });
+      //   })
+      // );
+
+      // (--queue.end())->wait();
+
+      // std::cout << "\n\nFaces " << i;
       
-      
+
     }
 
     std::tuple<
@@ -471,6 +543,16 @@ namespace xpm
         // R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
         R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
       ;
+
+
+
+
+      
+
+
+
+
+      
 
       
 
@@ -823,6 +905,26 @@ namespace xpm
       // v3i dim = 252;
       v3i dim = 500;
 
+      vtkUnsignedCharArray* phase_in;
+      vtkIntArray* velems_arr_in;
+      vtkIntArray* velems_adj_arr_in;
+
+      auto pred = [&, this](pnm_idx idx) {
+        // return true;
+
+        // return phase_in->GetTypedComponent(idx, 0) == 2;
+
+        return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+        // ;/
+
+        int z = idx / (dim.x() * dim.y());
+        int y = (idx - z * dim.x() * dim.y()) / dim.x();
+        int x = idx - z * dim.x() * dim.y() - y * dim.x();
+
+        // int z = i%dim.z();
+        // int y = (i/dim.z())%dim.y();
+        // int x = i/(dim.y()*dim.z()); 
+      };
 
      
       
@@ -968,9 +1070,9 @@ namespace xpm
 
 
       {
-        auto* phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
-        auto* velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
-        auto* velems_adj_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem_adj"));
+        phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
+        velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
+        velems_adj_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem_adj"));
         
         {
           auto scale_factor = /*1.0*/icl_pnm_inv.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
@@ -983,22 +1085,7 @@ namespace xpm
 
 
           {
-            auto pred = [&, this](pnm_idx idx) {
-              // return true;
-
-              // return phase_in->GetTypedComponent(idx, 0) == 2;
-
-              return velems_arr_in->GetTypedComponent(idx, 0) < 2;
-              // ;/
-
-              int z = idx / (dim.x() * dim.y());
-              int y = (idx - z * dim.x() * dim.y()) / dim.x();
-              int x = idx - z * dim.x() * dim.y() - y * dim.x();
-
-              // int z = i%dim.z();
-              // int y = (i/dim.z())%dim.y();
-              // int x = i/(dim.y()*dim.z()); 
-            };
+            
 
             
 

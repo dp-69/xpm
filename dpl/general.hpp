@@ -28,6 +28,7 @@
 #include <sstream>
 #include <type_traits>
 #include <cmath>
+#include <future>
 
 
 namespace dpl
@@ -71,8 +72,15 @@ namespace dpl
   // std::bool_constant<std::is_arithmetic_v<V_> && are_arithmetic<Rest_...>::value>
   // std::bool_constant<std::is_arithmetic_v<V_> && are_arithmetic<Rest_...>::value> {};
 
+
+
+
+
+  // std::list<std::future<void>> queue;
   
 
+
+  
 
   template <int First, int Last, typename Lambda>
   constexpr void sfor(const Lambda& f) {
@@ -89,6 +97,28 @@ namespace dpl
   template <int Count, typename Lambda>
   constexpr void sfor(const Lambda& f) {
     dpl::sfor<0, Count>(f);
+  }
+
+  template <int First, int Last, typename Lambda>
+  constexpr void _psfor(std::future<void>* queue, const Lambda& f) {
+    if constexpr (First < Last) {
+      if constexpr (std::is_invocable_v<Lambda, int_const<First>>)
+        *queue = std::async(std::launch::async, f, int_const<First>{});
+      else
+        *queue = std::async(std::launch::async, f);        
+        
+      dpl::_psfor<First + 1, Last>(++queue, f);
+    }
+  }
+  
+  template <int Count, typename Lambda>
+  constexpr void psfor(const Lambda& f) {
+    std::array<std::future<void>, Count> queue;
+
+    dpl::_psfor<0, Count>(queue.data(), f);
+
+    for (std::future<void>& task : queue)
+      task.wait();
   }
 
   // template<int Count>
