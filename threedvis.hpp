@@ -285,7 +285,7 @@ namespace xpm
 
 
  
-      cout << "\n\nFaces total time " <<
+      cout << "\n\nFaces total time: " <<
         duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
 
       // queue.push_back(
@@ -912,9 +912,9 @@ namespace xpm
       auto pred = [&, this](pnm_idx idx) {
         // return true;
 
-        // return phase_in->GetTypedComponent(idx, 0) == 2;
+        return phase_in->GetTypedComponent(idx, 0) == 2;
 
-        return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+        // return velems_arr_in->GetTypedComponent(idx, 0) < 2;
         // ;/
 
         int z = idx / (dim.x() * dim.y());
