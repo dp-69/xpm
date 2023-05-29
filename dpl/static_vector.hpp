@@ -38,9 +38,9 @@
 
 namespace dpl
 {
-  static inline constexpr auto _0 = int_const<0>{};
-  static inline constexpr auto _1 = int_const<1>{};
-  static inline constexpr auto _2 = int_const<2>{};
+  static inline constexpr auto _0 = ic<0>{};
+  static inline constexpr auto _1 = ic<1>{};
+  static inline constexpr auto _2 = ic<2>{};
 
   struct operation
   {
@@ -434,7 +434,7 @@ namespace dpl
     }
 
     template <int i, typename U = int>
-    constexpr vector_n(int_const<i>, const U& v = 1) : ptr_{} {
+    constexpr vector_n(ic<i>, const U& v = 1) : ptr_{} {
       ptr_[i] = v;
     }
 
@@ -532,7 +532,7 @@ namespace dpl
 namespace std
 {
   template <typename Type, int n>
-  struct tuple_size<dpl::vector_n<Type, n>> : integral_constant<size_t, n> {};
+  struct tuple_size<dpl::vector_n<Type, n>> : integral_constant<size_t, n> {};        
 
   template <size_t i, typename Type, int n>
   struct tuple_element<i, dpl::vector_n<Type, n>>
@@ -542,7 +542,7 @@ namespace std
 
 
   template <typename Type, int n>
-  struct tuple_size<dpl::vector_n_map<Type, n>> : integral_constant<size_t, n> {};
+  struct tuple_size<dpl::vector_n_map<Type, n>> : integral_constant<size_t, n> {};    
 
   template <size_t i, typename Type, int n>
   struct tuple_element<i, dpl::vector_n_map<Type, n>>
@@ -563,7 +563,7 @@ namespace dpl
   struct sdim;
 
   template<int count, int dim>
-  struct _sdim_impl : int_const<dim>
+  struct _sdim_impl : ic<dim>
   {
     static constexpr auto next() {
       return std::conditional_t<
@@ -580,9 +580,9 @@ namespace dpl
   struct sdim<3, dim> : _sdim_impl<3, dim>
   {
     template<int dim1/*, std::enable_if_t<dim_idx1 != dim_idx, int> = 0*/>
-    static constexpr auto cross(int_const<dim1> = {}) {
+    static constexpr auto cross(ic<dim1> = {}) {
       static_assert(dim1 != dim, "Dimensions should not be equal");
-      return sdim<3, vector3i{int_const<dim>{}}.cross({int_const<dim1>{}}).non_zero_dim()>{};
+      return sdim<3, vector3i{ic<dim>{}}.cross({ic<dim1>{}}).non_zero_dim()>{};
     }
   };
 
@@ -590,7 +590,18 @@ namespace dpl
 
 
 
+  template<int dim>
+  struct cdims
+  {
+    static constexpr auto e0 = dpl::sdim<3, dim>{};
+    static constexpr auto e1 = e0.next();
+    static constexpr auto e2 = e1.next();
 
+    template<typename Tuple>
+    static constexpr auto tie(Tuple& t) {
+      return std::tie(t[e0], t[e1], t[e2]);
+    }
+  };
 
     
 
@@ -612,7 +623,7 @@ namespace dpl
    *              z max - 5
    */
   template<int face>
-  struct face_cubic : int_const<face>
+  struct face_cubic : ic<face>
   {
     static constexpr auto dim = sdim<3, face/2>{};
     
@@ -621,7 +632,7 @@ namespace dpl
     /**
      * \brief inner direction
      */
-    static constexpr auto non_zero_component = std::conditional_t<is_upper, int_const<-1>, int_const<1>>{};
+    static constexpr auto non_zero_component = std::conditional_t<is_upper, ic<-1>, ic<1>>{};
 
     /**
      * \brief inner direction

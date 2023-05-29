@@ -21,12 +21,54 @@
 
 // #include "ui_mywidg.h"
 
+// struct my_t
+// {
+//   auto operator()() const {
+//     return 22;
+//   }
+//
+//   my_t() = default;
+//   
+//   my_t(const my_t& other) = delete;
+//   my_t(my_t&& other) noexcept = delete;
+//   my_t& operator=(const my_t& other) = delete;
+//   my_t& operator=(my_t&& other) noexcept = delete;
+// };
+//
+// auto complex(const auto& foo) {
+//   return foo() + 3;
+// }
 
 int main(int argc, char* argv[])
 {
+  // auto qqq = complex([](){return 10;});
+  //
+  // auto my_val = my_t{};
+  //
+  // auto& my_val_ref = my_val;
+  //
+  // auto qqq2222 = complex(my_t{});
+  //
+  // auto qqq2222 = complex(my_val);
+  //
+  // auto qqq22 = complex(my_val_ref);
+  
+  
+  
   // foo f;
   // f.helloworld();
 
+  // constexpr auto qqq = dpl::vector3i{5, 6, 7};
+  //
+  // constexpr auto rmg = dpl::cdims<1>::tie(qqq);
+  //
+  // auto& [a, b, c] = rmg;
+  //
+  // std::array<double, std::get<1>(rmg)> qqewe;
+  
+
+  
+  
 
   auto format = xpm::QVTKWidgetRef::defaultFormat();
 

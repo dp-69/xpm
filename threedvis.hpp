@@ -58,116 +58,96 @@ namespace xpm
   class ImageDataGlyphMapperFace
   {
     using face = dpl::face_cubic<face_idx>;
+    using dims = dpl::cdims<face::dim>;
 
-    void InitQuad(vtkGlyph3DMapper* glyph, double half_length = 0.5) {
-      static constexpr auto e1_dim = dpl::sdim<3, face::dim>{};
-      static constexpr auto e2_dim = e1_dim.next();
-      static constexpr auto e3_dim = e2_dim.next();
+    static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {
+      auto quad = vtkSmartPointer<vtkPolyData>::New();
 
-      vtkNew<vtkPolyData> quad;
-
-      {
-        vtkNew<vtkPoints> points;
-        vtkNew<vtkCellArray> cells;
-        quad->SetPoints(points);
-        quad->SetPolys(cells);
+      vtkNew<vtkPoints> points;
+      quad->SetPoints(points);
+      
+      vtkNew<vtkCellArray> cells;
+      quad->SetPolys(cells);
         
-        v3d pos;
-        pos[e1_dim] = 0;
+      v3d pos;
+      pos[dims::e0] = 0;
+      pos[dims::e1] = -half_length;
+      pos[dims::e2] = -half_length;
+      points->InsertNextPoint(pos);
 
-        pos[e2_dim] = -half_length;
-        pos[e3_dim] = -half_length;
-        points->InsertNextPoint(pos);
+      pos[dims::e1] = half_length;
+      points->InsertNextPoint(pos);
 
-        pos[e2_dim] = half_length;
-        points->InsertNextPoint(pos);
+      pos[dims::e2] = half_length;
+      points->InsertNextPoint(pos);
 
-        pos[e3_dim] = half_length;
-        points->InsertNextPoint(pos);
+      pos[dims::e1] = -half_length;
+      points->InsertNextPoint(pos);
 
-        pos[e2_dim] = -half_length;
-        points->InsertNextPoint(pos);
-
-        if constexpr (face::is_upper) {
-          vtkIdType indices[] = {0, 1, 2, 3};
-          cells->InsertNextCell(4, indices);
-        }
-        else {
-          vtkIdType indices[] = {3, 2, 1, 0};
-          cells->InsertNextCell(4, indices);
-        }
+      if constexpr (face::is_upper) {
+        vtkIdType indices[] = {0, 1, 2, 3};
+        cells->InsertNextCell(4, indices);
+      }
+      else {
+        vtkIdType indices[] = {3, 2, 1, 0};
+        cells->InsertNextCell(4, indices);
       }
 
-      glyph->SetSourceData(quad);
+      return quad;
     }
 
-    
+    vtkNew<vtkPoints> points_;
     
   public:
     vtkNew<vtkGlyph3DMapper> glyphs_;
     vtkNew<vtkIntArray> velems_arr_out_;
-    vtkNew<vtkPoints> points_;
     vtkNew<vtkActor> actor_;
     
     void Init(double half_length = 0.5) {
-      InitQuad(glyphs_);
-      
+      velems_arr_out_->SetName("velem_adj");
+
       vtkNew<vtkPolyData> polydata;
-      glyphs_->SetInputData(polydata);
+      polydata->GetPointData()->SetScalars(velems_arr_out_);
+      polydata->SetPoints(points_);
 
       glyphs_->OrientOff();
       glyphs_->SetScaleFactor(half_length); 
       glyphs_->SetScaleModeToNoDataScaling();
-      
-      velems_arr_out_->SetName("velem_adj");
-      polydata->GetPointData()->SetScalars(velems_arr_out_);
-
-      polydata->SetPoints(points_);
+      glyphs_->SetInputData(polydata);
+      glyphs_->SetSourceData(Quad());
     }
 
-    template<typename Filter, typename Post>
-    void Populate(
-      const v3i& dims, const v3d& cell_size, const Filter& filter, const Post& post) {
-      
-      static constexpr auto e1_dim = dpl::sdim<3, face::dim>{};
-      static constexpr auto e2_dim = e1_dim.next();
-      static constexpr auto e3_dim = e2_dim.next();
-
-      pnm_3idx map_idx{1, dims.x(), dims.x()*dims.y()};
+    void Populate(const v3i& cells, const v3d& cell_size, const auto& filter, const auto& post) {
+      pnm_3idx map_idx{1, cells.x(), cells.x()*cells.y()};
       pnm_3idx ijk;
-
-      auto& e3 = ijk[e3_dim];
-      auto& e2 = ijk[e2_dim];
-      auto& e1 = ijk[e1_dim];
-
-      auto e3_count = dims[e3_dim];
-      auto e2_count = dims[e2_dim];
-      auto e1_count = dims[e1_dim];
       
-      auto adj_step = map_idx[e1_dim];
+      auto [e0, e1, e2] = dims::tie(ijk);
+      auto [e0_count, e1_count, e2_count] = dims::tie(cells);
+      
+      auto adj_step = map_idx[dims::e0];
 
       v3d pos;
       
       pnm_idx idx1d;
       
-      for (e3 = 0; e3 < e3_count; ++e3)
-        for (e2 = 0; e2 < e2_count; ++e2) {
-          e1 = 0;
+      for (e2 = 0; e2 < e2_count; ++e2)
+        for (e1 = 0; e1 < e1_count; ++e1) {
+          e0 = 0;
 
           idx1d = ijk.dot(map_idx);
 
           if constexpr (!face::is_upper) {
             if (filter(idx1d)) {
-              pos[e1_dim] = (0)*cell_size[e1_dim];
-              pos[e2_dim] = (e2 + 0.5)*cell_size[e2_dim];
-              pos[e3_dim] = (e3 + 0.5)*cell_size[e3_dim];
+              pos[dims::e0] = 0; //(0)*cell_size[e1_dim];
+              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
+              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
 
               points_->InsertNextPoint(pos);
               post(idx1d);
             }
           }
           
-          for (; e1 < e1_count - 1; ++e1) {
+          for (; e0 < e0_count - 1; ++e0) {
             idx1d = ijk.dot(map_idx);
             bool filtered = filter(idx1d);
 
@@ -175,11 +155,9 @@ namespace xpm
             bool adj_filtered = filter(adj_idx1d);
 
             if (filtered != adj_filtered) {
-              pos[e1_dim] = (e1 + 1)*cell_size[e1_dim];
-              pos[e2_dim] = (e2 + 0.5)*cell_size[e2_dim];
-              pos[e3_dim] = (e3 + 0.5)*cell_size[e3_dim];
-
-                
+              pos[dims::e0] = (e0 + 1.0)*cell_size[dims::e0];
+              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
+              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
 
               if constexpr (face::is_upper) {
                 if (filtered) {
@@ -201,27 +179,21 @@ namespace xpm
             idx1d = ijk.dot(map_idx);
             
             if (filter(idx1d)) {
-              pos[e1_dim] = (e1_count)*cell_size[e1_dim];
-              pos[e2_dim] = (e2 + 0.5)*cell_size[e2_dim];
-              pos[e3_dim] = (e3 + 0.5)*cell_size[e3_dim];
+              pos[dims::e0] = (e0_count)*cell_size[dims::e0];
+              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
+              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
               
               points_->InsertNextPoint(pos);
-
               post(idx1d);
             }
           }
         }
     }
-
-    
-    // static constexpr auto is_upper = std::integral_constant<bool, face%2>{};
   };
 
 
   class ImageDataGlyphMapper
   {
-    
-
   public:
 
     void Init(double half_length) {
@@ -231,15 +203,9 @@ namespace xpm
     }
 
     template<typename Filter>
-    void Populate(
-      const v3i& dims, const v3d& cell_size, const Filter& filter, vtkIntArray* velems_adj_arr)
-    {
-      
-
-
+    void Populate(const v3i& dims, const v3d& cell_size, const Filter& filter, vtkIntArray* velems_adj_arr) {
       auto start = std::chrono::high_resolution_clock::now();
-
-
+      
       dpl::psfor<6>([=, this](auto i) {
         auto* face_mapper = &std::get<i>(faces_);
 
@@ -250,79 +216,13 @@ namespace xpm
           }
         );
 
-        std::cout << "\n\nFaces " << i;
+        // std::cout << "\n\nFaces " << i;
       });
 
-      // std::list<std::future<void>> queue;
-      //
-      // dpl::sfor<6>([=, this, &queue](auto i) {
-      //   auto* face_mapper = &std::get<i>(faces_);
-      //   
-      //   queue.push_back(
-      //     std::async(std::launch::async, [=]() {
-      //       face_mapper->Populate(dims, cell_size, filter, 
-      //         [=](pnm_idx idx) {
-      //           auto val = velems_adj_arr->GetTypedComponent(idx, 0);
-      //           face_mapper->velems_arr_out_->InsertNextTypedTuple(&val);
-      //         }
-      //       );
-      //
-      //       std::cout << "\n\nFaces " << i;
-      //     })
-      //   );
-      //
-      //   // (--queue.end())->wait();
-      //
-      //   
-      // });
-      //
-      //
-      // for (auto& f : queue)
-      //   f.wait();
-
-
       auto stop = std::chrono::high_resolution_clock::now();
-
-
  
       cout << "\n\nFaces total time: " <<
         duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
-
-      // queue.push_back(
-      //   std::async(std::launch::async, [&]() {
-      //     std::get<0>(faces_).Populate(dims, cell_size, filter, 
-      //       [&](pnm_idx idx) {
-      //         auto val = velems_adj_arr->GetTypedComponent(idx, 0);
-      //         std::get<0>(faces_).velems_arr_out_->InsertNextTypedTuple(&val);
-      //       });
-      //   })
-      // );
-      //
-      // queue.push_back(
-      //   std::async(std::launch::async, [&]() {
-      //     std::get<1>(faces_).Populate(dims, cell_size, filter, 
-      //       [&](pnm_idx idx) {
-      //         auto val = velems_adj_arr->GetTypedComponent(idx, 0);
-      //         std::get<1>(faces_).velems_arr_out_->InsertNextTypedTuple(&val);
-      //       });
-      //   })
-      // );
-      //
-      // queue.push_back(
-      //   std::async(std::launch::async, [&]() {
-      //     std::get<2>(faces_).Populate(dims, cell_size, filter, 
-      //       [&](pnm_idx idx) {
-      //         auto val = velems_adj_arr->GetTypedComponent(idx, 0);
-      //         std::get<2>(faces_).velems_arr_out_->InsertNextTypedTuple(&val);
-      //       });
-      //   })
-      // );
-
-      // (--queue.end())->wait();
-
-      // std::cout << "\n\nFaces " << i;
-      
-
     }
 
     std::tuple<
@@ -399,126 +299,7 @@ namespace xpm
 
 
 
-    template<int e1_idx, typename Filter, typename Post>
-    void FilterFaces(const v3i& dims, const v3d& cell_size, const Filter& filter, const Post& post, vtkPolyData* polydata) {
-      static constexpr auto e1_dim = dpl::sdim<3, e1_idx>{};
-      static constexpr auto e2_dim = e1_dim.next();
-      static constexpr auto e3_dim = e2_dim.next();
-
-      pnm_3idx map_idx{1, dims.x(), dims.x()*dims.y()};
-      pnm_3idx ijk;
-
-      auto& e3 = ijk[e3_dim];
-      auto& e2 = ijk[e2_dim];
-      auto& e1 = ijk[e1_dim];
-
-      auto e3_count = dims[e3_dim];
-      auto e2_count = dims[e2_dim];
-      auto e1_count = dims[e1_dim];
-      
-      auto adj_step = map_idx[e1_dim];
-
-      v3d pos;
-
-      auto* points = polydata->GetPoints();
-      auto* polys = polydata->GetPolys();
-
-      auto point_count = points->GetNumberOfPoints();
-
-      pnm_idx idx1d;
-      
-      for (e3 = 0; e3 < e3_count; ++e3)
-        for (e2 = 0; e2 < e2_count; ++e2) {
-          e1 = 0;
-
-          idx1d = ijk.dot(map_idx);
-          
-          if (filter(idx1d)) {
-            pos[e1_dim] = (0)*cell_size[e1_dim];
-          
-            pos[e2_dim] = (e2)*cell_size[e2_dim];
-            pos[e3_dim] = (e3)*cell_size[e3_dim];
-            points->InsertNextPoint(pos);
-          
-            pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
-            points->InsertNextPoint(pos);
-          
-            pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
-            points->InsertNextPoint(pos);
-          
-            pos[e2_dim] = (e2)*cell_size[e2_dim];
-            points->InsertNextPoint(pos);
-
-
-            vtkIdType indices[] = {point_count + 3, point_count + 2, point_count + 1, point_count + 0};
-            polys->InsertNextCell(4, indices);
-            post(idx1d);
-            point_count += 4;
-          }
-          
-          for (; e1 < e1_count - 1; ++e1) {
-            idx1d = ijk.dot(map_idx);
-            bool idx1d_filter = filter(idx1d);
-
-            auto adj_idx1d = idx1d + adj_step;
-            bool adj_idx1d_filter = filter(adj_idx1d);
-
-            if (idx1d_filter != adj_idx1d_filter) {
-              pos[e1_dim] = (e1 + 1)*cell_size[e1_dim];
-
-              pos[e2_dim] = (e2)*cell_size[e2_dim];
-              pos[e3_dim] = (e3)*cell_size[e3_dim];
-              points->InsertNextPoint(pos);
-
-              pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
-              points->InsertNextPoint(pos);
-
-              pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
-              points->InsertNextPoint(pos);
-
-              pos[e2_dim] = (e2)*cell_size[e2_dim];
-              points->InsertNextPoint(pos);
-
-              if (idx1d_filter) {
-                vtkIdType indices[] = {point_count, point_count + 1, point_count + 2, point_count + 3};
-                polys->InsertNextCell(4, indices);
-                post(idx1d);
-              }
-              else {
-                vtkIdType indices[] = {point_count + 3, point_count + 2, point_count + 1, point_count + 0};
-                polys->InsertNextCell(4, indices);
-                post(adj_idx1d);
-              }
-
-              point_count += 4;
-            }
-          }
-
-
-          idx1d = ijk.dot(map_idx);
-          if (filter(idx1d)) {
-            pos[e1_dim] = (e1_count)*cell_size[e1_dim];
-          
-            pos[e2_dim] = (e2)*cell_size[e2_dim];
-            pos[e3_dim] = (e3)*cell_size[e3_dim];
-            points->InsertNextPoint(pos);
-          
-            pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
-            points->InsertNextPoint(pos);
-          
-            pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
-            points->InsertNextPoint(pos);
-          
-            pos[e2_dim] = (e2)*cell_size[e2_dim];
-            points->InsertNextPoint(pos);
-
-            vtkIdType indices[] = {point_count, point_count + 1, point_count + 2, point_count + 3};
-            polys->InsertNextCell(4, indices);
-            post(idx1d);
-            point_count += 4;
-          }
-        }
-    }
+    
 
 
     
@@ -909,12 +690,18 @@ namespace xpm
       vtkIntArray* velems_arr_in;
       vtkIntArray* velems_adj_arr_in;
 
-      auto pred = [&, this](pnm_idx idx) {
+      auto filter = [&, this](pnm_idx idx) {
         // return true;
 
+        // vtkIntArray* velems_adj_arr_in;
+
+        // return velems_adj_arr_in->GetTypedComponent(idx, 0) > 2;
+
+        
         return phase_in->GetTypedComponent(idx, 0) == 2;
 
         // return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+
         // ;/
 
         int z = idx / (dim.x() * dim.y());
@@ -952,36 +739,22 @@ namespace xpm
         // auto* cat_vis = model->AddCategory("Visualisation");
 
 
-        dpl::qt::property_editor::ItemFunctor<bool> fnctr;
+        dpl::qt::property_editor::ItemFunctor<bool> edges;
 
-        fnctr.name = "Edges";
-        fnctr.get = [this] {
+        edges.name = "Edges";
+        edges.get = [this] {
           return std::get<0>(img_mapper.faces_).actor_->GetProperty()->GetEdgeVisibility();
         };
-
-        fnctr.set = [this](bool v) {
+        edges.set = [this](bool v) {
           dpl::sfor<6>([this, v](auto i) {
             std::get<i>(img_mapper.faces_).actor_->GetProperty()->SetEdgeVisibility(v);
             render_window_->Render();
           });
         };
         
-        
-        model->AddItem(/*cat_vis, */fnctr);
-        
-        // model.AddItem(cat_vis,
-        //   FunctorPropertyItem(fd_widget_, "Show",
-        //     [this](wptr) {
-        //       return static_cast<bool>(plane_actor_->GetVisibility());
-        //     },
-        //     [this](wptr, bool v) {
-        //       plane_actor_->SetVisibility(v);
-        //       fd_widget_->RefreshCubeAxesBounds();
-        //       fd_widget_->Render();
-        //     }
-        // ));
+        model->AddItem(/*cat_vis, */edges);
 
-        // tree_view_factory_
+
         
 
         
@@ -1015,29 +788,17 @@ namespace xpm
       dpl::vtk::PopulateLutRedWhiteBlue(lut_continuous_);
 
       
-      // // pni_.read_from_binary_file(
-      // //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\_MY_TEST_FILE_2.bin)"
-      // //   // R"(C:\dev\.temp\_MY_TEST_FILE_2.bin)"
-      // // );
-      // // pni_.physical_size = {252};
 
       pore_network_model icl_pnm_inv{pnm_path, pore_network_model::file_format::statoil};
 
-
       std::cout << "\n\nNetwork loaded";
-
-
-          
       
       
       auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
       
       lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-
-
       
       renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
-           
 
       std::cout << "\n\nNetwork actor created";
       
@@ -1085,25 +846,8 @@ namespace xpm
 
 
           {
+            img_mapper.Populate(dim, icl_pnm_inv.physical_size/dim, filter, velems_adj_arr_in);
             
-
-            
-
-
-            img_mapper.Populate(dim, icl_pnm_inv.physical_size/dim, pred, velems_adj_arr_in);
-
-            
-            
-            // FilterFacesGlyph<1>(dim, icl_pnm_inv.physical_size/dim, pred, post/*, orient_array*/, img_mapper.points_);
-            // std::cout << "\n\nFaces 1";
-            // FilterFacesGlyph<1>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
-            // FilterFacesGlyph<2>(dim, icl_pnm_inv.physical_size/dim, pred, post, orient_array, points);
-
-
-
-
-
-
             dpl::sfor<6>([&](auto i) {
               auto& mapper = std::get<i>(img_mapper.faces_);
               
@@ -1129,51 +873,11 @@ namespace xpm
               
               renderer_->AddActor(actor);
             });
-            
-                       
-
-            std::cout << "\n\nPRE UPD";
-
-            
-      
-            
-            std::cout << "\n\nPOST UPD";
-            
           }
-          
-
-          
-          
-          
         }
-        
       }
 
 
-
-
-
-
-
-
-
-
-
-
-      
-
-
-
-
-
-
-
-
-      
-
-      
-      
-      
 
       renderer_->ResetCamera();
       
@@ -1206,7 +910,126 @@ namespace xpm
 
 
 
-
+// template<int e1_idx, typename Filter, typename Post>
+    // void FilterFaces(const v3i& dims, const v3d& cell_size, const Filter& filter, const Post& post, vtkPolyData* polydata) {
+    //   static constexpr auto e1_dim = dpl::sdim<3, e1_idx>{};
+    //   static constexpr auto e2_dim = e1_dim.next();
+    //   static constexpr auto e3_dim = e2_dim.next();
+    //
+    //   pnm_3idx map_idx{1, dims.x(), dims.x()*dims.y()};
+    //   pnm_3idx ijk;
+    //
+    //   auto& e3 = ijk[e3_dim];
+    //   auto& e2 = ijk[e2_dim];
+    //   auto& e1 = ijk[e1_dim];
+    //
+    //   auto e3_count = dims[e3_dim];
+    //   auto e2_count = dims[e2_dim];
+    //   auto e1_count = dims[e1_dim];
+    //   
+    //   auto adj_step = map_idx[e1_dim];
+    //
+    //   v3d pos;
+    //
+    //   auto* points = polydata->GetPoints();
+    //   auto* polys = polydata->GetPolys();
+    //
+    //   auto point_count = points->GetNumberOfPoints();
+    //
+    //   pnm_idx idx1d;
+    //   
+    //   for (e3 = 0; e3 < e3_count; ++e3)
+    //     for (e2 = 0; e2 < e2_count; ++e2) {
+    //       e1 = 0;
+    //
+    //       idx1d = ijk.dot(map_idx);
+    //       
+    //       if (filter(idx1d)) {
+    //         pos[e1_dim] = (0)*cell_size[e1_dim];
+    //       
+    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
+    //         pos[e3_dim] = (e3)*cell_size[e3_dim];
+    //         points->InsertNextPoint(pos);
+    //       
+    //         pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
+    //         points->InsertNextPoint(pos);
+    //       
+    //         pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
+    //         points->InsertNextPoint(pos);
+    //       
+    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
+    //         points->InsertNextPoint(pos);
+    //
+    //
+    //         vtkIdType indices[] = {point_count + 3, point_count + 2, point_count + 1, point_count + 0};
+    //         polys->InsertNextCell(4, indices);
+    //         post(idx1d);
+    //         point_count += 4;
+    //       }
+    //       
+    //       for (; e1 < e1_count - 1; ++e1) {
+    //         idx1d = ijk.dot(map_idx);
+    //         bool idx1d_filter = filter(idx1d);
+    //
+    //         auto adj_idx1d = idx1d + adj_step;
+    //         bool adj_idx1d_filter = filter(adj_idx1d);
+    //
+    //         if (idx1d_filter != adj_idx1d_filter) {
+    //           pos[e1_dim] = (e1 + 1)*cell_size[e1_dim];
+    //
+    //           pos[e2_dim] = (e2)*cell_size[e2_dim];
+    //           pos[e3_dim] = (e3)*cell_size[e3_dim];
+    //           points->InsertNextPoint(pos);
+    //
+    //           pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
+    //           points->InsertNextPoint(pos);
+    //
+    //           pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
+    //           points->InsertNextPoint(pos);
+    //
+    //           pos[e2_dim] = (e2)*cell_size[e2_dim];
+    //           points->InsertNextPoint(pos);
+    //
+    //           if (idx1d_filter) {
+    //             vtkIdType indices[] = {point_count, point_count + 1, point_count + 2, point_count + 3};
+    //             polys->InsertNextCell(4, indices);
+    //             post(idx1d);
+    //           }
+    //           else {
+    //             vtkIdType indices[] = {point_count + 3, point_count + 2, point_count + 1, point_count + 0};
+    //             polys->InsertNextCell(4, indices);
+    //             post(adj_idx1d);
+    //           }
+    //
+    //           point_count += 4;
+    //         }
+    //       }
+    //
+    //
+    //       idx1d = ijk.dot(map_idx);
+    //       if (filter(idx1d)) {
+    //         pos[e1_dim] = (e1_count)*cell_size[e1_dim];
+    //       
+    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
+    //         pos[e3_dim] = (e3)*cell_size[e3_dim];
+    //         points->InsertNextPoint(pos);
+    //       
+    //         pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
+    //         points->InsertNextPoint(pos);
+    //       
+    //         pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
+    //         points->InsertNextPoint(pos);
+    //       
+    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
+    //         points->InsertNextPoint(pos);
+    //
+    //         vtkIdType indices[] = {point_count, point_count + 1, point_count + 2, point_count + 3};
+    //         polys->InsertNextCell(4, indices);
+    //         post(idx1d);
+    //         point_count += 4;
+    //       }
+    //     }
+    // }
 
 
 

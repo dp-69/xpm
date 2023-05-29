@@ -43,7 +43,7 @@ namespace dpl
   inline constexpr bool has_any_v = has_any<Args_...>::value;
 
   template <int i_>
-  using int_const = std::integral_constant<int, i_>;
+  using ic = std::integral_constant<int, i_>;
 
 
   
@@ -82,43 +82,50 @@ namespace dpl
 
   
 
-  template <int First, int Last, typename Lambda>
-  constexpr void sfor(const Lambda& f) {
-    if constexpr (First < Last) {
-      if constexpr (std::is_invocable_v<Lambda, int_const<First>>)
-        f(int_const<First>{});
+  template <int n0, int n1, typename Functor>
+  constexpr void sfor(const Functor& f) {
+    if constexpr (n0 < n1) {
+      if constexpr (std::is_invocable_v<Functor, ic<n0>>)
+        f(ic<n0>{});
       else
         f();
 
-      dpl::sfor<First + 1, Last>(f);
+      dpl::sfor<n0 + 1, n1>(f);
     }
   }
 
-  template <int Count, typename Lambda>
-  constexpr void sfor(const Lambda& f) {
-    dpl::sfor<0, Count>(f);
+  template <int n, typename Functor>
+  constexpr void sfor(const Functor& f) {
+    dpl::sfor<0, n>(f);
   }
 
-  template <int First, int Last, typename Lambda>
-  constexpr void _psfor(std::future<void>* queue, const Lambda& f) {
-    if constexpr (First < Last) {
-      if constexpr (std::is_invocable_v<Lambda, int_const<First>>)
-        *queue = std::async(std::launch::async, f, int_const<First>{});
-      else
-        *queue = std::async(std::launch::async, f);        
-        
-      dpl::_psfor<First + 1, Last>(++queue, f);
+  namespace internal
+  {
+    template <int n0, int n1, typename Functor>
+    constexpr void psfor(std::future<void>* queue, const Functor& f) {
+      if constexpr (n0 < n1) {
+        if constexpr (std::is_invocable_v<Functor, ic<n0>>)
+          *queue = std::async(std::launch::async, f, ic<n0>{});
+        else
+          *queue = std::async(std::launch::async, f);        
+          
+        internal::psfor<n0 + 1, n1>(++queue, f);
+      }
     }
   }
   
-  template <int Count, typename Lambda>
-  constexpr void psfor(const Lambda& f) {
-    std::array<std::future<void>, Count> queue;
+  template <int n, typename Functor>
+  constexpr void psfor(const Functor& f) {
+    std::array<std::future<void>, n> queue;
 
-    dpl::_psfor<0, Count>(queue.data(), f);
+    internal::psfor<0, n>(queue.data(), f);
 
-    for (std::future<void>& task : queue)
-      task.wait();
+    sfor<n>([&](auto i) {
+      queue[i].wait();
+    });
+    
+    // for (std::future<void>& task : queue)
+    //   task.wait();
   }
 
   // template<int Count>
@@ -188,10 +195,10 @@ namespace dpl
   
 
 
-  template<char thousands_sep_ = ',', typename T_>
-  std::string ft_format(const T_& value, int precision = 0) {
+  template<char ThousandsSep = ',', typename T>
+  std::string ft_format(const T& value, int precision = 0) {
     struct separate_thousands : std::numpunct<char> {
-      char_type do_thousands_sep() const override { return thousands_sep_; }  // separate with commas
+      char_type do_thousands_sep() const override { return ThousandsSep; }  // separate with commas
       string_type do_grouping() const override { return "\3"; } // groups of 3 digit
     };
 
