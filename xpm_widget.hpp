@@ -3,6 +3,7 @@
 
 #include "xpm/functions.h"
 
+#include <dpl/hypre/Input.hpp>
 #include <dpl/qt/property_editor/PropertyItemsBase.hpp>
 #include <dpl/qt/property_editor/QPropertyTreeView.hpp>
 #include <dpl/vtk/TidyAxes.hpp>
@@ -53,7 +54,23 @@
 
 namespace xpm
 {
+  namespace geometric_properties
+  {
+    struct equilateral_triangle_properties
+    {
+      static constexpr double area(double r_ins = 1) {
+        return 5.19615242271*r_ins*r_ins;
+      }
 
+      // k * G, k - coefficient, G - shape factor
+      static constexpr double conductance(double area = 1, double viscosity = 1) {
+        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
+      }
+    };
+  }
+
+
+  
   template<int face_idx>
   class ImageDataGlyphMapperFace
   {
@@ -263,6 +280,9 @@ namespace xpm
     vtkRenderWindowInteractor* interactor_;
     QVTKWidgetRef* qvtk_widget_;
     dpl::vtk::TidyAxes tidy_axes_;
+
+    vtkNew<vtkLookupTable> lut_pressure_;
+    
     vtkNew<vtkLookupTable> lut_continuous_;
     vtkNew<vtkLookupTable> lut_pore_solid_;
     vtkNew<vtkLookupTable> lut_velem_;
@@ -291,8 +311,8 @@ namespace xpm
 
     static auto CreateNetworkAssembly(const pore_network_model& pnm, vtkLookupTable* lut) {
       auto net = vtkSmartPointer<vtkAssembly>::New();
-      net->AddPart(CreateNodeActor(pnm, lut));
-      net->AddPart(CreateThroatActor(pnm, lut));
+      net->AddPart(CreateNodeActor(pnm, lut, [&](pnm_idx i) { return pnm.node_[attribs::r_ins][i]; }));
+      net->AddPart(CreateThroatActor(pnm, lut, [&](pnm_idx i) { return pnm.throat_[attribs::r_ins][i]; }));
       return net;
     }
 
@@ -316,13 +336,13 @@ namespace xpm
       auto image_path = 
         // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
         
-        // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
-        R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
+        R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
+        // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
       ;
 
       auto velems_path = 
-        // R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
-        R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
+        R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
+        // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
       ;
 
 
@@ -672,10 +692,72 @@ namespace xpm
       // renderer_->AddActor(image_actor_);
     }
 
+
+    auto SolvePressure(pore_network_model& pnm) {
+
+      using eq_tri = geometric_properties::equilateral_triangle_properties;
+      using namespace attribs;
+      
+      // auto calc_coef = [&pnm](pnm_idx i) {
+      //   auto [n0, n1] = pnm.throat_[adj][i];
+      //   
+      //   return
+      //     (pnm.inner_node(n0) ? pnm.throat_[length0][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n0])) : 0.0) +
+      //     (pnm.inner_node(n1) ? pnm.throat_[length1][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n1])) : 0.0) +
+      //     pnm.throat_[length][i]/eq_tri::conductance(eq_tri::area(pnm.throat_[r_ins][i]));
+      // };
+
+      dpl::hypre::SparseMatrix matrix(pnm.node_count_);
+
+      std::vector<double> free_terms(pnm.node_count_, 0);
+      
+      
+      for (pnm_idx i = 0; i < pnm.throat_count_; ++i) {
+        auto [n0, n1] = pnm.throat_[adj][i];
+
+        auto k = pnm.throat_[length0][i];
+        auto w = pnm.throat_[length1][i];
+        auto Q = pnm.throat_[length][i];
+        
+        
+        auto coef = -1.0/(
+          (pnm.inner_node(n0) ? pnm.throat_[length0][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n0])) : 0.0) +
+          (pnm.inner_node(n1) ? pnm.throat_[length1][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n1])) : 0.0) +
+          pnm.throat_[length][i]/eq_tri::conductance(eq_tri::area(pnm.throat_[r_ins][i])));
+
+        if (n0 == pnm.inlet()) {
+          free_terms[n1] += coef/**1 Pa*/;
+          matrix.AddDiagCoef(n1, coef);
+        }
+        else if (n1 == pnm.inlet()) {
+          free_terms[n0] += coef/**1 Pa*/;
+          matrix.AddDiagCoef(n0, coef);
+        }
+        else if (n0 == pnm.outlet()) {
+          matrix.AddDiagCoef(n1, coef);
+        }
+        else if (n1 == pnm.outlet()) {
+          matrix.AddDiagCoef(n0, coef);
+        }
+        else /*if (n0 != pnm.outlet() && n1 != pnm.outlet())*/ {
+          matrix.AddDifferenceCoefs(n0, n1, -coef);
+        }
+      }
+
+
+      dpl::hypre::Input input{matrix, std::move(free_terms)};
+
+      auto values = input.Solve();
+
+      return values;
+
+      // int p = 3;
+      
+    }
     
     void Init() {
       auto pnm_path = 
-        // R"(E:\hwu\research126\d\modelling\networks\3D_network\10x10x10\10x10x10)"
+        // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\10x10x10\10x10x10)"
         // R"(C:\dev\.temp\images\SS-1000\XNet)"
         // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
 
@@ -683,8 +765,8 @@ namespace xpm
         R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
       ;
 
-      // v3i dim = 252;
-      v3i dim = 500;
+      v3i dim = 252;
+      // v3i dim = 500;
 
       vtkUnsignedCharArray* phase_in;
       vtkIntArray* velems_arr_in;
@@ -698,9 +780,9 @@ namespace xpm
         // return velems_adj_arr_in->GetTypedComponent(idx, 0) > 2;
 
         
-        return phase_in->GetTypedComponent(idx, 0) == 2;
+        // return phase_in->GetTypedComponent(idx, 0) == 2;
 
-        // return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+        return velems_arr_in->GetTypedComponent(idx, 0) < 2;
 
         // ;/
 
@@ -785,44 +867,17 @@ namespace xpm
 
 
 
+      dpl::vtk::PopulateLutRedWhiteBlue(lut_pressure_);
       dpl::vtk::PopulateLutRedWhiteBlue(lut_continuous_);
 
       
 
-      pore_network_model icl_pnm_inv{pnm_path, pore_network_model::file_format::statoil};
+      pore_network_model pnm{pnm_path, pore_network_model::file_format::statoil};
 
       std::cout << "\n\nNetwork loaded";
       
-      
-      auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
-      
-      lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-      
-      renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
 
-      std::cout << "\n\nNetwork actor created";
-      
-      
-      LoadImage();
 
-      
-      
-      std::cout << "\n\nLoaded image";
-
-      
-      // image_actor_->SetUserTransform()
-      {
-        vtkNew<vtkTransform> trans;
-        trans->PostMultiply();
-        trans->Scale(v3d{icl_pnm_inv.physical_size.x()});
-        // trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
-        image_actor_->SetUserTransform(trans);
-      }
-
-            
-               
-
-      
 
 
 
@@ -830,51 +885,155 @@ namespace xpm
 
 
 
-      {
-        phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
-        velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
-        velems_adj_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem_adj"));
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+
+
+      
+      
+      
+
+
+      if (true) {
+        // auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
+        //
+        // lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
+        //
+        // renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
+        //
+        // std::cout << "\n\nNetwork actor created";
+
+
+        auto pressure = SolvePressure(pnm);
         
+        lut_pressure_->SetTableRange(0, 1);
+        
+
+        auto assembly = vtkSmartPointer<vtkAssembly>::New();
+        assembly->AddPart(CreateNodeActor(pnm, lut_pressure_, [&](pnm_idx i) { return pressure[i]; }));
+        assembly->AddPart(CreateThroatActor(pnm, lut_pressure_, [&](pnm_idx i) {
+          auto [n0, n1] = pnm.throat_[attribs::adj][i];
+
+          return (
+            (n0 == pnm.inlet() ? 1 : n0 == pnm.outlet() ? 0 : pressure[n0]) +
+            (n1 == pnm.inlet() ? 1 : n1 == pnm.outlet() ? 0 : pressure[n1]))/2;
+
+          // return 0;pressure[i];
+        }));
+        renderer_->AddActor(assembly);
+        
+        
+        
+        
+        // color_array->SetName("color");
+        
+        
+        
+        
+        
+        std::cout << "\n\nNetwork actor created";
+      }
+      else
+      {
+
+        auto [min, max] = std::ranges::minmax_element(pnm.node_.range(attribs::r_ins));
+      
+        lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
+        
+        renderer_->AddActor(CreateNetworkAssembly(pnm, lut_continuous_));
+
+        std::cout << "\n\nNetwork actor created";
+        
+
+
+        
+        LoadImage();
+
+      
+      
+        std::cout << "\n\nLoaded image";
+
+        
+        // image_actor_->SetUserTransform()
         {
-          auto scale_factor = /*1.0*/icl_pnm_inv.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
-          
-          
-          
-          img_mapper.Init(scale_factor);
-          
+          vtkNew<vtkTransform> trans;
+          trans->PostMultiply();
+          trans->Scale(v3d{pnm.physical_size.x()});
+          // trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
+          image_actor_->SetUserTransform(trans);
+        }
+
+              
+                 
+
+        
 
 
 
+        
+
+
+
+        {
+          phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
+          velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
+          velems_adj_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem_adj"));
+          
           {
-            img_mapper.Populate(dim, icl_pnm_inv.physical_size/dim, filter, velems_adj_arr_in);
+            auto scale_factor = /*1.0*/pnm.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
             
-            dpl::sfor<6>([&](auto i) {
-              auto& mapper = std::get<i>(img_mapper.faces_);
+            
+            
+            img_mapper.Init(scale_factor);
+            
+
+
+
+            {
+              img_mapper.Populate(dim, pnm.physical_size/dim, filter, velems_adj_arr_in);
               
-              vtkGlyph3DMapper* glyphs = mapper.glyphs_.Get();
-              vtkActor* actor = mapper.actor_.Get();
+              dpl::sfor<6>([&](auto i) {
+                auto& mapper = std::get<i>(img_mapper.faces_);
+                
+                vtkGlyph3DMapper* glyphs = mapper.glyphs_.Get();
+                vtkActor* actor = mapper.actor_.Get();
 
 
 
-              glyphs->SetLookupTable(lut_velem_);
-              glyphs->SetColorModeToMapScalars();
-              glyphs->UseLookupTableScalarRangeOn();
-              glyphs->SetScalarModeToUsePointData();
+                glyphs->SetLookupTable(lut_velem_);
+                glyphs->SetColorModeToMapScalars();
+                glyphs->UseLookupTableScalarRangeOn();
+                glyphs->SetScalarModeToUsePointData();
 
 
-              actor->SetMapper(glyphs);
+                actor->SetMapper(glyphs);
 
-              actor->GetProperty()->SetEdgeVisibility(/*false*/false);
-              actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
-              
-              actor->GetProperty()->SetAmbient(0.5);
-              actor->GetProperty()->SetDiffuse(0.4);
-              actor->GetProperty()->BackfaceCullingOn();
-              
-              renderer_->AddActor(actor);
-            });
+                actor->GetProperty()->SetEdgeVisibility(/*false*/false);
+                actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
+                
+                actor->GetProperty()->SetAmbient(0.5);
+                actor->GetProperty()->SetDiffuse(0.4);
+                actor->GetProperty()->BackfaceCullingOn();
+                
+                // renderer_->AddActor(actor);
+              });
+            }
           }
         }
+
       }
 
 
@@ -882,14 +1041,28 @@ namespace xpm
       renderer_->ResetCamera();
       
       tidy_axes_.Init(renderer_.Get());
+
+
+
+
+      connect(
+        qvtk_widget_,
+        &QVTKWidgetRef::resized, this, [this]() {
+          tidy_axes_.RefreshAxes();
+        });
+      
+      
+      
+      // renderer_->GetActiveCamera()->AddObserver(vtkCommand::ModifiedEvent, this, &TidyAxes::RefreshAxes);
+      
       tidy_axes_.SetFormat(".2e");
 
       
 
       double bounds[] = {
-        0., icl_pnm_inv.physical_size.x(),
-        0., icl_pnm_inv.physical_size.y(),
-        0., icl_pnm_inv.physical_size.z()};
+        0., pnm.physical_size.x(),
+        0., pnm.physical_size.y(),
+        0., pnm.physical_size.z()};
       tidy_axes_.Build(bounds);
 
       // tidy_axes_.Build();
@@ -898,236 +1071,3 @@ namespace xpm
     }
   };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-// template<int e1_idx, typename Filter, typename Post>
-    // void FilterFaces(const v3i& dims, const v3d& cell_size, const Filter& filter, const Post& post, vtkPolyData* polydata) {
-    //   static constexpr auto e1_dim = dpl::sdim<3, e1_idx>{};
-    //   static constexpr auto e2_dim = e1_dim.next();
-    //   static constexpr auto e3_dim = e2_dim.next();
-    //
-    //   pnm_3idx map_idx{1, dims.x(), dims.x()*dims.y()};
-    //   pnm_3idx ijk;
-    //
-    //   auto& e3 = ijk[e3_dim];
-    //   auto& e2 = ijk[e2_dim];
-    //   auto& e1 = ijk[e1_dim];
-    //
-    //   auto e3_count = dims[e3_dim];
-    //   auto e2_count = dims[e2_dim];
-    //   auto e1_count = dims[e1_dim];
-    //   
-    //   auto adj_step = map_idx[e1_dim];
-    //
-    //   v3d pos;
-    //
-    //   auto* points = polydata->GetPoints();
-    //   auto* polys = polydata->GetPolys();
-    //
-    //   auto point_count = points->GetNumberOfPoints();
-    //
-    //   pnm_idx idx1d;
-    //   
-    //   for (e3 = 0; e3 < e3_count; ++e3)
-    //     for (e2 = 0; e2 < e2_count; ++e2) {
-    //       e1 = 0;
-    //
-    //       idx1d = ijk.dot(map_idx);
-    //       
-    //       if (filter(idx1d)) {
-    //         pos[e1_dim] = (0)*cell_size[e1_dim];
-    //       
-    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
-    //         pos[e3_dim] = (e3)*cell_size[e3_dim];
-    //         points->InsertNextPoint(pos);
-    //       
-    //         pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
-    //         points->InsertNextPoint(pos);
-    //       
-    //         pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
-    //         points->InsertNextPoint(pos);
-    //       
-    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
-    //         points->InsertNextPoint(pos);
-    //
-    //
-    //         vtkIdType indices[] = {point_count + 3, point_count + 2, point_count + 1, point_count + 0};
-    //         polys->InsertNextCell(4, indices);
-    //         post(idx1d);
-    //         point_count += 4;
-    //       }
-    //       
-    //       for (; e1 < e1_count - 1; ++e1) {
-    //         idx1d = ijk.dot(map_idx);
-    //         bool idx1d_filter = filter(idx1d);
-    //
-    //         auto adj_idx1d = idx1d + adj_step;
-    //         bool adj_idx1d_filter = filter(adj_idx1d);
-    //
-    //         if (idx1d_filter != adj_idx1d_filter) {
-    //           pos[e1_dim] = (e1 + 1)*cell_size[e1_dim];
-    //
-    //           pos[e2_dim] = (e2)*cell_size[e2_dim];
-    //           pos[e3_dim] = (e3)*cell_size[e3_dim];
-    //           points->InsertNextPoint(pos);
-    //
-    //           pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
-    //           points->InsertNextPoint(pos);
-    //
-    //           pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
-    //           points->InsertNextPoint(pos);
-    //
-    //           pos[e2_dim] = (e2)*cell_size[e2_dim];
-    //           points->InsertNextPoint(pos);
-    //
-    //           if (idx1d_filter) {
-    //             vtkIdType indices[] = {point_count, point_count + 1, point_count + 2, point_count + 3};
-    //             polys->InsertNextCell(4, indices);
-    //             post(idx1d);
-    //           }
-    //           else {
-    //             vtkIdType indices[] = {point_count + 3, point_count + 2, point_count + 1, point_count + 0};
-    //             polys->InsertNextCell(4, indices);
-    //             post(adj_idx1d);
-    //           }
-    //
-    //           point_count += 4;
-    //         }
-    //       }
-    //
-    //
-    //       idx1d = ijk.dot(map_idx);
-    //       if (filter(idx1d)) {
-    //         pos[e1_dim] = (e1_count)*cell_size[e1_dim];
-    //       
-    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
-    //         pos[e3_dim] = (e3)*cell_size[e3_dim];
-    //         points->InsertNextPoint(pos);
-    //       
-    //         pos[e2_dim] = (e2 + 1)*cell_size[e2_dim];
-    //         points->InsertNextPoint(pos);
-    //       
-    //         pos[e3_dim] = (e3 + 1)*cell_size[e3_dim];
-    //         points->InsertNextPoint(pos);
-    //       
-    //         pos[e2_dim] = (e2)*cell_size[e2_dim];
-    //         points->InsertNextPoint(pos);
-    //
-    //         vtkIdType indices[] = {point_count, point_count + 1, point_count + 2, point_count + 3};
-    //         polys->InsertNextCell(4, indices);
-    //         post(idx1d);
-    //         point_count += 4;
-    //       }
-    //     }
-    // }
-
-
-
-
-
-
-
-
- // {
-                //
-                //   vtkNew<vtkPoints> points;
-                //   vtkNew<vtkCellArray> cells;
-                //   vtkNew<vtkPolyData> poly;
-                //   poly->SetPoints(points);
-                //   poly->SetPolys(cells);
-                //
-                //
-                //   
-                //   
-                //
-                //   auto* phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
-                //   auto* velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
-                //   auto* velems_adj_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem_adj"));
-                //
-                //   vtkNew<vtkIntArray> velems_arr_out;
-                //   velems_arr_out->SetName("velem_adj");
-                //   
-                //
-                //   poly->GetCellData()->AddArray(velems_arr_out);
-                //   
-                //   
-                //   auto pred = [&, this](pnm_idx idx) {
-                //
-                //
-                //     // return true;
-                //     
-                //     // return phase_in->GetTypedComponent(idx, 0) == 2;
-                //
-                //
-                //     
-                //     return velems_arr_in->GetTypedComponent(idx, 0) < 2;
-                //     // ;
-                //     //
-                //
-                //     int z = idx/(dim.x()*dim.y());
-                //     int y = (idx - z*dim.x()*dim.y())/dim.x();
-                //     int x = idx - z*dim.x()*dim.y() - y*dim.x();
-                //     
-                //     // int z = i%dim.z();
-                //     // int y = (i/dim.z())%dim.y();
-                //     // int x = i/(dim.y()*dim.z()); 
-                //
-                //     
-                //     
-                //     return x < 250 && idx%2;
-                //     
-                //
-                //
-                //     // return i < ((252*252*252)/2);
-                //   };
-                //
-                //   auto post = [&, this](pnm_idx idx) {
-                //     auto val = velems_adj_arr_in->GetTypedComponent(idx, 0);
-                //     velems_arr_out->InsertNextTypedTuple(&val);
-                //   };
-                //   
-                //   FilterFaces<0>(dim, icl_pnm_inv.physical_size/dim, pred, post, poly);
-                //   FilterFaces<1>(dim, icl_pnm_inv.physical_size/dim, pred, post, poly);
-                //   FilterFaces<2>(dim, icl_pnm_inv.physical_size/dim, pred, post, poly);
-                //
-                //
-                //   vtkNew<vtkPolyDataMapper> mapper;
-                //   // mapper->SetInputData(poly);
-                //   // mapper->SetScalarRange(poly->GetScalarRange());
-                //
-                //
-                //   mapper->SetInputData(poly);
-                //   // mapper->SetScalarRange(poly->GetScalarRange());
-                //   mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, velems_arr_out->GetName()); // This is needed only for vtkImageData without vtkThreshold
-                //   
-                //   mapper->SetColorModeToMapScalars(); 
-                //   mapper->UseLookupTableScalarRangeOn();
-                //   mapper->SetScalarModeToUseCellData();
-                //   mapper->SetLookupTable(/*image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : */lut_velem_);
-                //
-                //   poly->GetCellData()->SetActiveScalars(velems_arr_out->GetName());
-                //
-                //
-                //   vtkNew<vtkActor> actor;
-                //   actor->SetMapper(mapper);
-                //
-                //   actor->GetProperty()->SetEdgeVisibility(false/*true*/);
-                //   actor->GetProperty()->SetEdgeColor(v3d{0.5} /*0, 0, 0*/);
-                //   
-                //   actor->GetProperty()->SetAmbient(0.5);
-                //   actor->GetProperty()->SetDiffuse(0.4);
-                //   actor->GetProperty()->BackfaceCullingOn();
-                //
-                //   
-                //   // renderer_->AddActor(actor);
-                // }

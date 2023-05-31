@@ -1,18 +1,6 @@
 ﻿{
   "configurations": [
     {
-      "name": "x64-Debug",
-      "generator": "Ninja",
-      "configurationType": "Debug",
-      "inheritEnvironments": [ "msvc_x64_x64" ],
-      "buildRoot": "${projectDir}\\out\\build\\${name}",
-      "installRoot": "${projectDir}\\out\\install\\${name}",
-      "cmakeCommandArgs": "",
-      "buildCommandArgs": "-v",
-      "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake"
-    },
-    {
       "name": "x64-Release",
       "generator": "Ninja",
       "configurationType": "Release",
@@ -22,6 +10,18 @@
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
       "inheritEnvironments": [ "msvc_x64_x64" ],
+      "cmakeToolchain": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "x64-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
       "cmakeToolchain": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake"
     },
     {
@@ -45,7 +45,7 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/vcpkg-q515v82/scripts/buildsystems/vcpkg.cmake",
+      "cmakeToolchain": "C:/vcpkg-qt5.15vtk8.2/scripts/buildsystems/vcpkg.cmake",
       "inheritEnvironments": [ "msvc_x64_x64" ]
     },
     {
@@ -57,7 +57,7 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/vcpkg-q515v82/scripts/buildsystems/vcpkg.cmake",
+      "cmakeToolchain": "C:/vcpkg-qt5.15vtk8.2/scripts/buildsystems/vcpkg.cmake",
       "inheritEnvironments": [ "msvc_x64_x64" ]
     },
     {
@@ -69,9 +69,8 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "cmakeToolchain": "C:/vcpkg-q515v82/scripts/buildsystems/vcpkg.cmake",
-      "inheritEnvironments": [ "msvc_x64_x64" ],
-      "variables": []
+      "cmakeToolchain": "C:/vcpkg-qt5.15vtk8.2/scripts/buildsystems/vcpkg.cmake",
+      "inheritEnvironments": [ "msvc_x64_x64" ]
     }
   ]
 }

@@ -27,6 +27,8 @@
 
 #include <dpl/static_vector.hpp>
 #include <dpl/qt/property_editor/Editors.hpp>
+#include <dpl/qt/property_editor/ScalarConvert.hpp>
+
 
 #include <utility>
 #include <vector>
@@ -163,61 +165,7 @@ namespace dpl::qt::property_editor
     return widget;
   }
   
-  template <typename Scalar> struct ScalarConvert {};
-
-  template<> struct ScalarConvert<bool> {
-    static bool FromString(const QString& str, bool& value) {
-      value = QVariant{str}.toBool();
-      return true;
-    }
-
-    static auto ToQString(bool value) { return QString::number(value); }
-    static auto ToString(bool value) { return std::to_string(value); } 
-  };
   
-  template<> struct ScalarConvert<double> {
-    static bool FromString(const QString& str, double& value) {
-      bool valid;
-      auto str_copy = str;
-      value = str_copy.replace(",", "").toDouble(&valid);
-      return valid;
-    }
-
-    static auto ToQString(double value) { return QString::number(value); }
-    static auto ToString(double value) { return std::to_string(value); } 
-  };
-
-  template<> struct ScalarConvert<int> {
-    static bool FromString(const QString& str, int& value) {
-      bool valid;
-      value = str.toInt(&valid);
-      return valid;
-    }
-    
-    static auto ToQString(int value) { return QString::number(value); }
-    static auto ToString(int value) { return std::to_string(value); } 
-  };
-
-  template<> struct ScalarConvert<QString> {
-    static auto FromString(const QString& str, QString& value) {
-      value = str;
-      return true;
-    }
-    
-    static auto ToQString(const QString& value) { return value; }
-    static auto ToString(const QString& value) { return value.toStdString(); }
-  };
-
-  template<> struct ScalarConvert<std::string> {
-    static auto FromString(const QString& str, std::string& value) {
-      value = str.toStdString();
-      return true;
-    }
-
-    static auto ToQString(const std::string& value) { return QString::fromStdString(value); }
-    static auto ToString(const std::string& value) { return value; }
-  };
-
 
   
   

@@ -1,6 +1,6 @@
 // import threedvisMODULE;
 
-#include "threedvis.hpp"
+#include "xpm_widget.hpp"
 
 #include <vtkActor.h>
 #include <vtkCamera.h>

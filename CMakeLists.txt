@@ -51,7 +51,7 @@ message("VTK_VERSION: " ${VTK_VERSION})
 
 
 add_executable(xpm_project # WIN32
-  "threedvis.hpp"  
+  "xpm_widget.hpp"  
 
   "mywidg.ui"
   "main.cpp"
@@ -142,3 +142,7 @@ endif()
 
 find_package(Boost REQUIRED COMPONENTS iostreams)
 target_link_libraries(xpm_project PRIVATE Boost::iostreams)
+
+
+find_package(HYPRE REQUIRED)
+target_link_libraries(xpm_project PRIVATE HYPRE::HYPRE)

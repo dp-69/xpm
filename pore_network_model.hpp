@@ -24,6 +24,9 @@ namespace xpm
     static_key(pos)
     static_key(r_ins)
     static_key(adj)
+    static_key(length)
+    static_key(length0)
+    static_key(length1)
   }
 
   using mapped_file_source = boost::iostreams::mapped_file_source;
@@ -141,7 +144,7 @@ namespace xpm
         return node_count_;
   
       if (idx == 0)
-        return node_count_+ 1;
+        return node_count_ + 1;
     
       return idx - 1;
     }
@@ -169,7 +172,10 @@ namespace xpm
 
     dpl::soa<
       attribs::adj_t, std::pair<pnm_idx, pnm_idx>,
-      attribs::r_ins_t, double
+      attribs::r_ins_t, double,
+      attribs::length_t, double,
+      attribs::length0_t, double,
+      attribs::length1_t, double
     > throat_;
     
     
@@ -196,9 +202,9 @@ namespace xpm
 
     pore_network_model() = default;
     
-    pore_network_model(const pore_network_model& other) = default;
+    pore_network_model(const pore_network_model& other) = delete;
     pore_network_model(pore_network_model&& other) noexcept = default;
-    pore_network_model& operator=(const pore_network_model& other) = default;
+    pore_network_model& operator=(const pore_network_model& other) = delete;
     pore_network_model& operator=(pore_network_model&& other) noexcept = default;
 
     pore_network_model(const std::filesystem::path& p, file_format ff) {
@@ -242,6 +248,22 @@ namespace xpm
     bool inner_node(pnm_idx i) const {
       return i < node_count_;
     }
+
+    auto inlet() const {
+      return node_count_;
+    }
+
+    auto outlet() const {
+      return node_count_ + 1;
+    }
+    
+    // bool inlet(pnm_idx i) const {
+    //   return i == inlet();
+    // }
+    //
+    // bool outlet(pnm_idx i) const {
+    //   return i == outlet();
+    // }
 
     // auto node_r_ins(pnm_idx i) const {
     //   return node_[attribs::r_ins][i];
@@ -331,11 +353,11 @@ namespace xpm
           dpl::sfor<3>([&throat2_ptr] {
             skip_word(throat2_ptr);  
           });
-                    
-          // parse_text(throat2_ptr, _length0[i]); //TODO
-          // parse_text(throat2_ptr, _length1[i]);
-          // parse_text(throat2_ptr, lengthThroat[i]);
-          // parse_text(throat2_ptr, volume[i]);
+          
+          parse_text(throat2_ptr, throat_[length0][i]); 
+          parse_text(throat2_ptr, throat_[length1][i]);
+          parse_text(throat2_ptr, throat_[length][i]);
+          // parse_text(throat2_ptr, volume[i]);          //TODO
           skip_line(throat2_ptr);
         }  
       }
