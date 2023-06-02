@@ -72,12 +72,14 @@ namespace dpl
     size_type size_ = 0;
     
     template <typename T>
-    static void resize_(std::unique_ptr<T[]>& uptr, size_type size) {
-      uptr = std::make_unique<T[]>(size);
+    void resize_(std::unique_ptr<T[]>& uptr, size_type new_size) {
+      auto new_uptr = std::make_unique<T[]>(new_size);
+      std::copy(uptr.get(), uptr.get() + std::min(size_, new_size), new_uptr.get());
+      uptr = std::move(new_uptr);
     }
 
     template <typename T>
-    static void assign_(std::unique_ptr<T[]>& uptr, size_type size, const T& v) {
+    void assign_(std::unique_ptr<T[]>& uptr, size_type size, const T& v) {
       resize_(uptr, size);
       for (size_type i = 0; i < size; ++i)
         uptr[i] = v;
@@ -99,14 +101,16 @@ namespace dpl
     explicit soa_impl_(Args...) {}
     
     void resize(const size_type count) {
+      this->apply([this, count](auto& attrib) {
+        this->resize_(attrib, count);
+      });
       size_ = count;
-      this->apply([=](auto& attrib) { resize_(attrib, count); });
     }
 
     template <typename T>
     void assign(const size_type count, const T& v) {
+      this->apply([=](auto& attrib) { assign_(attrib, count, v); }); // TODO, tidy up
       size_ = count;
-      this->apply([=](auto& attrib) { assign_(attrib, count, v); });
     }
 
     template <typename Key, std::enable_if_t<!std::is_base_of_v<lookup_item_tag, Key>, int> = 0>

@@ -117,14 +117,14 @@ namespace xpm
     
   public:
     vtkNew<vtkGlyph3DMapper> glyphs_;
-    vtkNew<vtkIntArray> velems_arr_out_;
+    vtkNew<vtkIntArray> darcy_adj_out_;
     vtkNew<vtkActor> actor_;
     
     void Init(double half_length = 0.5) {
-      velems_arr_out_->SetName("velem_adj");
+      darcy_adj_out_->SetName("darcy_adj");
 
       vtkNew<vtkPolyData> polydata;
-      polydata->GetPointData()->SetScalars(velems_arr_out_);
+      polydata->GetPointData()->SetScalars(darcy_adj_out_);
       polydata->SetPoints(points_);
 
       glyphs_->OrientOff();
@@ -229,7 +229,7 @@ namespace xpm
         face_mapper->Populate(dims, cell_size, filter, 
           [=](pnm_idx idx) {
             auto val = velems_adj_arr->GetTypedComponent(idx, 0);
-            face_mapper->velems_arr_out_->InsertNextTypedTuple(&val);
+            face_mapper->darcy_adj_out_->InsertNextTypedTuple(&val);
           }
         );
 
@@ -295,12 +295,26 @@ namespace xpm
 
 
 
-    vtkNew<vtkActor> image_actor_;
+    // vtkNew<vtkActor> image_actor_;
 
 
 
 
     ImageDataGlyphMapper img_mapper;
+
+
+
+
+    vtkNew<vtkIntArray> velem_array;
+    
+    
+    /*
+     * connected pore node of a solid voxel. Gives a cluster number [0, n].
+     * -2 for pore voxels,
+     * -1 for solid voxels not connected
+     * 
+     */
+    vtkNew<vtkIntArray> img_darcy_adj_array;
 
 
     
@@ -375,15 +389,18 @@ namespace xpm
 
 
       vtkNew<vtkUnsignedCharArray> phase_array;
-      vtkNew<vtkIntArray> velem_array;
+      
 
-      vtkNew<vtkIntArray> velem_adjacent_array;
+
+      
 
       
       
       size_t size;
       dpl::vector_n<pnm_idx, 3> dim;
-      
+
+
+      std::vector<unsigned char> phase_buffer;
       
       {
         // Open the stream
@@ -392,13 +409,13 @@ namespace xpm
         is.seekg(0, std::ios_base::end);
         size = is.tellg();
         is.seekg(0, std::ios_base::beg);
-        std::vector<unsigned char> v(size);
-        is.read(reinterpret_cast<char*>(v.data()), size);
+        phase_buffer.resize(size);
+        is.read(reinterpret_cast<char*>(phase_buffer.data()), size);
 
 
         
         for (size_t i = 0; i < size; ++i)
-          phase_array->InsertTypedComponent(i, 0, v[i]/*v[i] == 0 ? 0 : 1*/);
+          phase_array->InsertTypedComponent(i, 0, phase_buffer[i]/*v[i] == 0 ? 0 : 1*/);
 
         
           // phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 230 : 99);
@@ -414,14 +431,18 @@ namespace xpm
       dim = std::round(std::cbrt(size));
 
       {
-        pore_network_model pnm;
-        auto velems = pnm.read_icl_velems(velems_path, dim);
+        auto velems = pore_network_model::read_icl_velems(velems_path, dim);
 
         std::cout << "\n\nVelems file read";
 
+        // auto [minelem, maxelem] = std::ranges::minmax_element(velems);
+        
         for (pnm_idx i = 0, count = velems.size(); i < count; ++i) {
-          auto val = velems[i];
-          velem_array->InsertTypedComponent(i, 0, val);
+          // if (phase_buffer[i] == 3 && velems[i] != -2) {
+          //   int error = 1;
+          // }
+          
+          velem_array->InsertTypedComponent(i, 0, velems[i]);
         }    
         
         
@@ -432,14 +453,14 @@ namespace xpm
 
         
         auto [min, max] = std::ranges::minmax_element(velems);
-        auto count = *max + 1;
+        auto count = *max - *min + 1;
 
-        std::cout << "\n\nRANGES MINMAX VELMES";
+        std::cout << "\n\nRANGES MINMAX VELEMS";
         
         // lut_velem_->IndexedLookupOn();
         lut_velem_->SetNumberOfTableValues(count);
 
-        vtkStdString nan_text = "Nan";
+        // vtkStdString nan_text = "Nan";
         
         for (int32_t i = 0; i < count; ++i) {
           auto coef = static_cast<double>(i*45%count)/count;
@@ -454,7 +475,7 @@ namespace xpm
         // lut_velem_->ResetAnnotations();
         lut_velem_->SetTableValue(0, 0.4, 0.4, 0.4);
         lut_velem_->SetTableValue(1, 0.55, 0.55, 0.55);
-        lut_velem_->SetTableRange(0, count - 1);
+        lut_velem_->SetTableRange(*min, *max);
         
 
         std::cout << "\n\nlut_velem_ created";
@@ -462,152 +483,59 @@ namespace xpm
         // dpl::vtk::PopulateLutRedWhiteBlue(lut_velem_);
         // lut_velem_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
 
-
-        // {
-        //   pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
-        //   pnm_3idx ijk;
-        //
-        //   pnm_idx idx1d = 0;
-        //
-        //   auto& i = ijk.x();
-        //   auto& j = ijk.y();
-        //   auto& k = ijk.z();
-        //
-        //   
-        //   for (k = 0; k < dim.z(); ++k)
-        //     for (j = 0; j < dim.y(); ++j)
-        //       for (i = 0; i < dim.x(); ++i, ++idx1d) {
-        //         int32_t adj = 1;
-        //         
-        //         if (velems[idx1d] < 2) {
-        //           if (i > 0) {
-        //             auto adj_idx = (ijk - pnm_3idx{1, 0, 0}).dot(map_idx);
-        //             if (velems[adj_idx] > 1)
-        //               adj = velems[adj_idx];
-        //           }
-        //
-        //           if (i < dim.x() - 1) {
-        //             auto adj_idx = (ijk + pnm_3idx{1, 0, 0}).dot(map_idx);
-        //             if (velems[adj_idx] > 1)
-        //               adj = velems[adj_idx];
-        //           }
-        //
-        //
-        //           if (j > 0) {
-        //             auto adj_idx = (ijk - pnm_3idx{0, 1, 0}).dot(map_idx);
-        //             if (velems[adj_idx] > 1)
-        //               adj = velems[adj_idx];
-        //           }
-        //
-        //           if (j < dim.y() - 1) {
-        //             auto adj_idx = (ijk + pnm_3idx{0, 1, 0}).dot(map_idx);
-        //             if (velems[adj_idx] > 1)
-        //               adj = velems[adj_idx];
-        //           }
-        //
-        //
-        //           if (k > 0) {
-        //             auto adj_idx = (ijk - pnm_3idx{0, 0, 1}).dot(map_idx);
-        //             if (velems[adj_idx] > 1)
-        //               adj = velems[adj_idx];
-        //           }
-        //
-        //           if (k < dim.z() - 1) {
-        //             auto adj_idx = (ijk + pnm_3idx{0, 0, 1}).dot(map_idx);
-        //             if (velems[adj_idx] > 1)
-        //               adj = velems[adj_idx];
-        //           }
-        //         }
-        //         else {
-        //           adj = 0;
-        //         }
-        //
-        //         velem_adjacent_array->InsertTypedComponent(idx1d, 0, adj);
-        //         // ++idx;
-        //
-        //         // auto val = file_ptr[velems_factor.dot(ijk + 1)];
-        //         // *velems_ptr++ = val < 0 ? val + 2 : val;
-        //       }
-        //
-        //
-        //   velem_adjacent_array->SetName("velem_adj");
-        //   image_data_->GetCellData()->AddArray(velem_adjacent_array);
-        //
-        //    std::cout << "\n\nVelems_adj array produced and filled";
-        // }
-
-         {
+        {
+          img_darcy_adj_array->SetNumberOfComponents(1);
+          // img_darcy_adj_array->SetNumberOfTuples(dim.prod());
+          
           pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
-          pnm_3idx ijk;
         
           pnm_idx idx1d = 0;
-        
-          auto& i = ijk.x();
-          auto& j = ijk.y();
-          auto& k = ijk.z();
           
-          for (k = 0; k < dim.z(); ++k)
-            for (j = 0; j < dim.y(); ++j)
-              for (i = 0; i < dim.x(); ++i, ++idx1d) {
-                int32_t adj = 1;
+          for (pnm_idx k = 0; k < dim.z(); ++k)
+            for (pnm_idx j = 0; j < dim.y(); ++j)
+              for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
+                int32_t adj = -1; // Solid not connected 
                 
-                if (velems[idx1d] < 2) {
+                if (velems[idx1d] < 0) { // Solid
                   if (i > 0)
-                    if (auto adj_idx = idx1d - map_idx.x(); velems[adj_idx] > 1)
-                      adj = velems[adj_idx];
+                    if (auto adj_velem = velems[idx1d - map_idx.x()]; adj_velem > 1)
+                      adj = adj_velem;
         
                   if (i < dim.x() - 1)
-                    if (auto adj_idx = idx1d + map_idx.x(); velems[adj_idx] > 1)
-                      adj = velems[adj_idx];
+                    if (auto adj_velem = velems[idx1d + map_idx.x()]; adj_velem > 1)
+                      adj = adj_velem;
         
         
                   if (j > 0)
-                    if (auto adj_idx = idx1d - map_idx.y(); velems[adj_idx] > 1)
-                      adj = velems[adj_idx];
+                    if (auto adj_velem = velems[idx1d - map_idx.y()]; adj_velem > 1)
+                      adj = adj_velem;
         
                   if (j < dim.y() - 1)
-                    if (auto adj_idx = idx1d + map_idx.y(); velems[adj_idx] > 1)
-                      adj = velems[adj_idx];
+                    if (auto adj_velem = velems[idx1d + map_idx.y()]; adj_velem > 1)
+                      adj = adj_velem;
         
         
                   if (k > 0)
-                    if (auto adj_idx = idx1d - map_idx.z(); velems[adj_idx] > 1)
-                      adj = velems[adj_idx];
+                    if (auto adj_velem = velems[idx1d - map_idx.z()]; adj_velem > 1)
+                      adj = adj_velem;
         
                   if (k < dim.z() - 1)
-                    if (auto adj_idx = idx1d + map_idx.z(); velems[adj_idx] > 1)
-                      adj = velems[adj_idx];
+                    if (auto adj_velem = velems[idx1d + map_idx.z()]; adj_velem > 1)
+                      adj = adj_velem;
                 }
                 else
-                  adj = 0;
-        
-                velem_adjacent_array->InsertTypedComponent(idx1d, 0, adj);
-                // ++idx;
-        
-                // auto val = file_ptr[velems_factor.dot(ijk + 1)];
-                // *velems_ptr++ = val < 0 ? val + 2 : val;
+                  adj = -2; // Pore voxel
+
+                img_darcy_adj_array->InsertNextTypedTuple(&adj);
               }
         
+          
+          img_darcy_adj_array->SetName("darcy_adj");
+          image_data_->GetCellData()->AddArray(img_darcy_adj_array);
         
-          velem_adjacent_array->SetName("velem_adj");
-          image_data_->GetCellData()->AddArray(velem_adjacent_array);
-        
-           std::cout << "\n\nVelems_adj array produced and filled";
+          std::cout << "\n\nVelems_adj array produced and filled";
         }
-
-
-
-        
       }
-
-
-
-     
-
-      
-
-      
-
 
 
       
@@ -624,24 +552,24 @@ namespace xpm
       
 
 
-      vtkDataArray* selected_arr = velem_adjacent_array;
+      vtkDataArray* selected_arr = img_darcy_adj_array;
 
       // vtkDataArray* selected_arr = velem_array;
       
       
       image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
 
-      vtkNew<vtkDataSetMapper> mapper;
-      
-      {
-        mapper->SetInputData(image_data_);
-        mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName()); // This is needed only for vtkImageData without vtkThreshold
-      
-        mapper->SetColorModeToMapScalars(); 
-        mapper->UseLookupTableScalarRangeOn();
-        mapper->SetScalarModeToUseCellData();
-        mapper->SetLookupTable(image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : lut_velem_);
-      }
+      // vtkNew<vtkDataSetMapper> mapper;
+      //
+      // {
+      //   mapper->SetInputData(image_data_);
+      //   mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName()); // This is needed only for vtkImageData without vtkThreshold
+      //
+      //   mapper->SetColorModeToMapScalars(); 
+      //   mapper->UseLookupTableScalarRangeOn();
+      //   mapper->SetScalarModeToUseCellData();
+      //   mapper->SetLookupTable(image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : lut_velem_);
+      // }
       
       // {
       //
@@ -679,14 +607,14 @@ namespace xpm
       
 
       
-      
-      image_actor_->SetMapper(mapper);
-      image_actor_->GetProperty()->SetEdgeVisibility(false/*true*/);
-      image_actor_->GetProperty()->SetEdgeColor(v3d{0.5} /*0, 0, 0*/);
-      
-      image_actor_->GetProperty()->SetAmbient(0.5);
-      image_actor_->GetProperty()->SetDiffuse(0.4);
-      image_actor_->GetProperty()->BackfaceCullingOn();
+      //
+      // image_actor_->SetMapper(mapper);
+      // image_actor_->GetProperty()->SetEdgeVisibility(false/*true*/);
+      // image_actor_->GetProperty()->SetEdgeColor(v3d{0.5} /*0, 0, 0*/);
+      //
+      // image_actor_->GetProperty()->SetAmbient(0.5);
+      // image_actor_->GetProperty()->SetDiffuse(0.4);
+      // image_actor_->GetProperty()->BackfaceCullingOn();
       
 
       // renderer_->AddActor(image_actor_);
@@ -734,9 +662,11 @@ namespace xpm
           matrix.AddDiagCoef(n0, coef);
         }
         else if (n0 == pnm.outlet()) {
+          // free_terms[n1] += coef/**0 Pa*/;
           matrix.AddDiagCoef(n1, coef);
         }
         else if (n1 == pnm.outlet()) {
+          // free_terms[n0] += coef/**0 Pa*/;
           matrix.AddDiagCoef(n0, coef);
         }
         else /*if (n0 != pnm.outlet() && n1 != pnm.outlet())*/ {
@@ -761,16 +691,16 @@ namespace xpm
         // R"(C:\dev\.temp\images\SS-1000\XNet)"
         // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
 
-        // R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
-        R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
+        R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
+        // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
       ;
 
       v3i dim = 252;
       // v3i dim = 500;
 
       vtkUnsignedCharArray* phase_in;
-      vtkIntArray* velems_arr_in;
-      vtkIntArray* velems_adj_arr_in;
+      // vtkIntArray* velems_arr_in;
+      // vtkIntArray* darcy_adj_in;
 
       auto filter = [&, this](pnm_idx idx) {
         // return true;
@@ -782,7 +712,7 @@ namespace xpm
         
         // return phase_in->GetTypedComponent(idx, 0) == 2;
 
-        return velems_arr_in->GetTypedComponent(idx, 0) < 2;
+        return velem_array->GetTypedComponent(idx, 0) == -2;
 
         // ;/
 
@@ -875,25 +805,14 @@ namespace xpm
       pore_network_model pnm{pnm_path, pore_network_model::file_format::statoil};
 
       std::cout << "\n\nNetwork loaded";
-      
-
-
-
 
 
       
 
 
-
-
-
-
-
-
-
-
-
-
+      LoadImage();
+            
+      std::cout << "\n\nLoaded image";
 
 
 
@@ -902,34 +821,230 @@ namespace xpm
 
 
 
+
+
+
+
+
+
+
+
+
       
+
+     
+
+      lut_pressure_->SetTableRange(0, 1);
+
+
+      using namespace attribs;
+      // static constexpr const auto& pos = attribs::pos;
+      // using pos = attribs::pos;
+
+
+
+
       
+
+
       
+      {
+        // auto pred = [](int32_t darcy_adj) {
+        //   // return darcy_adj == 10;
+        //   
+        //   return/* darcy_adj == 9;*/ darcy_adj >= 0/* && darcy_adj <= 0*/;
+        // };
 
-
-      if (true) {
-        // auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
-        //
-        // lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-        //
-        // renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
-        //
-        // std::cout << "\n\nNetwork actor created";
-
-
-        auto pressure = SolvePressure(pnm);
         
-        lut_pressure_->SetTableRange(0, 1);
+        auto min_r_ins = *std::ranges::min_element(pnm.throat_.range(r_ins));
+
         
 
+        // int max_solid_non = 1000;
+        
+        
+        auto* ptr = static_cast<int*>(img_darcy_adj_array->GetVoidPointer(0));
+
+        auto darcy_node_con_cluster_adj_count =
+          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(), [&](int32_t darcy_adj) { return darcy_adj >= 0; });
+
+        auto darcy_node_inner_adj_count =
+          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(), [&](int32_t darcy_adj) { return darcy_adj == -1; });
+        
+      
+        
+        auto* velems = static_cast<int*>(velem_array->GetVoidPointer(0));
+        pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
+
+
+        pnm_idx darcy_darcy_throats = 0;
+
+
+        std::unordered_map<pnm_idx, pnm_idx> voxel_to_row_inc_map;
+        
+        for (pnm_idx k = 1; k < dim.z(); ++k)
+          for (pnm_idx j = 1; j < dim.y(); ++j)
+            for (pnm_idx i = 1; i < dim.x(); ++i)
+              if (auto idx1d = map_idx.dot({i, j, k});
+                velems[idx1d] == -2) // Solid
+                dpl::sfor<3>([&](auto e) {
+                  if (velems[idx1d - map_idx[e]] == -2)
+                    ++darcy_darcy_throats;  
+                });
+
+
+        darcy_darcy_throats = 0;
+
+        
+        
+
+        // darcy_adj_count = 0;
+
+        pnm.node_.resize(pnm.node_count_ + darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count);
+        pnm.throat_.resize(pnm.throat_count_ + darcy_node_con_cluster_adj_count + darcy_darcy_throats);
+        
+        
+        pnm_idx new_throat_incr = 0;
+        
+        auto cell_size = pnm.physical_size/dim;
+
+
+        
+        for (auto& [n0, n1] : pnm.throat_.range(attribs::adj)) {
+          if (n0 == pnm.inlet() || n0 == pnm.outlet())
+            n0 += darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count;
+
+          if (n1 == pnm.inlet() || n1 == pnm.outlet())
+            n1 += darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count;
+        }
+
+        
+        pnm_idx voxel_to_row_inc = 0;
+        
+        for (pnm_idx idx1d = 0, k = 0; k < dim.z(); ++k)
+          for (pnm_idx j = 0; j < dim.y(); ++j)
+            for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
+              if (ptr[idx1d] >= 0) { // Solid
+                voxel_to_row_inc_map[idx1d] = voxel_to_row_inc++;
+
+
+                auto new_node_idx = pnm.node_count_ + voxel_to_row_inc_map[idx1d];
+                
+                pnm.node_[attribs::r_ins][new_node_idx] = cell_size.x()/2;
+                pnm.node_[attribs::pos][new_node_idx] = cell_size*(v3d{i, j, k} + 0.5);
+                
+
+                auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
+                
+                pnm.throat_[adj][new_throat_idx] = {new_node_idx, ptr[idx1d]};
+                pnm.throat_[r_ins][new_throat_idx] = cell_size.x()/4;//min_r_ins;
+                
+                pnm.throat_[length0][new_throat_idx] = 0;
+                pnm.throat_[length][new_throat_idx] =
+                  (pnm.node_[attribs::pos][new_node_idx] - pnm.node_[attribs::pos][ptr[idx1d]]).length();
+                pnm.throat_[length1][new_throat_idx] = 0;
+                
+                               
+                ++new_throat_incr;
+              }
+              else if (ptr[idx1d] == -1) {
+                voxel_to_row_inc_map[idx1d] = voxel_to_row_inc++;
+              
+                auto new_node_idx = pnm.node_count_ + voxel_to_row_inc_map[idx1d];
+              
+                pnm.node_[attribs::r_ins][new_node_idx] = cell_size.x()/2;
+                pnm.node_[attribs::pos][new_node_idx] = cell_size*(v3d{i, j, k} + 0.5);
+              }
+              
+
+              
+              
+            }
+
+
+        pnm_idx loaded = 0;
+        
+        for (pnm_idx k = 1; k < dim.z(); ++k)
+          for (pnm_idx j = 1; j < dim.y(); ++j)
+            for (pnm_idx i = 1; i < dim.x(); ++i) {
+              // int32_t adj = -1; // Solid not connected 
+
+              auto idx1d = map_idx.dot({i, j, k});
+              
+              if (velems[idx1d] == -2) {
+                // Solid
+
+                dpl::sfor<3>([&](auto e) {
+                  auto adj_idx = idx1d - map_idx[e];
+                  if (loaded < darcy_darcy_throats && velems[adj_idx] == -2) {
+                    auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
+                    
+                    pnm.throat_[adj][new_throat_idx] = //{0, 0};
+                      {pnm.node_count_ + voxel_to_row_inc_map[idx1d], pnm.node_count_ + voxel_to_row_inc_map[adj_idx]};
+                    pnm.throat_[r_ins][new_throat_idx] = cell_size.x()/4; //min_r_ins;
+
+                    pnm.throat_[length0][new_throat_idx] = 0;
+                    pnm.throat_[length][new_throat_idx] = cell_size.x();
+                    pnm.throat_[length1][new_throat_idx] = 0;
+
+                    ++new_throat_incr;
+                    ++loaded;
+                  }
+                });
+              }
+            }
+
+
+        
+        
+        pnm.node_count_ += darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count;
+
+        pnm.throat_count_ += darcy_node_con_cluster_adj_count + darcy_darcy_throats;
+
+        
+      
+      
+        
+        
+        
+        
+      }
+
+
+      auto pressure = SolvePressure(pnm);
+
+      std::cout << "\n\nPressure solved";
+      
+
+
+      
+      
+
+      
+
+      
+
+      
+
+      auto get_pressure = [&pressure](pnm_idx i){ return i < pressure.size() ? pressure[i] : 1; };
+      
+      
         auto assembly = vtkSmartPointer<vtkAssembly>::New();
-        assembly->AddPart(CreateNodeActor(pnm, lut_pressure_, [&](pnm_idx i) { return pressure[i]; }));
+        assembly->AddPart(CreateNodeActor(pnm, lut_pressure_, 
+          get_pressure
+        //   [&](pnm_idx i) {
+        //   return i < pressure.size() ? pressure[i] : 0;
+        //
+        //   
+        // }
+        
+        ));
         assembly->AddPart(CreateThroatActor(pnm, lut_pressure_, [&](pnm_idx i) {
-          auto [n0, n1] = pnm.throat_[attribs::adj][i];
+          auto [n0, n1] = pnm.throat_[adj][i];
 
           return (
-            (n0 == pnm.inlet() ? 1 : n0 == pnm.outlet() ? 0 : pressure[n0]) +
-            (n1 == pnm.inlet() ? 1 : n1 == pnm.outlet() ? 0 : pressure[n1]))/2;
+            (n0 == pnm.inlet() ? 1.0 : n0 == pnm.outlet() ? 0.0 : get_pressure(n0)/*pressure[n0]*/) +
+            (n1 == pnm.inlet() ? 1.0 : n1 == pnm.outlet() ? 0.0 : get_pressure(n1)/*pressure[n1]*/))/2.0;
 
           // return 0;pressure[i];
         }));
@@ -945,52 +1060,57 @@ namespace xpm
         
         
         std::cout << "\n\nNetwork actor created";
+
+      
+      
+      
+
+
+      if (false) {
+        // auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
+        //
+        // lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
+        //
+        // renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
+        //
+        // std::cout << "\n\nNetwork actor created";
+
+
+        
+        
+       
       }
       else
       {
 
-        auto [min, max] = std::ranges::minmax_element(pnm.node_.range(attribs::r_ins));
-      
-        lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
+        // auto [min, max] = std::ranges::minmax_element(pnm.node_.range(attribs::r_ins));
+        //
+        // lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
+        //
+        // renderer_->AddActor(CreateNetworkAssembly(pnm, lut_continuous_));
+        //
+        // std::cout << "\n\nNetwork actor created";
         
-        renderer_->AddActor(CreateNetworkAssembly(pnm, lut_continuous_));
-
-        std::cout << "\n\nNetwork actor created";
-        
 
 
         
-        LoadImage();
-
-      
-      
-        std::cout << "\n\nLoaded image";
+        
 
         
         // image_actor_->SetUserTransform()
-        {
-          vtkNew<vtkTransform> trans;
-          trans->PostMultiply();
-          trans->Scale(v3d{pnm.physical_size.x()});
-          // trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
-          image_actor_->SetUserTransform(trans);
-        }
-
-              
-                 
-
-        
-
-
-
-        
-
+        // {
+        //   vtkNew<vtkTransform> trans;
+        //   trans->PostMultiply();
+        //   trans->Scale(v3d{pnm.physical_size.x()});
+        //   // trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
+        //   // image_actor_->SetUserTransform(trans);
+        // }
 
 
         {
           phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
-          velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
-          velems_adj_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem_adj"));
+          // velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
+          // darcy_adj_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("darcy_adj"));
           
           {
             auto scale_factor = /*1.0*/pnm.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
@@ -1003,7 +1123,7 @@ namespace xpm
 
 
             {
-              img_mapper.Populate(dim, pnm.physical_size/dim, filter, velems_adj_arr_in);
+              img_mapper.Populate(dim, pnm.physical_size/dim, filter, img_darcy_adj_array);
               
               dpl::sfor<6>([&](auto i) {
                 auto& mapper = std::get<i>(img_mapper.faces_);

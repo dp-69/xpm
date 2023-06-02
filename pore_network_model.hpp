@@ -327,16 +327,16 @@ namespace xpm
 
         throat_.resize(throat_count_);
         
-        pnm_idx idx;
+        pnm_idx value;
         
         for (pnm_idx i = 0; i < throat_count_; ++i) {       
           skip_word(throat1_ptr);
 
-          parse_text(throat1_ptr, idx);
-          throat_[adj][i].first = parse_statoil_text_idx(idx); 
+          parse_text(throat1_ptr, value);
+          throat_[adj][i].first = parse_statoil_text_idx(value); 
 
-          parse_text(throat1_ptr, idx);
-          throat_[adj][i].second = parse_statoil_text_idx(idx);        
+          parse_text(throat1_ptr, value);
+          throat_[adj][i].second = parse_statoil_text_idx(value);        
 
           parse_text(throat1_ptr, throat_[r_ins][i]);
           // parse_text(throat1_ptr, shapeFactor[i]); //TODO
@@ -389,7 +389,22 @@ namespace xpm
     //   return map;
     // }
 
-    auto read_icl_velems(const std::filesystem::path& network_path, const pnm_3idx& dim) const {
+    
+    /**
+     * \brief
+     * input file value description
+     *   -2: solid (validated),
+     *   -1: inlet/outlet (do not know?),
+     *   0, 1: do not exist (validated),
+     *   >=2: cluster
+     *
+     *
+     * output vector value description
+     *    -2: solid | the same
+     *    -1: inlet/outlet (do not know?) | the same
+     *    >=0: clusters | subtracted 2
+     */
+    static auto read_icl_velems(const std::filesystem::path& network_path, const pnm_3idx& dim) {
       mapped_file_source file(network_path.string() + "_VElems.raw");
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
@@ -404,7 +419,31 @@ namespace xpm
         for (ijk.y() = 0; ijk.y() < dim.y(); ++ijk.y())
           for (ijk.x() = 0; ijk.x() < dim.x(); ++ijk.x()) {
             auto val = file_ptr[velems_factor.dot(ijk + 1)];
-            *velems_ptr++ = val < 0 ? val + 2 : val;
+
+            // if (val == -2) { // Solid?
+            //   int p = 3;
+            // }
+            //
+            // if (val == -1) { // Inlet/Outlet facing ?
+            //   int p = 3;
+            // }
+            //
+            // if (val == 0) { // THere is no zero
+            //   int p = 3;
+            // }
+            //
+            // if (val == 1) {
+            //   int k = 3;
+            // }
+            //
+            // if (val == 2) {
+            //   int k = 3;
+            // }
+
+            // *velems_ptr++ = val;
+            // *velems_ptr++ = val < 0 ? val + 2 : val;
+
+            *velems_ptr++ = val > 0 ? val - 2 : val;
           }
 
       return velems;
