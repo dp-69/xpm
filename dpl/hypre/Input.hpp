@@ -35,22 +35,14 @@
 
 // #include "rrm/fd/core/linear_solver/HypreVectorMatrix.hpp"
 
-#include <boost/format/format_fwd.hpp>
-#include <boost/format.hpp>
+// #include <boost/format/format_fwd.hpp>
+// #include <boost/format.hpp>
 
 #include <vector>
 #include <fstream>
 
 #include <forward_list>
-
-
-
-
-
-
-
-
-
+#include <iostream>
 
 
 namespace dpl::hypre
@@ -120,8 +112,63 @@ namespace dpl::hypre
 
     public:
       void SetValues(HYPRE_Int nrows, HYPRE_Int ncols, HYPRE_Int* ncols_per_row, const HYPRE_Int* cols_of_coefs, const HYPRE_Real* coefs) {
-        HYPRE_IJMatrixCreate(MPI_COMM_WORLD, 0, nrows - 1, 0, ncols - 1, &m_);
+#ifndef HYPRE_SEQUENTIAL
+        int world_size;
+        int world_rank;
+        MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+        MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
+
+        HYPRE_BigInt ilower, iupper; 
+
+        if (world_size == 1) {
+          ilower = 0;
+          iupper = nrows - 1;
+        }
+        else {
+          if (world_rank == 0) {
+            ilower = 0;
+            iupper = nrows/2;
+          }
+          else /*if (world_rank == 1)*/ {
+            ilower = nrows/2 + 1;
+            iupper = nrows - 1;
+          }
+        }
+
+        std::cout << ilower << ' ' << iupper << "HERE\n";
+        std::cout << std::flush;
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        
+        
+        HYPRE_IJMatrixCreate(MPI_COMM_WORLD, ilower, iupper, 0, ncols - 1, &m_);
+
+        HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
+        
+        HYPRE_IJMatrixInitialize(m_);
+
+
+        size_t shift = 0;
+
+        for (HYPRE_BigInt i = 0; i < ilower; ++i)
+          shift += ncols_per_row[i];
+
+        for (HYPRE_BigInt i = ilower; i <= iupper; ++i) {
+          HYPRE_IJMatrixSetValues(m_, 1, ncols_per_row + i, &i, cols_of_coefs + shift, coefs + shift);
+          shift += ncols_per_row[i];
+        }
+
+
+        HYPRE_IJMatrixAssemble(m_);
+                
+        std::cout << ilower << ' ' << iupper << "ASSEMBLED\n";
+        std::cout << std::flush;
+        MPI_Barrier(MPI_COMM_WORLD);
+        
+#else
+        HYPRE_IJMatrixCreate(MPI_COMM_WORLD, 0, nrows - 1, 0, ncols - 1, &m_);
+        
         HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
         // HYPRE_IJMatrixSetRowSizes(A, ncols.data());    
 
@@ -137,6 +184,18 @@ namespace dpl::hypre
         }
 
         HYPRE_IJMatrixAssemble(m_);
+#endif
+        
+        
+        
+        
+       
+
+        
+        
+
+
+        
       }
 
       HYPRE_ParCSRMatrix GetParCSRMatrix() const {
@@ -270,51 +329,61 @@ namespace dpl::hypre
       }          
     }
     
-    void Export(const std::string& filename, bool numerical = false) {
-      std::ofstream out(filename);      
-
-      auto* colPtr = cols_of_coefs.data();
-      auto* coefPtr = coefs.data();
-      for (auto i = 0; i < nrows; ++i) {
-        std::vector<HYPRE_Real> row_values(nrows, 0);
-
-        for (auto j = 0; j < ncols_per_row[i]; ++j)
-          row_values[*colPtr++] = *coefPtr++;
-
-        for (auto j = 0; j < nrows; ++j) {          
-          if (numerical)
-            out << boost::format("%10.2e") % row_values[j];
-          else
-            out << (row_values[j] ? row_values[j] == 1 ? '1' : 'v' : '0'); // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
-          
-          out << ' ';
-        }
-
-        out << "| ";
-                
-        if (numerical)
-          out << boost::format("%10.2e") % constants[i];
-        else
-          out << (constants[i] ? constants[i] == 1 ? '1' : 'v' : '0');  // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
-        
-        out << std::endl;
-      }
-      
-      // out << "one" << " two" << boost::format("%e %.3e") % 1.5e3 % 0.0048799;
-
-      out.close();
-    }
+    // void Export(const std::string& filename, bool numerical = false) {
+    //   std::ofstream out(filename);      
+    //
+    //   auto* colPtr = cols_of_coefs.data();
+    //   auto* coefPtr = coefs.data();
+    //   for (auto i = 0; i < nrows; ++i) {
+    //     std::vector<HYPRE_Real> row_values(nrows, 0);
+    //
+    //     for (auto j = 0; j < ncols_per_row[i]; ++j)
+    //       row_values[*colPtr++] = *coefPtr++;
+    //
+    //     for (auto j = 0; j < nrows; ++j) {          
+    //       if (numerical)
+    //         out << boost::format("%10.2e") % row_values[j];
+    //       else
+    //         out << (row_values[j] ? row_values[j] == 1 ? '1' : 'v' : '0'); // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
+    //       
+    //       out << ' ';
+    //     }
+    //
+    //     out << "| ";
+    //             
+    //     if (numerical)
+    //       out << boost::format("%10.2e") % constants[i];
+    //     else
+    //       out << (constants[i] ? constants[i] == 1 ? '1' : 'v' : '0');  // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
+    //     
+    //     out << std::endl;
+    //   }
+    //   
+    //   // out << "one" << " two" << boost::format("%e %.3e") % 1.5e3 % 0.0048799;
+    //
+    //   out.close();
+    // }
     
     void Solve(HYPRE_Int* indices_ptr, HYPRE_Int indices_count, HYPRE_Real* output_ptr) {                  
+
       HYPRE_Solver solver;
 
+       // int world_size;
+       //  int world_rank;
+       //  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+       //  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
       
+      
+      // if (world_rank == 0)
       HYPRE_BoomerAMGCreate(&solver);      
 
       // (Optional) Set the convergence tolerance, if BoomerAMG is used as a solver. If it is used as a preconditioner,
       //   it should be set to 0. The default is 1.e-7.
 
       // HYPRE_Real tolerance = 1e-20;
+
+      // if (world_rank == 0)
       HYPRE_BoomerAMGSetTol(solver, 1.e-20);
 
       
@@ -384,8 +453,37 @@ namespace dpl::hypre
       // const auto t0 = std::chrono::system_clock::now();
       // result = HYPRE_AMSSetup(solver, A_parcsr, B_par, x_par);
       // result = HYPRE_AMSSolve(solver, A_parcsr, B_par, x_par);
-      HYPRE_BoomerAMGSetup(solver, A_parcsr, B_par, x_par);      
+
+      // std::cout << "HYPRE_BoomerAMGSetup___PRE\n" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
+
+      // try{
+        // if (world_rank == 0)
+      HYPRE_BoomerAMGSetup(solver, A_parcsr, B_par, x_par);
+
+      // std::cout << "HYPRE_BoomerAMGSetup___POST" << world_rank << "\n" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
+      
+      // }
+      // catch (...){
+      //   std::cout << "HYPRE_BoomerAMGSetup EXCEPTION\n" << std::flush;
+      //   MPI_Barrier(MPI_COMM_WORLD);
+      // }
+
+      // std::cout << "HYPRE_BoomerAMGSetup_POST\n" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
+
+      // if (world_rank == 0)
       HYPRE_BoomerAMGSolve(solver, A_parcsr, B_par, x_par);
+
+      //  std::cout << "HYPRE_BoomerAMGSetup___SOLVE" << world_rank << "\n" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
+      // std::cout << "HYPRE_BoomerAMGSolve\n" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
 
       // char msg[2048];
       // if (result)
@@ -394,19 +492,25 @@ namespace dpl::hypre
       
       // const auto t1 = std::chrono::system_clock::now();
       // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
+      // if (world_rank == 0)
       HYPRE_BoomerAMGDestroy(solver);                  
 
-      // result = HYPRE_AMSDestroy(solver);    
-      
-      x_vector.GetValues(indices_count, indices_ptr, output_ptr); 
+      // result = HYPRE_AMSDestroy(solver);
+      // if (world_rank == 0)
+      x_vector.GetValues(indices_count, indices_ptr, output_ptr);
+
+        
+
+      // std::cout << "SOLVE_END" << world_rank << "\n" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
     }
     
-    void Solve(int count, HYPRE_Real* output_ptr) {
-      std::vector<HYPRE_Int> x_indices(count);
+    void Solve(HYPRE_Int count, HYPRE_Real* output_ptr) {
+      std::vector<HYPRE_Int> indices(count);
       for (HYPRE_Int i = 0; i < count; ++i)
-        x_indices[i] = i;
+        indices[i] = i;
       
-      Solve(x_indices.data(), count, output_ptr);  
+      Solve(indices.data(), count, output_ptr);  
     }
 
     auto Solve() {

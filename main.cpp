@@ -21,50 +21,72 @@
 
 // #include "ui_mywidg.h"
 
-// struct my_t
-// {
-//   auto operator()() const {
-//     return 22;
-//   }
-//
-//   my_t() = default;
-//   
-//   my_t(const my_t& other) = delete;
-//   my_t(my_t&& other) noexcept = delete;
-//   my_t& operator=(const my_t& other) = delete;
-//   my_t& operator=(my_t&& other) noexcept = delete;
-// };
-//
-// auto complex(const auto& foo) {
-//   return foo() + 3;
-// }
+// #include <mpi.h>
+
+
 
 int main(int argc, char* argv[])
 {
-  // auto qqq = complex([](){return 10;});
+  // MPI_Init(&argc, &argv);
   //
-  // auto my_val = my_t{};
   //
-  // auto& my_val_ref = my_val;
   //
-  // auto qqq2222 = complex(my_t{});
+  // // Get the number of processes
+  // int world_size;
+  // MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   //
-  // auto qqq2222 = complex(my_val);
+  // // Get the rank of the process
+  // int world_rank;
+  // MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   //
-  // auto qqq22 = complex(my_val_ref);
-  
-  
-  
-  // foo f;
-  // f.helloworld();
+  //
+  //
+  //
+  //
+  // // Get the name of the processor
+  // char processor_name[MPI_MAX_PROCESSOR_NAME];
+  // int name_len;
+  // MPI_Get_processor_name(processor_name, &name_len);
+  //
+  // // Print off a hello world message
+  // printf("Hello world from processor %s, rank %d out of %d processors, %d Proc ID\n",
+  //        processor_name, world_rank, world_size, GetCurrentProcessId());
+  //
+  // std::cout << std::flush;
+  //
+  // if (world_rank == 0) {
+  //   getchar();  
+  // }
+  //
+  // MPI_Barrier(MPI_COMM_WORLD);
+  //
+  // // std::this_thread::sleep_for(std::chrono::seconds{3});
+  //  
+  //
+  // xpm::pore_network_model pnm{
+  //   R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)",
+  //   // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)",
+  //   xpm::pore_network_model::file_format::statoil};
+  //
+  //
+  // {
+  //   auto pressure = pnm.SolvePressure();
+  //   
+  //   auto sum = std::accumulate(pressure.begin(), pressure.end(), 0.0);
+  //   std::cout << sum << '\n';
+  // }
+  //
+  //
+  // // Finalize the MPI environment.
+  // MPI_Finalize();
+  //
+  //
+  //
+  //
+  // return 0;
 
-  // constexpr auto qqq = dpl::vector3i{5, 6, 7};
-  //
-  // constexpr auto rmg = dpl::cdims<1>::tie(qqq);
-  //
-  // auto& [a, b, c] = rmg;
-  //
-  // std::array<double, std::get<1>(rmg)> qqewe;
+
+  
   
 
   

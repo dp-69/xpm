@@ -19,7 +19,6 @@ if(Qt6_FOUND)
   qt_standard_project_setup()
   message("Qt6_DIR: " ${Qt6_DIR})
   message("Qt6_VERSION: " ${Qt6_VERSION})
-
 else()
   find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED) #Charts
 
@@ -143,6 +142,11 @@ endif()
 find_package(Boost REQUIRED COMPONENTS iostreams)
 target_link_libraries(xpm_project PRIVATE Boost::iostreams)
 
+
+find_package(MPI)
+if(MPI_FOUND)
+  target_link_libraries(xpm_project PRIVATE MPI::MPI_CXX)
+endif()
 
 find_package(HYPRE REQUIRED)
 target_link_libraries(xpm_project PRIVATE HYPRE::HYPRE)

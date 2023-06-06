@@ -54,20 +54,7 @@
 
 namespace xpm
 {
-  namespace geometric_properties
-  {
-    struct equilateral_triangle_properties
-    {
-      static constexpr double area(double r_ins = 1) {
-        return 5.19615242271*r_ins*r_ins;
-      }
-
-      // k * G, k - coefficient, G - shape factor
-      static constexpr double conductance(double area = 1, double viscosity = 1) {
-        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
-      }
-    };
-  }
+  
 
 
   
@@ -117,7 +104,7 @@ namespace xpm
     
   public:
     vtkNew<vtkGlyph3DMapper> glyphs_;
-    vtkNew<vtkIntArray> darcy_adj_out_;
+    vtkNew<vtkDoubleArray> darcy_adj_out_;
     vtkNew<vtkActor> actor_;
     
     void Init(double half_length = 0.5) {
@@ -219,8 +206,7 @@ namespace xpm
       });
     }
 
-    template<typename Filter>
-    void Populate(const v3i& dims, const v3d& cell_size, const Filter& filter, vtkIntArray* velems_adj_arr) {
+    void Populate(const v3i& dims, const v3d& cell_size, const auto& filter, const auto& value/*, vtkIntArray* velems_adj_arr*/) {
       auto start = std::chrono::high_resolution_clock::now();
       
       dpl::psfor<6>([=, this](auto i) {
@@ -228,7 +214,7 @@ namespace xpm
 
         face_mapper->Populate(dims, cell_size, filter, 
           [=](pnm_idx idx) {
-            auto val = velems_adj_arr->GetTypedComponent(idx, 0);
+            auto val = value(idx);//velems_adj_arr->GetTypedComponent(idx, 0);
             face_mapper->darcy_adj_out_->InsertNextTypedTuple(&val);
           }
         );
@@ -621,69 +607,7 @@ namespace xpm
     }
 
 
-    auto SolvePressure(pore_network_model& pnm) {
-
-      using eq_tri = geometric_properties::equilateral_triangle_properties;
-      using namespace attribs;
-      
-      // auto calc_coef = [&pnm](pnm_idx i) {
-      //   auto [n0, n1] = pnm.throat_[adj][i];
-      //   
-      //   return
-      //     (pnm.inner_node(n0) ? pnm.throat_[length0][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n0])) : 0.0) +
-      //     (pnm.inner_node(n1) ? pnm.throat_[length1][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n1])) : 0.0) +
-      //     pnm.throat_[length][i]/eq_tri::conductance(eq_tri::area(pnm.throat_[r_ins][i]));
-      // };
-
-      dpl::hypre::SparseMatrix matrix(pnm.node_count_);
-
-      std::vector<double> free_terms(pnm.node_count_, 0);
-      
-      
-      for (pnm_idx i = 0; i < pnm.throat_count_; ++i) {
-        auto [n0, n1] = pnm.throat_[adj][i];
-
-        auto k = pnm.throat_[length0][i];
-        auto w = pnm.throat_[length1][i];
-        auto Q = pnm.throat_[length][i];
-        
-        
-        auto coef = -1.0/(
-          (pnm.inner_node(n0) ? pnm.throat_[length0][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n0])) : 0.0) +
-          (pnm.inner_node(n1) ? pnm.throat_[length1][i]/eq_tri::conductance(eq_tri::area(pnm.node_[r_ins][n1])) : 0.0) +
-          pnm.throat_[length][i]/eq_tri::conductance(eq_tri::area(pnm.throat_[r_ins][i])));
-
-        if (n0 == pnm.inlet()) {
-          free_terms[n1] += coef/**1 Pa*/;
-          matrix.AddDiagCoef(n1, coef);
-        }
-        else if (n1 == pnm.inlet()) {
-          free_terms[n0] += coef/**1 Pa*/;
-          matrix.AddDiagCoef(n0, coef);
-        }
-        else if (n0 == pnm.outlet()) {
-          // free_terms[n1] += coef/**0 Pa*/;
-          matrix.AddDiagCoef(n1, coef);
-        }
-        else if (n1 == pnm.outlet()) {
-          // free_terms[n0] += coef/**0 Pa*/;
-          matrix.AddDiagCoef(n0, coef);
-        }
-        else /*if (n0 != pnm.outlet() && n1 != pnm.outlet())*/ {
-          matrix.AddDifferenceCoefs(n0, n1, -coef);
-        }
-      }
-
-
-      dpl::hypre::Input input{matrix, std::move(free_terms)};
-
-      auto values = input.Solve();
-
-      return values;
-
-      // int p = 3;
-      
-    }
+    
     
     void Init() {
       auto pnm_path = 
@@ -804,9 +728,22 @@ namespace xpm
 
       pore_network_model pnm{pnm_path, pore_network_model::file_format::statoil};
 
+
+      // {
+      //   auto pressure = pnm.SolvePressure();
+      //   
+      //   auto sum = std::accumulate(pressure.begin(), pressure.end(), 0.0);
+      //   std::cout << sum << '\n';
+      // }
+      
+
       std::cout << "\n\nNetwork loaded";
 
 
+
+
+     
+      
       
 
 
@@ -837,7 +774,7 @@ namespace xpm
       lut_pressure_->SetTableRange(0, 1);
 
 
-      using namespace attribs;
+      //using namespace attribs;
       // static constexpr const auto& pos = attribs::pos;
       // using pos = attribs::pos;
 
@@ -845,8 +782,11 @@ namespace xpm
 
 
       
+      auto old_node = pnm.node_count_;
+      auto old_throat = pnm.throat_count_;
 
-
+      std::unordered_map<pnm_idx, pnm_idx> voxel_to_row_inc_map;
+      
       
       {
         // auto pred = [](int32_t darcy_adj) {
@@ -856,7 +796,7 @@ namespace xpm
         // };
 
         
-        auto min_r_ins = *std::ranges::min_element(pnm.throat_.range(r_ins));
+        auto min_r_ins = *std::ranges::min_element(pnm.throat_.range(attribs::r_ins));
 
         
 
@@ -880,7 +820,7 @@ namespace xpm
         pnm_idx darcy_darcy_throats = 0;
 
 
-        std::unordered_map<pnm_idx, pnm_idx> voxel_to_row_inc_map;
+        
         
         for (pnm_idx k = 1; k < dim.z(); ++k)
           for (pnm_idx j = 1; j < dim.y(); ++j)
@@ -893,7 +833,7 @@ namespace xpm
                 });
 
 
-        darcy_darcy_throats = 0;
+        //darcy_darcy_throats = 0;
 
         
         
@@ -936,13 +876,13 @@ namespace xpm
 
                 auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
                 
-                pnm.throat_[adj][new_throat_idx] = {new_node_idx, ptr[idx1d]};
-                pnm.throat_[r_ins][new_throat_idx] = cell_size.x()/4;//min_r_ins;
+                pnm.throat_[attribs::adj][new_throat_idx] = {new_node_idx, ptr[idx1d]};
+                pnm.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;//min_r_ins;
                 
-                pnm.throat_[length0][new_throat_idx] = 0;
-                pnm.throat_[length][new_throat_idx] =
+                pnm.throat_[attribs::length0][new_throat_idx] = 0;
+                pnm.throat_[attribs::length][new_throat_idx] =
                   (pnm.node_[attribs::pos][new_node_idx] - pnm.node_[attribs::pos][ptr[idx1d]]).length();
-                pnm.throat_[length1][new_throat_idx] = 0;
+                pnm.throat_[attribs::length1][new_throat_idx] = 0;
                 
                                
                 ++new_throat_incr;
@@ -979,13 +919,13 @@ namespace xpm
                   if (loaded < darcy_darcy_throats && velems[adj_idx] == -2) {
                     auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
                     
-                    pnm.throat_[adj][new_throat_idx] = //{0, 0};
+                    pnm.throat_[attribs::adj][new_throat_idx] = //{0, 0};
                       {pnm.node_count_ + voxel_to_row_inc_map[idx1d], pnm.node_count_ + voxel_to_row_inc_map[adj_idx]};
-                    pnm.throat_[r_ins][new_throat_idx] = cell_size.x()/4; //min_r_ins;
+                    pnm.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4; //min_r_ins;
 
-                    pnm.throat_[length0][new_throat_idx] = 0;
-                    pnm.throat_[length][new_throat_idx] = cell_size.x();
-                    pnm.throat_[length1][new_throat_idx] = 0;
+                    pnm.throat_[attribs::length0][new_throat_idx] = 0;
+                    pnm.throat_[attribs::length][new_throat_idx] = cell_size.x();
+                    pnm.throat_[attribs::length1][new_throat_idx] = 0;
 
                     ++new_throat_incr;
                     ++loaded;
@@ -1011,13 +951,27 @@ namespace xpm
       }
 
 
-      auto pressure = SolvePressure(pnm);
+      auto pressure = pnm.SolvePressure();
 
       std::cout << "\n\nPressure solved";
       
 
 
       
+      for (auto& [n0, n1] : pnm.throat_.range(attribs::adj)) {
+          if (n0 == pnm.inlet() || n0 == pnm.outlet())
+            n0 -= pnm.node_count_ - old_node;
+
+          if (n1 == pnm.inlet() || n1 == pnm.outlet())
+            n1 -= pnm.node_count_ - old_node;
+        }
+
+      pnm.node_.resize(old_node);
+      pnm.node_count_ = old_node;
+
+      pnm.throat_.resize(old_node);
+      pnm.throat_count_ = old_throat;
+
       
 
       
@@ -1029,7 +983,8 @@ namespace xpm
       auto get_pressure = [&pressure](pnm_idx i){ return i < pressure.size() ? pressure[i] : 1; };
       
       
-        auto assembly = vtkSmartPointer<vtkAssembly>::New();
+        
+         auto assembly = vtkSmartPointer<vtkAssembly>::New();
         assembly->AddPart(CreateNodeActor(pnm, lut_pressure_, 
           get_pressure
         //   [&](pnm_idx i) {
@@ -1040,7 +995,7 @@ namespace xpm
         
         ));
         assembly->AddPart(CreateThroatActor(pnm, lut_pressure_, [&](pnm_idx i) {
-          auto [n0, n1] = pnm.throat_[adj][i];
+          auto [n0, n1] = pnm.throat_[attribs::adj][i];
 
           return (
             (n0 == pnm.inlet() ? 1.0 : n0 == pnm.outlet() ? 0.0 : get_pressure(n0)/*pressure[n0]*/) +
@@ -1052,13 +1007,16 @@ namespace xpm
         
         
         
-        
         // color_array->SetName("color");
         
         
         
         
-        
+
+
+
+
+      
         std::cout << "\n\nNetwork actor created";
 
       
@@ -1123,7 +1081,12 @@ namespace xpm
 
 
             {
-              img_mapper.Populate(dim, pnm.physical_size/dim, filter, img_darcy_adj_array);
+              img_mapper.Populate(dim, pnm.physical_size/dim, filter, [&](pnm_idx idx) {
+
+                return pressure[old_node + voxel_to_row_inc_map[idx]];
+                
+
+              }/*img_darcy_adj_array*/);
               
               dpl::sfor<6>([&](auto i) {
                 auto& mapper = std::get<i>(img_mapper.faces_);
@@ -1133,7 +1096,7 @@ namespace xpm
 
 
 
-                glyphs->SetLookupTable(lut_velem_);
+                glyphs->SetLookupTable(lut_pressure_);
                 glyphs->SetColorModeToMapScalars();
                 glyphs->UseLookupTableScalarRangeOn();
                 glyphs->SetScalarModeToUsePointData();
@@ -1148,7 +1111,7 @@ namespace xpm
                 actor->GetProperty()->SetDiffuse(0.4);
                 actor->GetProperty()->BackfaceCullingOn();
                 
-                // renderer_->AddActor(actor);
+                renderer_->AddActor(actor);
               });
             }
           }

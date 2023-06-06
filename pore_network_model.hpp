@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include <dpl/hypre/Input.hpp>
 #include <dpl/static_vector.hpp>
 #include <dpl/soa.hpp>
 
@@ -15,11 +16,28 @@
 #include <stdint.h>
 
 
+
+
 #define static_key(name) \
   inline constexpr struct name##_t {} name;
 
 namespace xpm
 {
+  namespace geometric_properties
+  {
+    struct equilateral_triangle_properties
+    {
+      static constexpr double area(double r_ins = 1) {
+        return 5.19615242271*r_ins*r_ins;
+      }
+
+      // k * G, k - coefficient, G - shape factor
+      static constexpr double conductance(double area = 1, double viscosity = 1) {
+        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
+      }
+    };
+  }
+  
   namespace attribs {
     static_key(pos)
     static_key(r_ins)
@@ -447,6 +465,74 @@ namespace xpm
           }
 
       return velems;
+    }
+
+
+
+
+
+
+    
+    
+
+    auto SolvePressure() {
+
+      using eq_tri = geometric_properties::equilateral_triangle_properties;
+      using namespace attribs;
+      
+      // auto calc_coef = [&pnm](pnm_idx i) {
+      //   auto [n0, n1] = throat_[adj][i];
+      //   
+      //   return
+      //     (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
+      //     (inner_node(n1) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n1])) : 0.0) +
+      //     throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i]));
+      // };
+
+      dpl::hypre::SparseMatrix matrix(node_count_);
+
+      std::vector<double> free_terms(node_count_, 0);
+      
+      
+      for (pnm_idx i = 0; i < throat_count_; ++i) {
+        auto [n0, n1] = throat_[adj][i];
+
+        // auto k = throat_[length0][i];
+        // auto w = throat_[length1][i];
+        // auto Q = throat_[length][i];
+        
+        
+        auto coef = -1.0/(
+          (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
+          (inner_node(n1) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n1])) : 0.0) +
+          throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])));
+
+        if (n0 == inlet()) {
+          free_terms[n1] += coef/**1 Pa*/;
+          matrix.AddDiagCoef(n1, coef);
+        }
+        else if (n1 == inlet()) {
+          free_terms[n0] += coef/**1 Pa*/;
+          matrix.AddDiagCoef(n0, coef);
+        }
+        else if (n0 == outlet()) {
+          // free_terms[n1] += coef/**0 Pa*/;
+          matrix.AddDiagCoef(n1, coef);
+        }
+        else if (n1 == outlet()) {
+          // free_terms[n0] += coef/**0 Pa*/;
+          matrix.AddDiagCoef(n0, coef);
+        }
+        else /*if (n0 != outlet() && n1 != outlet())*/ {
+          matrix.AddDifferenceCoefs(n0, n1, -coef);
+        }
+      }
+
+      dpl::hypre::Input input{matrix, std::move(free_terms)};
+      
+      auto values = input.Solve();
+      
+      return values;
     }
   };
 }
