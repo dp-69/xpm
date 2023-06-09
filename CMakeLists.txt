@@ -67,7 +67,9 @@ target_include_directories(xpm_project PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_compile_features(xpm_project PUBLIC cxx_std_20)
 
 
+
 add_subdirectory(dpl)
+target_compile_definitions(dpl INTERFACE DPL_HYPRE_BOOST_SHARED_MEMORY)
 target_link_libraries(xpm_project PRIVATE dpl)
 
 

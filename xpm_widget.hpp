@@ -52,6 +52,8 @@
 
 #undef LoadImage
 
+
+
 namespace xpm
 {
   
@@ -65,6 +67,9 @@ namespace xpm
     using dims = dpl::cdims<face::dim>;
 
     static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {
+
+      
+      
       auto quad = vtkSmartPointer<vtkPolyData>::New();
 
       vtkNew<vtkPoints> points;
@@ -785,8 +790,18 @@ namespace xpm
       auto old_node = pnm.node_count_;
       auto old_throat = pnm.throat_count_;
 
-      std::unordered_map<pnm_idx, pnm_idx> voxel_to_row_inc_map;
+      // std::unordered_map<pnm_idx, pnm_idx> voxel_to_row_inc_map;
+
+      using row_idx_type = pnm_idx;
+
+
       
+      
+      
+      // std::unordered_map<pnm_idx, pnm_idx> voxel_to_row_inc_map;
+
+      auto voxel_to_row_inc_map_uptr = std::make_unique<row_idx_type[]>(dim.prod());
+      auto* voxel_to_row_inc_map = voxel_to_row_inc_map_uptr.get();
       
       {
         // auto pred = [](int32_t darcy_adj) {
@@ -806,10 +821,12 @@ namespace xpm
         auto* ptr = static_cast<int*>(img_darcy_adj_array->GetVoidPointer(0));
 
         auto darcy_node_con_cluster_adj_count =
-          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(), [&](int32_t darcy_adj) { return darcy_adj >= 0; });
+          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(),
+            [&](int32_t darcy_adj) { return darcy_adj >= 0; });
 
         auto darcy_node_inner_adj_count =
-          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(), [&](int32_t darcy_adj) { return darcy_adj == -1; });
+          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(),
+            [&](int32_t darcy_adj) { return darcy_adj == -1; });
         
       
         
@@ -840,9 +857,13 @@ namespace xpm
 
         // darcy_adj_count = 0;
 
+
+        std::cout << "\n\nPRE_RESIZE";
+        
         pnm.node_.resize(pnm.node_count_ + darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count);
         pnm.throat_.resize(pnm.throat_count_ + darcy_node_con_cluster_adj_count + darcy_darcy_throats);
-        
+
+        std::cout << "\n\nPOST_RESIZE";
         
         pnm_idx new_throat_incr = 0;
         
@@ -864,33 +885,35 @@ namespace xpm
         for (pnm_idx idx1d = 0, k = 0; k < dim.z(); ++k)
           for (pnm_idx j = 0; j < dim.y(); ++j)
             for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
-              if (ptr[idx1d] >= 0) { // Solid
-                voxel_to_row_inc_map[idx1d] = voxel_to_row_inc++;
+              auto ptr_idx1d = ptr[idx1d];
+              
+              if (ptr_idx1d >= 0) { // Solid
+                auto voxel_to_row_inc_curr = voxel_to_row_inc++;
+                voxel_to_row_inc_map[idx1d] = voxel_to_row_inc_curr;
 
-
-                auto new_node_idx = pnm.node_count_ + voxel_to_row_inc_map[idx1d];
+                auto new_node_idx = pnm.node_count_ + voxel_to_row_inc_curr;
                 
                 pnm.node_[attribs::r_ins][new_node_idx] = cell_size.x()/2;
                 pnm.node_[attribs::pos][new_node_idx] = cell_size*(v3d{i, j, k} + 0.5);
                 
-
                 auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
                 
-                pnm.throat_[attribs::adj][new_throat_idx] = {new_node_idx, ptr[idx1d]};
+                pnm.throat_[attribs::adj][new_throat_idx] = {new_node_idx, ptr_idx1d};
                 pnm.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;//min_r_ins;
                 
                 pnm.throat_[attribs::length0][new_throat_idx] = 0;
                 pnm.throat_[attribs::length][new_throat_idx] =
-                  (pnm.node_[attribs::pos][new_node_idx] - pnm.node_[attribs::pos][ptr[idx1d]]).length();
+                  (pnm.node_[attribs::pos][new_node_idx] - pnm.node_[attribs::pos][ptr_idx1d]).length();
                 pnm.throat_[attribs::length1][new_throat_idx] = 0;
                 
                                
                 ++new_throat_incr;
               }
-              else if (ptr[idx1d] == -1) {
-                voxel_to_row_inc_map[idx1d] = voxel_to_row_inc++;
+              else if (ptr_idx1d == -1) {
+                auto voxel_to_row_inc_curr = voxel_to_row_inc++;
+                voxel_to_row_inc_map[idx1d] = voxel_to_row_inc_curr;
               
-                auto new_node_idx = pnm.node_count_ + voxel_to_row_inc_map[idx1d];
+                auto new_node_idx = pnm.node_count_ + voxel_to_row_inc_curr;
               
                 pnm.node_[attribs::r_ins][new_node_idx] = cell_size.x()/2;
                 pnm.node_[attribs::pos][new_node_idx] = cell_size*(v3d{i, j, k} + 0.5);
@@ -901,6 +924,8 @@ namespace xpm
               
             }
 
+
+        std::cout << "\n\nNODES_VALUES";
 
         pnm_idx loaded = 0;
         
@@ -934,6 +959,7 @@ namespace xpm
               }
             }
 
+        std::cout << "\n\nTHROAT_VALUES";
 
         
         
@@ -951,8 +977,56 @@ namespace xpm
       }
 
 
-      auto pressure = pnm.SolvePressure();
+      std::vector<double> pressure(pnm.node_count_);
+      
+      // for (pnm_idx i = 0; i < pnm.node_count_; ++i)
+      //   pressure[i] = (1.*i)/pnm.node_count_;
+      std::cout << "\n\nGeneratePressureInput_START";
+      
+      auto input = pnm.GeneratePressureInput();
 
+      std::cout << "\n\nGeneratePressureInput_END";
+      
+      // auto pressure = input.Solve();
+
+
+      {
+        using namespace boost::interprocess;
+
+
+        {
+          shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
+          input.Save(smo);
+        }
+
+        std::cout << "\n\nSaved hypre input";
+      
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        auto solve_result = std::system(
+          std::format("mpiexec -n 16 \"{}\" -s",
+            "xpm_project.exe"
+          ).c_str());
+
+        auto stop = std::chrono::high_resolution_clock::now();
+ 
+        cout << "\n\nMPI hypre solve time: " <<
+          duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
+
+
+        shared_memory_object smo_output{open_only, "xpm-hypre-output", read_only};
+        mapped_region mr_ouput{smo_output, read_only};
+        // auto* ptr = static_cast<double*>(mr_ouput.get_address());
+
+
+        std::memcpy(pressure.data(), mr_ouput.get_address(), input.nrows*sizeof(double));
+        
+          // auto val = std::accumulate(ptr, ptr + input.nrows, 0.0);
+              
+              
+      }
+
+      
       std::cout << "\n\nPressure solved";
       
 

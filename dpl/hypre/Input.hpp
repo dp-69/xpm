@@ -25,9 +25,8 @@
 
 #pragma once
 
-
-#include <HYPRE.h>
-#include <HYPRE_parcsr_ls.h>
+#include <dpl/hypre/ij_matrix.hpp>
+#include <dpl/hypre/sparse_matrix.hpp>
 
 #ifndef MPI_COMM_WORLD
 #define MPI_COMM_WORLD 0
@@ -44,245 +43,29 @@
 #include <forward_list>
 #include <iostream>
 
+#ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+#endif
+
 
 namespace dpl::hypre
 {
-  namespace internal
-  {
-    class Vector
-    {
-      HYPRE_IJVector v_ = nullptr;
-
-    public:
-      // HypreVector() = default;
-
-      Vector(HYPRE_Int nrows/*, const HYPRE_Int* rows*/, const HYPRE_Real* values) {
-        SetValues(nrows/*, rows*/, values);
-      }
-
-      Vector(HYPRE_Int nrows) {
-        AllocateSpace(nrows);
-      }
-
-      ~Vector() {
-        if (v_)
-          HYPRE_IJVectorDestroy(v_);
-      }
-
-      void AllocateSpace(HYPRE_Int nrows) {
-        HYPRE_IJVectorCreate(MPI_COMM_WORLD, 0, nrows - 1, &v_);
-        HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
-        HYPRE_IJVectorInitialize(v_);
-
-        HYPRE_IJVectorAssemble(v_);
-      }
-
-      void SetValues(HYPRE_Int nrows/*, const HYPRE_Int* rows*/, const HYPRE_Real* values) {
-        HYPRE_IJVectorCreate(MPI_COMM_WORLD, 0, nrows - 1, &v_);
-        HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
-        HYPRE_IJVectorInitialize(v_);
-        
-        //      HYPRE_IJVectorSetValues(_v, nrows, rows, values);
-        for (HYPRE_Int i = 0; i < nrows; ++i)
-          HYPRE_IJVectorSetValues(v_, 1, &i, values + i);
-
-        HYPRE_IJVectorAssemble(v_);
-      }
-
-      HYPRE_ParVector GetParVector() const {
-        HYPRE_ParVector pointer;
-        HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&pointer));
-        return pointer;
-      }
-
-      void GetValues(HYPRE_Int nrows, const HYPRE_Int* rows, HYPRE_Real* values) const {
-        HYPRE_IJVectorGetValues(v_, nrows, rows, values);
-      }
-
-
-      Vector(const Vector& other) = delete;
-      Vector(Vector&& other) = delete;
-      Vector& operator=(const Vector& other) = delete;
-      Vector& operator=(Vector&& other) = delete;
-    };
-
-    class Matrix
-    {
-      HYPRE_IJMatrix m_ = nullptr;
-
-    public:
-      void SetValues(HYPRE_Int nrows, HYPRE_Int ncols, HYPRE_Int* ncols_per_row, const HYPRE_Int* cols_of_coefs, const HYPRE_Real* coefs) {
-#ifndef HYPRE_SEQUENTIAL
-        int world_size;
-        int world_rank;
-        MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-        MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
-
-        HYPRE_BigInt ilower, iupper; 
-
-        if (world_size == 1) {
-          ilower = 0;
-          iupper = nrows - 1;
-        }
-        else {
-          if (world_rank == 0) {
-            ilower = 0;
-            iupper = nrows/2;
-          }
-          else /*if (world_rank == 1)*/ {
-            ilower = nrows/2 + 1;
-            iupper = nrows - 1;
-          }
-        }
-
-        std::cout << ilower << ' ' << iupper << "HERE\n";
-        std::cout << std::flush;
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        
-        
-        HYPRE_IJMatrixCreate(MPI_COMM_WORLD, ilower, iupper, 0, ncols - 1, &m_);
-
-        HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
-        
-        HYPRE_IJMatrixInitialize(m_);
-
-
-        size_t shift = 0;
-
-        for (HYPRE_BigInt i = 0; i < ilower; ++i)
-          shift += ncols_per_row[i];
-
-        for (HYPRE_BigInt i = ilower; i <= iupper; ++i) {
-          HYPRE_IJMatrixSetValues(m_, 1, ncols_per_row + i, &i, cols_of_coefs + shift, coefs + shift);
-          shift += ncols_per_row[i];
-        }
-
-
-        HYPRE_IJMatrixAssemble(m_);
-                
-        std::cout << ilower << ' ' << iupper << "ASSEMBLED\n";
-        std::cout << std::flush;
-        MPI_Barrier(MPI_COMM_WORLD);
-        
-#else
-        HYPRE_IJMatrixCreate(MPI_COMM_WORLD, 0, nrows - 1, 0, ncols - 1, &m_);
-        
-        HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
-        // HYPRE_IJMatrixSetRowSizes(A, ncols.data());    
-
-        // std::vector<HYPRE_Int> zeroArray(nrows, 0);
-        // HYPRE_IJMatrixSetDiagOffdSizes(m_, ncols_per_row, zeroArray.data());
-
-        HYPRE_IJMatrixInitialize(m_);
-        // HYPRE_IJMatrixSetValues(_m, nrows, ncols, rows, cols, values);
-
-        for (HYPRE_Int i = 0, shift = 0; i < nrows; ++i) {
-          HYPRE_IJMatrixSetValues(m_, 1, ncols_per_row + i, &i, cols_of_coefs + shift, coefs + shift);
-          shift += ncols_per_row[i];
-        }
-
-        HYPRE_IJMatrixAssemble(m_);
-#endif
-        
-        
-        
-        
-       
-
-        
-        
-
-
-        
-      }
-
-      HYPRE_ParCSRMatrix GetParCSRMatrix() const {
-        HYPRE_ParCSRMatrix csr;
-        HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&csr));
-        return csr;
-      }
-
-      Matrix(HYPRE_Int nrows, HYPRE_Int ncols, HYPRE_Int* ncols_per_row, const HYPRE_Int* cols_of_coefs, const HYPRE_Real* coefs) {
-        SetValues(nrows, ncols, ncols_per_row, cols_of_coefs, coefs);
-      }
-
-      // HypreMatrix() = default;
-
-      ~Matrix() {
-        if (m_)
-          HYPRE_IJMatrixDestroy(m_);
-      }
-
-      Matrix(const Matrix& other) = delete;
-      Matrix& operator=(const Matrix& other) = delete;
-      Matrix(Matrix&& other) = delete;
-      Matrix& operator=(Matrix&& other) = delete;
-    };
-  }
-
-
-
-
-
-
-
-
-
-
-
-
-
   
-  class SparseMatrix
-  {                    
-    HYPRE_Int off_diag_count_;    
-    
-    friend struct Input;
-    
-  public:
-    HYPRE_Int nrows;
-    
-    std::vector<std::forward_list<std::tuple<HYPRE_Int, HYPRE_Real>>> off_diag_coefs;
-    std::vector<HYPRE_Real> diagonal;
-    
-    SparseMatrix() = default;
-    
-    explicit SparseMatrix(HYPRE_Int n) {
-      SetSize(n);
-    }
 
-    void SetSize(HYPRE_Int n) {       
-      nrows = n;
-      diagonal.assign(n, 0);            
-      // constants_.assign(n, 0);
 
-      off_diag_coefs.resize(n);
-      off_diag_count_ = 0;
-    }
 
-    void SetOffDiagCoef(HYPRE_Int row, HYPRE_Int col, double coef) {                    
-      off_diag_coefs[row].emplace_front(col, coef);      
-      ++off_diag_count_;
-    }                  
+  struct InputPtr
+  {
+    HYPRE_Int nrows;    
+    HYPRE_Int* ncols; // size of nrows
+    HYPRE_Complex* b; // constants, b vector, size of nrows
 
-    void AddDiagCoef(HYPRE_Int i, double value) {
-      diagonal[i] += value;
-    }
-
-    auto& GetOffDiagCoefs(HYPRE_Int row) {
-      return off_diag_coefs[row];
-    }
-
-    void AddDifferenceCoefs(HYPRE_Int owner, HYPRE_Int adj, HYPRE_Real coef) {
-      AddDiagCoef(owner, -coef);
-      SetOffDiagCoef(owner, adj, coef);
-
-      AddDiagCoef(adj, -coef);
-      SetOffDiagCoef(adj, owner, coef);
-    }       
+    HYPRE_BigInt* cols; 
+    HYPRE_Complex* values;
   };
+
+
   
   struct Input
   {
@@ -293,7 +76,77 @@ namespace dpl::hypre
     std::vector<HYPRE_Int> cols_of_coefs; 
     std::vector<HYPRE_Real> coefs;
 
+#ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
+    using smo_t = boost::interprocess::shared_memory_object;
+    
+    void Save(smo_t& smo) {
+      // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
+      using namespace boost::interprocess;
+      
+      auto coefs_count = cols_of_coefs.size();
+      
+      auto buffer_size = sizeof(HYPRE_Int) + sizeof(HYPRE_Int) +
+        nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Real))
+      + coefs_count*(sizeof(HYPRE_Int) + sizeof(HYPRE_Real));
+      
+      smo.truncate(buffer_size);
+      
+      mapped_region region(smo, read_write);
+      auto* ptr = region.get_address();
 
+      *(HYPRE_Int*)ptr = nrows;
+      ptr = (char*)ptr + sizeof(HYPRE_Int);
+      
+      *(HYPRE_Int*)ptr = coefs_count;
+      ptr = (char*)ptr + sizeof(HYPRE_Int);
+      
+      std::memcpy(ptr, ncols_per_row.data(), nrows*sizeof(HYPRE_Int));
+      ptr = (char*)ptr + nrows*sizeof(HYPRE_Int);
+
+      std::memcpy(ptr, constants.data(), nrows*sizeof(HYPRE_Real));
+      ptr = (char*)ptr + nrows*sizeof(HYPRE_Real);
+
+      std::memcpy(ptr, cols_of_coefs.data(), coefs_count*sizeof(HYPRE_Int));
+      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Int);
+
+      std::memcpy(ptr, coefs.data(), coefs_count*sizeof(HYPRE_Real));
+      // ptr += nrows*sizeof(HYPRE_Real);
+    }
+
+    void Load(smo_t& smo) {
+      using namespace boost::interprocess;
+
+      mapped_region region(smo, read_only);
+
+      auto* ptr = region.get_address();
+
+      nrows = *(HYPRE_Int*)ptr;
+      ptr = (char*)ptr + sizeof(HYPRE_Int);
+
+      auto coefs_count = *(HYPRE_Int*)ptr;
+      ptr = (char*)ptr + sizeof(HYPRE_Int);
+
+
+      ncols_per_row.resize(nrows);
+      std::memcpy(ncols_per_row.data(), ptr, nrows*sizeof(HYPRE_Int));
+      ptr = (char*)ptr + nrows*sizeof(HYPRE_Int);
+      
+      constants.resize(nrows);
+      std::memcpy(constants.data(), ptr, nrows*sizeof(HYPRE_Real));
+      ptr = (char*)ptr + nrows*sizeof(HYPRE_Real);
+      
+      cols_of_coefs.resize(coefs_count);
+      std::memcpy(cols_of_coefs.data(), ptr, coefs_count*sizeof(HYPRE_Int));
+      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Int);
+      
+      coefs.resize(coefs_count);
+      std::memcpy(coefs.data(), ptr, coefs_count*sizeof(HYPRE_Real));
+      // ptr += nrows*sizeof(HYPRE_Real);
+    }
+
+#endif
+
+    
 
     Input() = default;
 
@@ -365,28 +218,80 @@ namespace dpl::hypre
     // }
     
     void Solve(HYPRE_Int* indices_ptr, HYPRE_Int indices_count, HYPRE_Real* output_ptr) {                  
-
       HYPRE_Solver solver;
-
-       // int world_size;
-       //  int world_rank;
-       //  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-       //  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
       
-      
-      // if (world_rank == 0)
       HYPRE_BoomerAMGCreate(&solver);      
 
-      // (Optional) Set the convergence tolerance, if BoomerAMG is used as a solver. If it is used as a preconditioner,
+      HYPRE_BoomerAMGSetTol(solver, 1.e-20);
+      
+      // ReSharper disable once CppInconsistentNaming
+      ij_matrix A_ij_matrix{nrows, ncols_per_row.data(), cols_of_coefs.data(), coefs.data()};
+      ij_vector b_ij_vector{nrows, constants.data()};
+      ij_vector x_ij_vector{nrows};
+      
+      auto* ref_A = A_ij_matrix.par_ref();
+      auto* ref_b = b_ij_vector.par_ref();
+      auto* ref_x = x_ij_vector.par_ref();           
+      
+      // const auto t0 = std::chrono::system_clock::now();
+      // result = HYPRE_AMSSetup(solver, A_parcsr, B_par, x_par);
+      // result = HYPRE_AMSSolve(solver, A_parcsr, B_par, x_par);
+
+      HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
+      HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
+
+      // char msg[2048];
+      // if (result)
+      //   HYPRE_DescribeError(result, msg);
+      // HYPRE_ClearError(HYPRE_ERROR_CONV);
+      
+      // const auto t1 = std::chrono::system_clock::now();
+      // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
+      HYPRE_BoomerAMGDestroy(solver);                  
+
+      x_ij_vector.get_values(indices_count, indices_ptr, output_ptr);
+    }
+    
+    void Solve(HYPRE_Int count, HYPRE_Real* output_ptr) {
+      std::vector<HYPRE_Int> indices(count);
+      for (HYPRE_Int i = 0; i < count; ++i)
+        indices[i] = i;
+      
+      Solve(indices.data(), count, output_ptr);  
+    }
+
+    auto Solve() {
+#ifndef HYPRE_SEQUENTIAL
+      auto [ilower, iupper] = mpi_part(nrows);
+
+      auto count = iupper - ilower + 1;
+
+      std::vector<double> x(count);
+      std::vector<HYPRE_Int> indices(count);
+      for (HYPRE_BigInt i = 0; i < count; ++i)
+        indices[i] = ilower + i;
+      
+      Solve(indices.data(), count, x.data());
+      
+      return x;
+#else
+      std::vector<double> x(nrows);
+      Solve(nrows, x.data());
+      return x;
+#endif
+    }
+  };
+
+
+  
+}
+
+
+
+
+ // (Optional) Set the convergence tolerance, if BoomerAMG is used as a solver. If it is used as a preconditioner,
       //   it should be set to 0. The default is 1.e-7.
 
-      // HYPRE_Real tolerance = 1e-20;
-
-      // if (world_rank == 0)
-      HYPRE_BoomerAMGSetTol(solver, 1.e-20);
-
-      
       // (Optional) Sets AMG strength threshold. The default is 0.25. For 2d Laplace operators, 0.25 is a good value,
       //   for 3d Laplace operators, 0.5 or 0.6 is a better value. For elasticity problems, a large strength threshold,
       //     such as 0.9, is often better.
@@ -437,89 +342,3 @@ namespace dpl::hypre
       // The default is 0.
 
       // HYPRE_BoomerAMGSetInterpType(solver, 8);
-
-  
-
-      
-      const internal::Matrix A_matrix(nrows, nrows, ncols_per_row.data(), cols_of_coefs.data(), coefs.data());
-      const internal::Vector B_vector(nrows, constants.data());
-      const internal::Vector x_vector(nrows);
-      
-      auto* A_parcsr = A_matrix.GetParCSRMatrix();
-      auto* B_par = B_vector.GetParVector();
-      auto* x_par = x_vector.GetParVector();           
-      // HYPRE_ERROR_ARG
-      
-      // const auto t0 = std::chrono::system_clock::now();
-      // result = HYPRE_AMSSetup(solver, A_parcsr, B_par, x_par);
-      // result = HYPRE_AMSSolve(solver, A_parcsr, B_par, x_par);
-
-      // std::cout << "HYPRE_BoomerAMGSetup___PRE\n" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-
-      // try{
-        // if (world_rank == 0)
-      HYPRE_BoomerAMGSetup(solver, A_parcsr, B_par, x_par);
-
-      // std::cout << "HYPRE_BoomerAMGSetup___POST" << world_rank << "\n" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-      
-      // }
-      // catch (...){
-      //   std::cout << "HYPRE_BoomerAMGSetup EXCEPTION\n" << std::flush;
-      //   MPI_Barrier(MPI_COMM_WORLD);
-      // }
-
-      // std::cout << "HYPRE_BoomerAMGSetup_POST\n" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-
-      // if (world_rank == 0)
-      HYPRE_BoomerAMGSolve(solver, A_parcsr, B_par, x_par);
-
-      //  std::cout << "HYPRE_BoomerAMGSetup___SOLVE" << world_rank << "\n" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-      // std::cout << "HYPRE_BoomerAMGSolve\n" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-      // char msg[2048];
-      // if (result)
-      //   HYPRE_DescribeError(result, msg);
-      // HYPRE_ClearError(HYPRE_ERROR_CONV);
-      
-      // const auto t1 = std::chrono::system_clock::now();
-      // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
-      // if (world_rank == 0)
-      HYPRE_BoomerAMGDestroy(solver);                  
-
-      // result = HYPRE_AMSDestroy(solver);
-      // if (world_rank == 0)
-      x_vector.GetValues(indices_count, indices_ptr, output_ptr);
-
-        
-
-      // std::cout << "SOLVE_END" << world_rank << "\n" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-    }
-    
-    void Solve(HYPRE_Int count, HYPRE_Real* output_ptr) {
-      std::vector<HYPRE_Int> indices(count);
-      for (HYPRE_Int i = 0; i < count; ++i)
-        indices[i] = i;
-      
-      Solve(indices.data(), count, output_ptr);  
-    }
-
-    auto Solve() {
-      std::vector<double> x(nrows);
-      Solve(nrows, x.data());
-      return x;
-    }
-  };
-
-
-  
-}

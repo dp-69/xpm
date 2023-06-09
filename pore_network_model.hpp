@@ -475,7 +475,7 @@ namespace xpm
     
     
 
-    auto SolvePressure() {
+    auto GeneratePressureInput() {
 
       using eq_tri = geometric_properties::equilateral_triangle_properties;
       using namespace attribs;
@@ -500,7 +500,10 @@ namespace xpm
         // auto k = throat_[length0][i];
         // auto w = throat_[length1][i];
         // auto Q = throat_[length][i];
-        
+
+        if (i%(throat_count_/10) == 0) {
+          std::cout << (1.0*i)/throat_count_ << '\n';
+        }
         
         auto coef = -1.0/(
           (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
@@ -528,11 +531,16 @@ namespace xpm
         }
       }
 
-      dpl::hypre::Input input{matrix, std::move(free_terms)};
+      std::cout << "\n\nSparseMatrix created";
+
+      return dpl::hypre::Input /*input*/{matrix, std::move(free_terms)};
+
+
+
       
-      auto values = input.Solve();
+
       
-      return values;
+      // return input.Solve();
     }
   };
 }
