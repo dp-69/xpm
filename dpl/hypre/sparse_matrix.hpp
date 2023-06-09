@@ -32,52 +32,48 @@
 
 namespace dpl::hypre
 {
-  class SparseMatrix
+  class sparse_matrix
   {                    
-    HYPRE_Int off_diag_count_;    
+    HYPRE_BigInt off_diag_count_;    
     
-    friend struct Input;
-    
-  public:
-    HYPRE_Int nrows;
-    
-    std::vector<std::forward_list<std::tuple<HYPRE_Int, HYPRE_Real>>> off_diag_coefs;
-    std::vector<HYPRE_Real> diagonal;
-    
-    SparseMatrix() = default;
-    
-    explicit SparseMatrix(HYPRE_Int n) {
-      SetSize(n);
-    }
+    friend struct InputDeprec;
 
-    void SetSize(HYPRE_Int n) {       
+  public:
+    HYPRE_BigInt nrows;
+    
+    std::vector<HYPRE_Complex> diag;
+    std::vector<std::forward_list<std::tuple<HYPRE_BigInt, HYPRE_Complex>>> off_diag;
+    
+    sparse_matrix() = default;
+    
+    explicit sparse_matrix(HYPRE_BigInt n) {
       nrows = n;
-      diagonal.assign(n, 0);            
+      diag.assign(n, 0);            
       // constants_.assign(n, 0);
 
-      off_diag_coefs.resize(n);
+      off_diag.resize(n);
       off_diag_count_ = 0;
     }
 
-    void SetOffDiagCoef(HYPRE_Int row, HYPRE_Int col, double coef) {                    
-      off_diag_coefs[row].emplace_front(col, coef);      
+    void set_off_diag(HYPRE_BigInt i, HYPRE_BigInt j, HYPRE_Complex coef) {                    
+      off_diag[i].emplace_front(j, coef);      
       ++off_diag_count_;
     }                  
 
-    void AddDiagCoef(HYPRE_Int i, double value) {
-      diagonal[i] += value;
+    void add_diag(HYPRE_BigInt i, HYPRE_Complex value) {
+      diag[i] += value;
     }
 
-    auto& GetOffDiagCoefs(HYPRE_Int row) {
-      return off_diag_coefs[row];
+    auto& get_off_diag(HYPRE_BigInt i) {
+      return off_diag[i];
     }
 
-    void AddDifferenceCoefs(HYPRE_Int owner, HYPRE_Int adj, HYPRE_Real coef) {
-      AddDiagCoef(owner, -coef);
-      SetOffDiagCoef(owner, adj, coef);
+    void add_paired_diff_coef(HYPRE_BigInt i0, HYPRE_BigInt i1, HYPRE_Complex coef) {
+      add_diag(i0, -coef);
+      set_off_diag(i0, i1, coef);
 
-      AddDiagCoef(adj, -coef);
-      SetOffDiagCoef(adj, owner, coef);
+      add_diag(i1, -coef);
+      set_off_diag(i1, i0, coef);
     }       
   };
 }

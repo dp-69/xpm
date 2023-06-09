@@ -3,7 +3,7 @@
 
 #include "xpm/functions.h"
 
-#include <dpl/hypre/Input.hpp>
+#include <dpl/hypre/InputDeprec.hpp>
 #include <dpl/qt/property_editor/PropertyItemsBase.hpp>
 #include <dpl/qt/property_editor/QPropertyTreeView.hpp>
 #include <dpl/vtk/TidyAxes.hpp>

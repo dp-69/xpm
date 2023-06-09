@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include <dpl/hypre/Input.hpp>
+#include <dpl/hypre/InputDeprec.hpp>
 #include <dpl/static_vector.hpp>
 #include <dpl/soa.hpp>
 
@@ -489,7 +489,7 @@ namespace xpm
       //     throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i]));
       // };
 
-      dpl::hypre::SparseMatrix matrix(node_count_);
+      dpl::hypre::sparse_matrix matrix(node_count_);
 
       std::vector<double> free_terms(node_count_, 0);
       
@@ -512,28 +512,28 @@ namespace xpm
 
         if (n0 == inlet()) {
           free_terms[n1] += coef/**1 Pa*/;
-          matrix.AddDiagCoef(n1, coef);
+          matrix.add_diag(n1, coef);
         }
         else if (n1 == inlet()) {
           free_terms[n0] += coef/**1 Pa*/;
-          matrix.AddDiagCoef(n0, coef);
+          matrix.add_diag(n0, coef);
         }
         else if (n0 == outlet()) {
           // free_terms[n1] += coef/**0 Pa*/;
-          matrix.AddDiagCoef(n1, coef);
+          matrix.add_diag(n1, coef);
         }
         else if (n1 == outlet()) {
           // free_terms[n0] += coef/**0 Pa*/;
-          matrix.AddDiagCoef(n0, coef);
+          matrix.add_diag(n0, coef);
         }
         else /*if (n0 != outlet() && n1 != outlet())*/ {
-          matrix.AddDifferenceCoefs(n0, n1, -coef);
+          matrix.add_paired_diff_coef(n0, n1, -coef);
         }
       }
 
       std::cout << "\n\nSparseMatrix created";
 
-      return dpl::hypre::Input /*input*/{matrix, std::move(free_terms)};
+      return dpl::hypre::InputDeprec /*input*/{matrix, std::move(free_terms)};
 
 
 

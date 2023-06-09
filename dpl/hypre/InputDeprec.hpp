@@ -28,10 +28,6 @@
 #include <dpl/hypre/ij_matrix.hpp>
 #include <dpl/hypre/sparse_matrix.hpp>
 
-#ifndef MPI_COMM_WORLD
-#define MPI_COMM_WORLD 0
-#endif
-
 // #include "rrm/fd/core/linear_solver/HypreVectorMatrix.hpp"
 
 // #include <boost/format/format_fwd.hpp>
@@ -51,13 +47,9 @@
 
 namespace dpl::hypre
 {
-  
-
-
-
   struct InputPtr
   {
-    HYPRE_Int nrows;    
+    HYPRE_BigInt nrows;    
     HYPRE_Int* ncols; // size of nrows
     HYPRE_Complex* b; // constants, b vector, size of nrows
 
@@ -67,14 +59,14 @@ namespace dpl::hypre
 
 
   
-  struct Input
+  struct InputDeprec
   {
-    HYPRE_Int nrows;    
+    HYPRE_BigInt nrows;    
     std::vector<HYPRE_Int> ncols_per_row; // size of nrows       
-    std::vector<HYPRE_Real> constants; // size of nrows
+    std::vector<HYPRE_Complex> constants; // size of nrows
 
-    std::vector<HYPRE_Int> cols_of_coefs; 
-    std::vector<HYPRE_Real> coefs;
+    std::vector<HYPRE_BigInt> cols_of_coefs; 
+    std::vector<HYPRE_Complex> coefs;
 
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
     using smo_t = boost::interprocess::shared_memory_object;
@@ -148,15 +140,15 @@ namespace dpl::hypre
 
     
 
-    Input() = default;
+    InputDeprec() = default;
 
-    Input(const Input& other) = default;
-    Input(Input&& other) noexcept = default;
-    Input& operator=(const Input& other) = default;
-    Input& operator=(Input&& other) noexcept = default;
+    InputDeprec(const InputDeprec& other) = default;
+    InputDeprec(InputDeprec&& other) noexcept = default;
+    InputDeprec& operator=(const InputDeprec& other) = default;
+    InputDeprec& operator=(InputDeprec&& other) noexcept = default;
     
 
-    Input(SparseMatrix& m, std::vector<double>&& free_terms) {             
+    InputDeprec(sparse_matrix& m, std::vector<double>&& free_terms) {             
       nrows = m.nrows;
       ncols_per_row.assign(m.nrows, 1);
       constants = std::move(free_terms);            
@@ -170,9 +162,9 @@ namespace dpl::hypre
       for (HYPRE_Int row_idx = 0, coef_idx = 0; row_idx < nrows; row_idx++) {                
         auto diag_idx = coef_idx++;
         cols_of_coefs[diag_idx] = row_idx;
-        coefs[diag_idx] = m.diagonal[row_idx];        
+        coefs[diag_idx] = m.diag[row_idx];        
         
-        for (auto [j, j_off_coef] : m.off_diag_coefs[row_idx]) {
+        for (auto [j, j_off_coef] : m.off_diag[row_idx]) {
           ++ncols_per_row[row_idx];
           
           auto off_diag_idx = coef_idx++;
@@ -181,41 +173,6 @@ namespace dpl::hypre
         }                                                
       }          
     }
-    
-    // void Export(const std::string& filename, bool numerical = false) {
-    //   std::ofstream out(filename);      
-    //
-    //   auto* colPtr = cols_of_coefs.data();
-    //   auto* coefPtr = coefs.data();
-    //   for (auto i = 0; i < nrows; ++i) {
-    //     std::vector<HYPRE_Real> row_values(nrows, 0);
-    //
-    //     for (auto j = 0; j < ncols_per_row[i]; ++j)
-    //       row_values[*colPtr++] = *coefPtr++;
-    //
-    //     for (auto j = 0; j < nrows; ++j) {          
-    //       if (numerical)
-    //         out << boost::format("%10.2e") % row_values[j];
-    //       else
-    //         out << (row_values[j] ? row_values[j] == 1 ? '1' : 'v' : '0'); // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
-    //       
-    //       out << ' ';
-    //     }
-    //
-    //     out << "| ";
-    //             
-    //     if (numerical)
-    //       out << boost::format("%10.2e") % constants[i];
-    //     else
-    //       out << (constants[i] ? constants[i] == 1 ? '1' : 'v' : '0');  // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
-    //     
-    //     out << std::endl;
-    //   }
-    //   
-    //   // out << "one" << " two" << boost::format("%e %.3e") % 1.5e3 % 0.0048799;
-    //
-    //   out.close();
-    // }
     
     void Solve(HYPRE_Int* indices_ptr, HYPRE_Int indices_count, HYPRE_Real* output_ptr) {                  
       HYPRE_Solver solver;
@@ -289,56 +246,95 @@ namespace dpl::hypre
 
 
 
- // (Optional) Set the convergence tolerance, if BoomerAMG is used as a solver. If it is used as a preconditioner,
-      //   it should be set to 0. The default is 1.e-7.
+// void Export(const std::string& filename, bool numerical = false) {
+//   std::ofstream out(filename);      
+//
+//   auto* colPtr = cols_of_coefs.data();
+//   auto* coefPtr = coefs.data();
+//   for (auto i = 0; i < nrows; ++i) {
+//     std::vector<HYPRE_Real> row_values(nrows, 0);
+//
+//     for (auto j = 0; j < ncols_per_row[i]; ++j)
+//       row_values[*colPtr++] = *coefPtr++;
+//
+//     for (auto j = 0; j < nrows; ++j) {          
+//       if (numerical)
+//         out << boost::format("%10.2e") % row_values[j];
+//       else
+//         out << (row_values[j] ? row_values[j] == 1 ? '1' : 'v' : '0'); // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
+//       
+//       out << ' ';
+//     }
+//
+//     out << "| ";
+//             
+//     if (numerical)
+//       out << boost::format("%10.2e") % constants[i];
+//     else
+//       out << (constants[i] ? constants[i] == 1 ? '1' : 'v' : '0');  // NOLINT(clang-diagnostic-float-conversion, clang-diagnostic-float-equal)
+//     
+//     out << std::endl;
+//   }
+//   
+//   // out << "one" << " two" << boost::format("%e %.3e") % 1.5e3 % 0.0048799;
+//
+//   out.close();
+// }
 
-      // (Optional) Sets AMG strength threshold. The default is 0.25. For 2d Laplace operators, 0.25 is a good value,
-      //   for 3d Laplace operators, 0.5 or 0.6 is a better value. For elasticity problems, a large strength threshold,
-      //     such as 0.9, is often better.
-      // HYPRE_BoomerAMGSetStrongThreshold(solver, 0.5); // 0.7
-
-      // 0 CLJP-coarsening (a parallel coarsening algorithm using independent sets.
-      //   1 classical Ruge-Stueben coarsening on each processor, no boundary treatment (not recommended!)
-      //   3 classical Ruge-Stueben coarsening on each processor, followed by a third pass, which adds coarse
-      //   points on the boundaries
-      //   6 Falgout coarsening (uses 1 first, followed by CLJP using the interior coarse points
-      //     generated by 1 as its first independent set)
-      //   7 CLJP-coarsening (using a fixed random vector, for debugging purposes only)
-      //   8 PMIS-coarsening (a parallel coarsening algorithm using independent sets, generating
-      //     lower complexities than CLJP, might also lead to slower convergence)
-      //   9 PMIS-coarsening (using a fixed random vector, for debugging purposes only)
-      //   10 HMIS-coarsening (uses one pass Ruge-Stueben on each processor independently, followed
-      //     by PMIS using the interior C-points generated as its first independent set)
-      //   11 one-pass Ruge-Stueben coarsening on each processor, no boundary treatment (not recommended!)
-      //   21 CGC coarsening by M. Griebel, B. Metsch and A. Schweitzer
-      //   22 CGC-E coarsening by M. Griebel, B. Metsch and A.Schweitzer
-
-      // The default is 6.
-
-      
-      // HYPRE_BoomerAMGSetCoarsenType(solver, 9); //HMIS - 10 PMIS - 9
 
 
 
-      // (Optional) Defines which parallel interpolation operator is used. There are the following options for interp type:
 
-       // 0 classical modified interpolation
-       //  1 LS interpolation (for use with GSMG)
-       //  2 classical modified interpolation for hyperbolic PDEs
-       //  3 direct interpolation (with separation of weights)
-       //  4 multipass interpolation
-       //  5 multipass interpolation (with separation of weights)
-       //  6 extended+i interpolation
-       //  7 extended+i (if no common C neighbor) interpolation
-       //  8 standard interpolation
-       //  9 standard interpolation (with separation of weights)
-       //  10 classical block interpolation (for use with nodal systems version only)
-       //  11 classical block interpolation (for use with nodal systems version only)
-       //  with diagonalized diagonal blocks
-       //  12 FF interpolation
-       //  13 FF1 interpolation
-       //  14 extended interpolation
+// (Optional) Set the convergence tolerance, if BoomerAMG is used as a solver. If it is used as a preconditioner,
+//   it should be set to 0. The default is 1.e-7.
 
-      // The default is 0.
+// (Optional) Sets AMG strength threshold. The default is 0.25. For 2d Laplace operators, 0.25 is a good value,
+//   for 3d Laplace operators, 0.5 or 0.6 is a better value. For elasticity problems, a large strength threshold,
+//     such as 0.9, is often better.
+// HYPRE_BoomerAMGSetStrongThreshold(solver, 0.5); // 0.7
 
-      // HYPRE_BoomerAMGSetInterpType(solver, 8);
+// 0 CLJP-coarsening (a parallel coarsening algorithm using independent sets.
+//   1 classical Ruge-Stueben coarsening on each processor, no boundary treatment (not recommended!)
+//   3 classical Ruge-Stueben coarsening on each processor, followed by a third pass, which adds coarse
+//   points on the boundaries
+//   6 Falgout coarsening (uses 1 first, followed by CLJP using the interior coarse points
+//     generated by 1 as its first independent set)
+//   7 CLJP-coarsening (using a fixed random vector, for debugging purposes only)
+//   8 PMIS-coarsening (a parallel coarsening algorithm using independent sets, generating
+//     lower complexities than CLJP, might also lead to slower convergence)
+//   9 PMIS-coarsening (using a fixed random vector, for debugging purposes only)
+//   10 HMIS-coarsening (uses one pass Ruge-Stueben on each processor independently, followed
+//     by PMIS using the interior C-points generated as its first independent set)
+//   11 one-pass Ruge-Stueben coarsening on each processor, no boundary treatment (not recommended!)
+//   21 CGC coarsening by M. Griebel, B. Metsch and A. Schweitzer
+//   22 CGC-E coarsening by M. Griebel, B. Metsch and A.Schweitzer
+
+// The default is 6.
+
+
+// HYPRE_BoomerAMGSetCoarsenType(solver, 9); //HMIS - 10 PMIS - 9
+
+
+
+// (Optional) Defines which parallel interpolation operator is used. There are the following options for interp type:
+
+ // 0 classical modified interpolation
+ //  1 LS interpolation (for use with GSMG)
+ //  2 classical modified interpolation for hyperbolic PDEs
+ //  3 direct interpolation (with separation of weights)
+ //  4 multipass interpolation
+ //  5 multipass interpolation (with separation of weights)
+ //  6 extended+i interpolation
+ //  7 extended+i (if no common C neighbor) interpolation
+ //  8 standard interpolation
+ //  9 standard interpolation (with separation of weights)
+ //  10 classical block interpolation (for use with nodal systems version only)
+ //  11 classical block interpolation (for use with nodal systems version only)
+ //  with diagonalized diagonal blocks
+ //  12 FF interpolation
+ //  13 FF1 interpolation
+ //  14 extended interpolation
+
+// The default is 0.
+
+// HYPRE_BoomerAMGSetInterpType(solver, 8);

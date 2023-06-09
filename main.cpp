@@ -28,6 +28,9 @@
 
 int main(int argc, char* argv[])
 {
+  
+
+  
   // using namespace boost::interprocess;
   //   {
   //     shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
@@ -81,7 +84,7 @@ int main(int argc, char* argv[])
     // if (w_rank == root)
     //   t0 = std::chrono::high_resolution_clock::now();
     
-    dpl::hypre::Input input;
+    dpl::hypre::InputDeprec input;
 
     {
       shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
@@ -154,13 +157,24 @@ int main(int argc, char* argv[])
     return 0;
   }
   else {
+    MPI_Init(&argc, &argv);
+
     
-    // xpm::pore_network_model pnm{
-    //   R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)",
-    //   // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)",
-    //   xpm::pore_network_model::file_format::statoil};
-    //
-    // auto input = pnm.GeneratePressureInput();
+    xpm::pore_network_model pnm{
+      R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)",
+      // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)",
+      xpm::pore_network_model::file_format::statoil};
+
+    
+    
+    auto input = pnm.GeneratePressureInput();
+
+    auto vals = input.Solve();
+    std::cout << std::format("\n\n {}", std::accumulate(vals.begin(), vals.end(), 0.0));
+
+    getchar();
+    
+
     // {
     //   shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
     //   input.Save(smo);
@@ -192,20 +206,6 @@ int main(int argc, char* argv[])
     
     
 
-    
-   
-    
-
-    
-
-
-
-
-
-
-    
-
-
 
     
     auto format = xpm::QVTKWidgetRef::defaultFormat();
@@ -232,35 +232,28 @@ int main(int argc, char* argv[])
     // QWidget widget;
     xpm::XPMWidget widget;
 
-    MPI_Init(&argc, &argv);
+    
     
     widget.Init();
-
-    MPI_Finalize();
     
     // Ui::MainWindow ui;
     // ui.setupUi(&widget);
 
     widget.resize(1400, 1000);
-    
     widget.show();
-    return app.exec();
+
+    auto result = QApplication::exec();
+
+    MPI_Finalize();
+
+    return result;
   }
+}
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-  // shared_memory_object shm (open_only, "MySharedMemory", read_only);
+// shared_memory_object shm (open_only, "MySharedMemory", read_only);
     // mapped_region region(shm, read_only);
     //
     // auto shared_inp = *((int*)region.get_address());
@@ -385,4 +378,3 @@ int main(int argc, char* argv[])
   // renderWindowInteractor->Start();
   //
   // return EXIT_SUCCESS;
-}
