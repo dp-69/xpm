@@ -25,8 +25,11 @@
 
 #pragma once
 
+
+#include <dpl/general.hpp>
 #include <dpl/hypre/ij_matrix.hpp>
-#include <dpl/hypre/sparse_matrix.hpp>
+#include <dpl/hypre/sparse_matrix_builder.hpp>
+#include <dpl/soa.hpp>
 
 // #include "rrm/fd/core/linear_solver/HypreVectorMatrix.hpp"
 
@@ -39,6 +42,9 @@
 #include <forward_list>
 #include <iostream>
 
+
+
+
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
@@ -47,15 +53,160 @@
 
 namespace dpl::hypre
 {
-  struct InputPtr
-  {
-    HYPRE_BigInt nrows;    
-    HYPRE_Int* ncols; // size of nrows
-    HYPRE_Complex* b; // constants, b vector, size of nrows
+  namespace keys {
+    def_static_key(index)
+    def_static_key(value)
+  }
 
-    HYPRE_BigInt* cols; 
+  inline constexpr struct populate_tag {} populate;
+
+  /**
+   * \brief
+   *    nrows = length(ncols) = length(b), number of rows
+   *    sum(ncols) = length(cols) = length(values), number of non-zero coefficients
+   */
+  struct ls_known_ref
+  {
+    HYPRE_BigInt nrows;     // number of rows   
+    
+    HYPRE_Int* ncols;       // number of non-zero columns
+    HYPRE_BigInt* cols;     // non-zero columns
+    HYPRE_Complex* values;  // non-zero coefficients
+
+    HYPRE_Complex* b;       // constant terms
+  };
+
+
+#ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
+  inline auto load_QQ(const boost::interprocess::mapped_region& region/*smo_t& smo*/) {
+    ls_known_ref lkr;
+
+    using namespace boost::interprocess;
+
+
+    // mapped_region region(smo, read_only);
+
+
+    auto* ptr = region.get_address();
+
+    lkr.nrows = *(HYPRE_BigInt*)ptr;
+    ptr = (char*)ptr + sizeof(HYPRE_Int);
+
+    auto coefs_count = *(HYPRE_BigInt*)ptr;
+    ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+
+
+    lkr.ncols = (HYPRE_Int*)ptr;
+    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_Int);
+
+    lkr.b = (HYPRE_Complex*)ptr;
+    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_Real);
+
+    lkr.cols = (HYPRE_BigInt*)ptr;
+    ptr = (char*)ptr + coefs_count * sizeof(HYPRE_Int);
+
+    lkr.values = (HYPRE_Complex*)ptr;
+
+
+    return lkr;
+  }
+#endif
+
+
+
+
+
+  struct ls_unknown_ref
+  {
+    HYPRE_Int nvalues;
+    HYPRE_BigInt* indices;
     HYPRE_Complex* values;
   };
+
+  struct ls_unknown_storage
+  {
+    dpl::soa<
+      keys::index_t, HYPRE_BigInt,
+      keys::value_t, HYPRE_Complex
+    > data;
+
+    // ls_unknown_storage(HYPRE_BigInt size) {
+    //   data.resize(size);
+    // }
+
+
+
+    // ls_unknown_storage(HYPRE_BigInt nrows, populate_tag) {
+    //   #ifdef HYPRE_SEQUENTIAL
+    //     static constexpr auto jlower = 0;
+    //     const auto jupper = nrows - 1;
+    //   #else
+    //     auto [jlower, jupper] = mpi_part(nrows);
+    //   #endif
+    //
+    //   auto count = jupper - jlower + 1;
+    //
+    //   // ls_unknown_storage lus{count}; 
+    //
+    //   data.resize(count);
+    //   for (HYPRE_BigInt i = 0; i < count; ++i)
+    //     data[keys::index][i] = jlower + i;
+    //
+    //   // #ifdef HYPRE_SEQUENTIAL
+    //   //   static constexpr auto jlower = 0;
+    //   //   const auto jupper = nrows - 1;
+    //   // #else
+    //   //   auto [jlower, jupper] = mpi_part(size);
+    //   // #endif
+    //   //
+    //   // data.resize(size);
+    //   // for (HYPRE_BigInt i = 0; i < size; ++i)
+    //   //   data[keys::index][i] = jlower + i;
+    // }
+
+    auto get_ref() {
+      return ls_unknown_ref {
+        static_cast<HYPRE_Int>(data.size()),
+        data[keys::index].get(),
+        data[keys::value].get()
+      };
+    }
+  };
+
+  
+
+
+
+  inline void solve(const ls_known_ref& in, const ls_unknown_ref& out) {                  
+      HYPRE_Solver solver;
+      
+      HYPRE_BoomerAMGCreate(&solver);      
+
+      HYPRE_BoomerAMGSetTol(solver, 1.e-20);
+
+      // ReSharper disable CppInconsistentNaming
+      ij_matrix A_matrix{in.nrows, in.ncols, in.cols, in.values};
+      ij_vector b_vector{in.nrows, in.b};
+      ij_vector x_vector{in.nrows};
+      
+      auto* ref_A = A_matrix.par_ref();
+      auto* ref_b = b_vector.par_ref();
+      auto* ref_x = x_vector.par_ref();
+      // ReSharper restore CppInconsistentNaming
+      
+      // const auto t0 = std::chrono::system_clock::now();
+
+      HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
+      HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
+
+      // const auto t1 = std::chrono::system_clock::now();
+      // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
+      HYPRE_BoomerAMGDestroy(solver);                  
+    
+      x_vector.get_values(out.nvalues, out.indices, out.values);
+    }
+
+
 
 
   
@@ -68,10 +219,20 @@ namespace dpl::hypre
     std::vector<HYPRE_BigInt> cols_of_coefs; 
     std::vector<HYPRE_Complex> coefs;
 
+    auto get_ref() {
+      return ls_known_ref{
+        nrows,
+        ncols_per_row.data(),
+        cols_of_coefs.data(),
+        coefs.data(),
+        constants.data()
+      };
+    }
+
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
     using smo_t = boost::interprocess::shared_memory_object;
-    
-    void Save(smo_t& smo) {
+
+    void save(smo_t& smo) {
       // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
       using namespace boost::interprocess;
       
@@ -105,7 +266,7 @@ namespace dpl::hypre
       // ptr += nrows*sizeof(HYPRE_Real);
     }
 
-    void Load(smo_t& smo) {
+    void load(smo_t& smo) {
       using namespace boost::interprocess;
 
       mapped_region region(smo, read_only);
@@ -148,10 +309,10 @@ namespace dpl::hypre
     InputDeprec& operator=(InputDeprec&& other) noexcept = default;
     
 
-    InputDeprec(sparse_matrix& m, std::vector<double>&& free_terms) {             
+    InputDeprec(sparse_matrix_builder& m, std::vector<double>&& b) {             
       nrows = m.nrows;
       ncols_per_row.assign(m.nrows, 1);
-      constants = std::move(free_terms);            
+      constants = std::move(b);            
       
       const auto coef_count = nrows + m.off_diag_count_;
       
@@ -174,69 +335,73 @@ namespace dpl::hypre
       }          
     }
     
-    void Solve(HYPRE_Int* indices_ptr, HYPRE_Int indices_count, HYPRE_Real* output_ptr) {                  
-      HYPRE_Solver solver;
-      
-      HYPRE_BoomerAMGCreate(&solver);      
-
-      HYPRE_BoomerAMGSetTol(solver, 1.e-20);
-      
-      // ReSharper disable once CppInconsistentNaming
-      ij_matrix A_ij_matrix{nrows, ncols_per_row.data(), cols_of_coefs.data(), coefs.data()};
-      ij_vector b_ij_vector{nrows, constants.data()};
-      ij_vector x_ij_vector{nrows};
-      
-      auto* ref_A = A_ij_matrix.par_ref();
-      auto* ref_b = b_ij_vector.par_ref();
-      auto* ref_x = x_ij_vector.par_ref();           
-      
-      // const auto t0 = std::chrono::system_clock::now();
-      // result = HYPRE_AMSSetup(solver, A_parcsr, B_par, x_par);
-      // result = HYPRE_AMSSolve(solver, A_parcsr, B_par, x_par);
-
-      HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
-      HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
-
-      // char msg[2048];
-      // if (result)
-      //   HYPRE_DescribeError(result, msg);
-      // HYPRE_ClearError(HYPRE_ERROR_CONV);
-      
-      // const auto t1 = std::chrono::system_clock::now();
-      // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
-      HYPRE_BoomerAMGDestroy(solver);                  
-
-      x_ij_vector.get_values(indices_count, indices_ptr, output_ptr);
-    }
+    // void Solve(HYPRE_BigInt* indices_ptr, HYPRE_Int indices_count, HYPRE_Complex* output_ptr) {                  
+    //   HYPRE_Solver solver;
+    //   
+    //   HYPRE_BoomerAMGCreate(&solver);      
+    //
+    //   HYPRE_BoomerAMGSetTol(solver, 1.e-20);
+    //   
+    //   // ReSharper disable once CppInconsistentNaming
+    //   ij_matrix A_ij_matrix{nrows, ncols_per_row.data(), cols_of_coefs.data(), coefs.data()};
+    //   ij_vector b_ij_vector{nrows, constants.data()};
+    //   ij_vector x_ij_vector{nrows};
+    //   
+    //   auto* ref_A = A_ij_matrix.par_ref();
+    //   auto* ref_b = b_ij_vector.par_ref();
+    //   auto* ref_x = x_ij_vector.par_ref();           
+    //   
+    //   // const auto t0 = std::chrono::system_clock::now();
+    //   // result = HYPRE_AMSSetup(solver, A_parcsr, B_par, x_par);
+    //   // result = HYPRE_AMSSolve(solver, A_parcsr, B_par, x_par);
+    //
+    //   HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
+    //   HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
+    //
+    //   // char msg[2048];
+    //   // if (result)
+    //   //   HYPRE_DescribeError(result, msg);
+    //   // HYPRE_ClearError(HYPRE_ERROR_CONV);
+    //   
+    //   // const auto t1 = std::chrono::system_clock::now();
+    //   // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
+    //   HYPRE_BoomerAMGDestroy(solver);                  
+    //
+    //   x_ij_vector.get_values(indices_count, indices_ptr, output_ptr);
+    // }
     
-    void Solve(HYPRE_Int count, HYPRE_Real* output_ptr) {
-      std::vector<HYPRE_Int> indices(count);
-      for (HYPRE_Int i = 0; i < count; ++i)
-        indices[i] = i;
-      
-      Solve(indices.data(), count, output_ptr);  
-    }
+    // void Solve(HYPRE_BigInt count, HYPRE_Complex* output_ptr) {
+    //   std::vector<HYPRE_Int> indices(count);
+    //   for (HYPRE_Int i = 0; i < count; ++i)
+    //     indices[i] = i;
+    //   
+    //   Solve(indices.data(), count, output_ptr);  
+    // }
 
-    auto Solve() {
-#ifndef HYPRE_SEQUENTIAL
-      auto [ilower, iupper] = mpi_part(nrows);
+    // auto Solve() {
+    //   #ifdef HYPRE_SEQUENTIAL
+    //     static constexpr auto jlower = 0;
+    //     const auto jupper = nrows - 1;
+    //   #else
+    //     auto [jlower, jupper] = mpi_part(nrows);
+    //   #endif
+    //
+    //   auto count = jupper - jlower + 1;
+    //
+    //   ls_unknown_storage lus{count, jlower}; 
+    //
+    //   // for (HYPRE_BigInt i = 0; i < count; ++i)
+    //   //   lus.data[keys::index][i] = jlower + i;
+    //
+    //   solve(get_ref(), lus.get_ref());
+    //   
+    //   std::vector<double> x(count);
+    //   for (HYPRE_BigInt i = 0; i < count; ++i)
+    //     x[i] = lus.data[keys::value][i];
+    //
+    //   return x;
+    // }
 
-      auto count = iupper - ilower + 1;
-
-      std::vector<double> x(count);
-      std::vector<HYPRE_Int> indices(count);
-      for (HYPRE_BigInt i = 0; i < count; ++i)
-        indices[i] = ilower + i;
-      
-      Solve(indices.data(), count, x.data());
-      
-      return x;
-#else
-      std::vector<double> x(nrows);
-      Solve(nrows, x.data());
-      return x;
-#endif
-    }
   };
 
 

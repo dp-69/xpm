@@ -84,35 +84,64 @@ int main(int argc, char* argv[])
     // if (w_rank == root)
     //   t0 = std::chrono::high_resolution_clock::now();
     
-    dpl::hypre::InputDeprec input;
+    // dpl::hypre::InputDeprec input;
+    dpl::hypre::ls_known_ref lk_ref;
 
-    {
-      shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
-      input.Load(smo);
-    }
+    shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
+    mapped_region region(smo, read_only);
+
+    lk_ref = dpl::hypre::load_QQ(region);
+
+
+    // input.load(smo);
 
     // if (w_rank == root)
     //   t1 = std::chrono::high_resolution_clock::now();
+
+
+    #ifdef HYPRE_SEQUENTIAL
+      static constexpr auto jlower = 0;
+      const auto jupper = nrows - 1;
+    #else
+      auto [jlower, jupper] = dpl::hypre::mpi_part(lk_ref.nrows);
+    #endif
+  
+    auto count = jupper - jlower + 1;
     
-    auto pressure_part = input.Solve();
+    auto indices = std::make_unique<HYPRE_BigInt[]>(count);
+    for (HYPRE_BigInt i = 0; i < count; ++i)
+      indices[i] = jlower + i;
+    auto pressure_part = std::make_unique<HYPRE_Complex[]>(count);
+
+    dpl::hypre::solve(
+      lk_ref/*.get_ref()*/,
+      dpl::hypre::ls_unknown_ref{
+        count,
+        indices.get(),
+        pressure_part.get()
+      });
+
+
+    // auto pressure_part = input.Solve();
 
     // if (w_rank == root)
     //   t2 = std::chrono::high_resolution_clock::now();
 
-    std::vector<double> pressure;
+    std::unique_ptr<double[]> pressure;
+    // std::vector<double> pressure;
     double* receive_ptr = nullptr;
 
     
     
     
     if (w_rank == root) {
-      pressure.resize(input.nrows);
-      receive_ptr = pressure.data();
+      receive_ptr = new double[lk_ref.nrows];
+      pressure.reset(receive_ptr);
     }
 
     MPI_Gather(
-      pressure_part.data(), pressure_part.size(), MPI_DOUBLE,
-      receive_ptr, pressure_part.size(), MPI_DOUBLE,
+      pressure_part.get(), count, MPI_DOUBLE,
+      receive_ptr, count, MPI_DOUBLE,
       root, MPI_COMM_WORLD);
 
     // if (w_rank == root)
@@ -126,9 +155,9 @@ int main(int argc, char* argv[])
 
 
         shared_memory_object smo{open_or_create, "xpm-hypre-output", read_write};
-        smo.truncate(input.nrows*sizeof(double));
+        smo.truncate(lk_ref.nrows*sizeof(double));
         mapped_region region(smo, read_write);
-        std::memcpy(region.get_address(), receive_ptr, input.nrows*sizeof(double));
+        std::memcpy(region.get_address(), receive_ptr, lk_ref.nrows*sizeof(double));
 
 
         // std::cout <<
@@ -159,21 +188,39 @@ int main(int argc, char* argv[])
   else {
     MPI_Init(&argc, &argv);
 
-    
-    xpm::pore_network_model pnm{
-      R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)",
-      // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)",
-      xpm::pore_network_model::file_format::statoil};
+    // {
+    //
+    //   xpm::pore_network_model pnm{
+    //     R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)",
+    //     // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)",
+    //     xpm::pore_network_model::file_format::statoil};
+    //   
+    //   auto input = pnm.GeneratePressureInput();
+    //
+    //
+    //   // dpl::hypre::solve()
+    //
+    //   auto indices = std::make_unique<HYPRE_BigInt[]>(input.nrows);
+    //   for (HYPRE_BigInt i = 0; i < input.nrows; ++i)
+    //     indices[i] = i;
+    //   std::vector<HYPRE_Real> vals(input.nrows);
+    //
+    //   dpl::hypre::solve(
+    //     input.get_ref(),
+    //     dpl::hypre::ls_unknown_ref{
+    //       input.nrows,
+    //       indices.get(),
+    //       vals.data()
+    //     });
+    //
+    //   // auto vals = input.Solve();
+    //
+    //   std::cout << std::format("\n\n {}", std::accumulate(vals.begin(), vals.end(), 0.0));
+    //
+    //   getchar();
+    //
+    // }
 
-    
-    
-    auto input = pnm.GeneratePressureInput();
-
-    auto vals = input.Solve();
-    std::cout << std::format("\n\n {}", std::accumulate(vals.begin(), vals.end(), 0.0));
-
-    getchar();
-    
 
     // {
     //   shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};

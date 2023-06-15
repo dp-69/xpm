@@ -281,7 +281,7 @@ namespace xpm
     
     
     
-    vtkNew<vtkImageData> image_data_;
+    // vtkNew<vtkImageData> image_data_;
     // vtkNew<vtkThreshold> threshold_;
 
 
@@ -296,16 +296,17 @@ namespace xpm
 
 
 
-    vtkNew<vtkIntArray> velem_array;
-    
-    
+    std::unique_ptr<property::phase[]> phase_array;
+    std::unique_ptr<property::velem[]> velem_array;
+
     /*
      * connected pore node of a solid voxel. Gives a cluster number [0, n].
      * -2 for pore voxels,
      * -1 for solid voxels not connected
      * 
      */
-    vtkNew<vtkIntArray> img_darcy_adj_array;
+    std::unique_ptr<std::int32_t[]> img_darcy_adj_array;
+    
 
 
     
@@ -338,17 +339,38 @@ namespace xpm
     
   public:
     void LoadImage() {
-      auto image_path = 
-        // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
-        
-        R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
-        // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
-      ;
+      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)";
+      auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
+      constexpr struct
+      {
+        std::uint8_t solid = 1;       // dummy value, no '1' is in the image
+        std::uint8_t pore = 255;
+        std::uint8_t microporous = 0; // we read actual solid '0' as microporous
+      } input_spec;
 
-      auto velems_path = 
-        R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
-        // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
-      ;
+
+      // auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      // auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      // constexpr struct
+      // {
+      //   std::uint8_t solid = 3;       
+      //   std::uint8_t pore = 0;
+      //   std::uint8_t microporous = 2;  
+      // } input_spec;
+
+
+
+              // auto image_path = 
+              //   // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
+              //   
+              //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
+              //   // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
+              // ;
+              //
+              // auto velems_path = 
+              //   R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
+              //   // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
+              // ;
 
 
 
@@ -365,85 +387,82 @@ namespace xpm
 
       
       lut_pore_solid_->IndexedLookupOn();
-      
       lut_pore_solid_->SetNumberOfTableValues(2);
-      
-
       lut_pore_solid_->SetTableValue(0, 0.6, 0.6, 0.6);
       lut_pore_solid_->SetAnnotation(vtkVariant(0), "SOLID");
-
       lut_pore_solid_->SetTableValue(1, 0, 0, 0);
       lut_pore_solid_->SetAnnotation(vtkVariant(1), "PORE");
       
-      // lut_pore_solid_->SetTableRange(0, 230);
-      // lut_pore_solid_->Modified();
-
-
-      vtkNew<vtkUnsignedCharArray> phase_array;
-      
-
-
-      
+   
 
       
       
-      size_t size;
-      dpl::vector_n<pnm_idx, 3> dim;
+      size_t image_size;
+      pnm_3idx dim;
 
 
-      std::vector<unsigned char> phase_buffer;
       
       {
-        // Open the stream
         std::ifstream is(image_path);
-        // Determine the file length
         is.seekg(0, std::ios_base::end);
-        size = is.tellg();
+        image_size = is.tellg();
         is.seekg(0, std::ios_base::beg);
-        phase_buffer.resize(size);
-        is.read(reinterpret_cast<char*>(phase_buffer.data()), size);
+        phase_array = std::make_unique<property::phase[]>(image_size);
+        is.read(reinterpret_cast<char*>(phase_array.get()), image_size);
 
+        size_t pore_voxels = 0;
+        size_t solid_voxels = 0;
+        size_t microporous_voxels = 0;
 
-        
-        for (size_t i = 0; i < size; ++i)
-          phase_array->InsertTypedComponent(i, 0, phase_buffer[i]/*v[i] == 0 ? 0 : 1*/);
+        for (size_t i = 0; i < image_size; ++i) {
+          auto& val = phase_array[i];
+          if (val.value == input_spec.pore) {
+            val = property::pore;
+            ++pore_voxels;
+          }
+          else if (val.value == input_spec.solid) {
+            val = property::solid;
+            ++solid_voxels;
+          }
+          else if (val.value == input_spec.microporous) {
+            val = property::microporous;
+            ++microporous_voxels;
+          }
+        }
 
-        
-          // phase_array->InsertTypedComponent(i, 0, v[i] == 0 ? 230 : 99);
-          // phase_array->InsertNextTuple1(/*i<(size/2) ? 1 : 0*/v[i] == 0 ? 230 : 99);
-
-        phase_array->SetName("phase");
-        // image_data_->GetCellData()->SetScalars(phase_array);
-        image_data_->GetCellData()->AddArray(phase_array);
+        std::cout << std::format("\n\ntotal: {}; pore: {}; solid: {}; microporous: {} voxels", image_size, pore_voxels, solid_voxels, microporous_voxels);
       }
 
       std::cout << "\n\nImage phases read and array created";
 
-      dim = std::round(std::cbrt(size));
+      dim = std::round(std::cbrt(image_size));
 
       {
-        auto velems = pore_network_model::read_icl_velems(velems_path, dim);
+        velem_array = std::move(pore_network_model::read_icl_velems(velems_path, dim));
 
         std::cout << "\n\nVelems file read";
 
         // auto [minelem, maxelem] = std::ranges::minmax_element(velems);
         
-        for (pnm_idx i = 0, count = velems.size(); i < count; ++i) {
-          // if (phase_buffer[i] == 3 && velems[i] != -2) {
-          //   int error = 1;
-          // }
-          
-          velem_array->InsertTypedComponent(i, 0, velems[i]);
-        }    
+        // for (pnm_idx i = 0/*, count = velems.size()*/; i < size; ++i) {
+        //   // if (phase_buffer[i] == 3 && velems[i] != -2) {
+        //   //   int error = 1;
+        //   // }
+        //   
+        //   velem_array->InsertTypedComponent(i, 0, velems[i].value);
+        // }    
         
         
-        velem_array->SetName("velem");
-        image_data_->GetCellData()->AddArray(velem_array);
+        // velem_array->SetName("velem");
+        // image_data_->GetCellData()->AddArray(velem_array);
 
         std::cout << "\n\nVelems array filled";
 
+
         
-        auto [min, max] = std::ranges::minmax_element(velems);
+
+        auto mapped_range = std::ranges::subrange{velem_array.get(), velem_array.get() + image_size} | std::views::transform([](property::velem x) { return x.value; });
+        auto [min, max] = std::ranges::minmax_element(mapped_range);
         auto count = *max - *min + 1;
 
         std::cout << "\n\nRANGES MINMAX VELEMS";
@@ -475,9 +494,11 @@ namespace xpm
         // lut_velem_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
 
         {
-          img_darcy_adj_array->SetNumberOfComponents(1);
+          // img_darcy_adj_array->SetNumberOfComponents(1);
           // img_darcy_adj_array->SetNumberOfTuples(dim.prod());
-          
+
+          img_darcy_adj_array = std::make_unique<std::int32_t[]>(dim.prod());
+
           pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
         
           pnm_idx idx1d = 0;
@@ -487,42 +508,43 @@ namespace xpm
               for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
                 int32_t adj = -1; // Solid not connected 
                 
-                if (velems[idx1d] < 0) { // Solid
+                if (phase_array[idx1d] == property::microporous && velem_array[idx1d].value < 0) { // Solid
                   if (i > 0)
-                    if (auto adj_velem = velems[idx1d - map_idx.x()]; adj_velem > 1)
+                    if (auto adj_velem = velem_array[idx1d - map_idx.x()].value; adj_velem > 1)
                       adj = adj_velem;
         
                   if (i < dim.x() - 1)
-                    if (auto adj_velem = velems[idx1d + map_idx.x()]; adj_velem > 1)
+                    if (auto adj_velem = velem_array[idx1d + map_idx.x()].value; adj_velem > 1)
                       adj = adj_velem;
         
         
                   if (j > 0)
-                    if (auto adj_velem = velems[idx1d - map_idx.y()]; adj_velem > 1)
+                    if (auto adj_velem = velem_array[idx1d - map_idx.y()].value; adj_velem > 1)
                       adj = adj_velem;
         
                   if (j < dim.y() - 1)
-                    if (auto adj_velem = velems[idx1d + map_idx.y()]; adj_velem > 1)
+                    if (auto adj_velem = velem_array[idx1d + map_idx.y()].value; adj_velem > 1)
                       adj = adj_velem;
         
         
                   if (k > 0)
-                    if (auto adj_velem = velems[idx1d - map_idx.z()]; adj_velem > 1)
+                    if (auto adj_velem = velem_array[idx1d - map_idx.z()].value; adj_velem > 1)
                       adj = adj_velem;
         
                   if (k < dim.z() - 1)
-                    if (auto adj_velem = velems[idx1d + map_idx.z()]; adj_velem > 1)
+                    if (auto adj_velem = velem_array[idx1d + map_idx.z()].value; adj_velem > 1)
                       adj = adj_velem;
                 }
                 else
                   adj = -2; // Pore voxel
 
-                img_darcy_adj_array->InsertNextTypedTuple(&adj);
+                img_darcy_adj_array[idx1d] = adj;
+                // img_darcy_adj_array->InsertNextTypedTuple(&adj);
               }
         
           
-          img_darcy_adj_array->SetName("darcy_adj");
-          image_data_->GetCellData()->AddArray(img_darcy_adj_array);
+          // img_darcy_adj_array->SetName("darcy_adj");
+          // image_data_->GetCellData()->AddArray(img_darcy_adj_array);
         
           std::cout << "\n\nVelems_adj array produced and filled";
         }
@@ -534,21 +556,21 @@ namespace xpm
       
       
       
-      auto dim_side = std::round(std::cbrt(size));
-      image_data_->SetDimensions(v3i{dim_side + 1});
-      image_data_->SetSpacing(v3d{1.0/dim_side});
-      image_data_->SetOrigin(v3d{0});
+      // auto dim_side = std::round(std::cbrt(size));
+      // image_data_->SetDimensions(v3i{dim_side + 1});
+      // image_data_->SetSpacing(v3d{1.0/dim_side});
+      // image_data_->SetOrigin(v3d{0});
 
       
       
 
 
-      vtkDataArray* selected_arr = img_darcy_adj_array;
+      // vtkDataArray* selected_arr = img_darcy_adj_array;
 
       // vtkDataArray* selected_arr = velem_array;
       
       
-      image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
+      // image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
 
       // vtkNew<vtkDataSetMapper> mapper;
       //
@@ -615,47 +637,22 @@ namespace xpm
     
     
     void Init() {
-      auto pnm_path = 
-        // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\10x10x10\10x10x10)"
-        // R"(C:\dev\.temp\images\SS-1000\XNet)"
-        // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
-
-        R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
-        // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
-      ;
-
+      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
       v3i dim = 252;
+
+      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
       // v3i dim = 500;
 
-      vtkUnsignedCharArray* phase_in;
-      // vtkIntArray* velems_arr_in;
-      // vtkIntArray* darcy_adj_in;
 
-      auto filter = [&, this](pnm_idx idx) {
-        // return true;
+      // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\10x10x10\10x10x10)"
+      // R"(C:\dev\.temp\images\SS-1000\XNet)"
+      // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
 
-        // vtkIntArray* velems_adj_arr_in;
 
-        // return velems_adj_arr_in->GetTypedComponent(idx, 0) > 2;
 
-        
-        // return phase_in->GetTypedComponent(idx, 0) == 2;
 
-        return velem_array->GetTypedComponent(idx, 0) == -2;
+      auto filter = [this](pnm_idx idx) { return phase_array[idx] == property::microporous; };
 
-        // ;/
-
-        int z = idx / (dim.x() * dim.y());
-        int y = (idx - z * dim.x() * dim.y()) / dim.x();
-        int x = idx - z * dim.x() * dim.y() - y * dim.x();
-
-        // int z = i%dim.z();
-        // int y = (i/dim.z())%dim.y();
-        // int x = i/(dim.y()*dim.z()); 
-      };
-
-     
-      
 
       
       qvtk_widget_ = new QVTKWidgetRef;
@@ -675,10 +672,8 @@ namespace xpm
       {
         tree_view_ = new QPropertyTreeView;
 
-
         auto* model = tree_view_->model();
         // auto* cat_vis = model->AddCategory("Visualisation");
-
 
         dpl::qt::property_editor::ItemFunctor<bool> edges;
 
@@ -694,10 +689,6 @@ namespace xpm
         };
         
         model->AddItem(/*cat_vis, */edges);
-
-
-        
-
         
         auto* hsplit = new QSplitter{Qt::Horizontal};
         hsplit->addWidget(tree_view_);
@@ -707,22 +698,9 @@ namespace xpm
       
         setCentralWidget(hsplit);
       }
-      
+
+
       // setCentralWidget(qvtk_widget_);
-
-
-      
-
-     
-
-
-
-      
-
-
-      
-
-      
 
 
 
@@ -734,43 +712,13 @@ namespace xpm
       pore_network_model pnm{pnm_path, pore_network_model::file_format::statoil};
 
 
-      // {
-      //   auto pressure = pnm.SolvePressure();
-      //   
-      //   auto sum = std::accumulate(pressure.begin(), pressure.end(), 0.0);
-      //   std::cout << sum << '\n';
-      // }
-      
-
       std::cout << "\n\nNetwork loaded";
 
-
-
-
-     
-      
-      
 
 
       LoadImage();
             
       std::cout << "\n\nLoaded image";
-
-
-
-
-      
-
-
-
-
-
-
-
-
-
-
-
 
       
 
@@ -818,19 +766,39 @@ namespace xpm
         // int max_solid_non = 1000;
         
         
-        auto* ptr = static_cast<int*>(img_darcy_adj_array->GetVoidPointer(0));
+        // auto* darcy_adj_ptr = static_cast<int*>(img_darcy_adj_array->GetVoidPointer(0));
 
-        auto darcy_node_con_cluster_adj_count =
-          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(),
-            [&](int32_t darcy_adj) { return darcy_adj >= 0; });
+        auto image_size = dim.prod();
+        
 
-        auto darcy_node_inner_adj_count =
-          std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(),
-            [&](int32_t darcy_adj) { return darcy_adj == -1; });
+
+        vtkIdType darcy_node_connected_cluster_adj_count = 0;
+        vtkIdType darcy_node_inner_adj_count = 0;
+        
+        for (vtkIdType i = 0; i < image_size; ++i) {
+          if (img_darcy_adj_array[i] >= 0 && is_micro_porous(i))
+            ++darcy_node_connected_cluster_adj_count;
+
+          if (img_darcy_adj_array[i] == -1 && is_micro_porous(i))
+            ++darcy_node_inner_adj_count;
+        }
+
+
+        // auto darcy_node_con_cluster_adj_count =
+        //   std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(),
+        //     [&](int32_t darcy_adj) { return
+        //     
+        //     darcy_adj >= 0;
+        //
+        // });
+
+        // auto darcy_node_inner_adj_count =
+        //   std::count_if(ptr, ptr + img_darcy_adj_array->GetNumberOfTuples(),
+        //     [&](int32_t darcy_adj) { return darcy_adj == -1; });
         
       
         
-        auto* velems = static_cast<int*>(velem_array->GetVoidPointer(0));
+        // auto* velems = static_cast<int*>(velem_array->GetVoidPointer(0));
         pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
 
 
@@ -841,13 +809,17 @@ namespace xpm
         
         for (pnm_idx k = 1; k < dim.z(); ++k)
           for (pnm_idx j = 1; j < dim.y(); ++j)
-            for (pnm_idx i = 1; i < dim.x(); ++i)
-              if (auto idx1d = map_idx.dot({i, j, k});
-                velems[idx1d] == -2) // Solid
+            for (pnm_idx i = 1; i < dim.x(); ++i) {
+              auto idx1d = map_idx.dot({i, j, k});
+
+              if (velem_array[idx1d].value == -2 && is_micro_porous(idx1d)) // Solid
                 dpl::sfor<3>([&](auto e) {
-                  if (velems[idx1d - map_idx[e]] == -2)
+                  auto adj_idx = idx1d - map_idx[e];
+
+                  if (velem_array[adj_idx].value == -2 && is_micro_porous(adj_idx))
                     ++darcy_darcy_throats;  
                 });
+            }
 
 
         //darcy_darcy_throats = 0;
@@ -860,8 +832,8 @@ namespace xpm
 
         std::cout << "\n\nPRE_RESIZE";
         
-        pnm.node_.resize(pnm.node_count_ + darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count);
-        pnm.throat_.resize(pnm.throat_count_ + darcy_node_con_cluster_adj_count + darcy_darcy_throats);
+        pnm.node_.resize(pnm.node_count_ + darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count);
+        pnm.throat_.resize(pnm.throat_count_ + darcy_node_connected_cluster_adj_count + darcy_darcy_throats);
 
         std::cout << "\n\nPOST_RESIZE";
         
@@ -873,10 +845,10 @@ namespace xpm
         
         for (auto& [n0, n1] : pnm.throat_.range(attribs::adj)) {
           if (n0 == pnm.inlet() || n0 == pnm.outlet())
-            n0 += darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count;
+            n0 += darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count;
 
           if (n1 == pnm.inlet() || n1 == pnm.outlet())
-            n1 += darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count;
+            n1 += darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count;
         }
 
         
@@ -885,9 +857,9 @@ namespace xpm
         for (pnm_idx idx1d = 0, k = 0; k < dim.z(); ++k)
           for (pnm_idx j = 0; j < dim.y(); ++j)
             for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
-              auto ptr_idx1d = ptr[idx1d];
+              auto darcy_adj_idx1d = img_darcy_adj_array[idx1d];
               
-              if (ptr_idx1d >= 0) { // Solid
+              if (darcy_adj_idx1d >= 0 && is_micro_porous(idx1d)) { // Solid
                 auto voxel_to_row_inc_curr = voxel_to_row_inc++;
                 voxel_to_row_inc_map[idx1d] = voxel_to_row_inc_curr;
 
@@ -898,18 +870,18 @@ namespace xpm
                 
                 auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
                 
-                pnm.throat_[attribs::adj][new_throat_idx] = {new_node_idx, ptr_idx1d};
+                pnm.throat_[attribs::adj][new_throat_idx] = {new_node_idx, darcy_adj_idx1d};
                 pnm.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;//min_r_ins;
                 
                 pnm.throat_[attribs::length0][new_throat_idx] = 0;
                 pnm.throat_[attribs::length][new_throat_idx] =
-                  (pnm.node_[attribs::pos][new_node_idx] - pnm.node_[attribs::pos][ptr_idx1d]).length();
+                  (pnm.node_[attribs::pos][new_node_idx] - pnm.node_[attribs::pos][darcy_adj_idx1d]).length();
                 pnm.throat_[attribs::length1][new_throat_idx] = 0;
                 
                                
                 ++new_throat_incr;
               }
-              else if (ptr_idx1d == -1) {
+              else if (darcy_adj_idx1d == -1 && is_micro_porous(idx1d)) {
                 auto voxel_to_row_inc_curr = voxel_to_row_inc++;
                 voxel_to_row_inc_map[idx1d] = voxel_to_row_inc_curr;
               
@@ -936,12 +908,12 @@ namespace xpm
 
               auto idx1d = map_idx.dot({i, j, k});
               
-              if (velems[idx1d] == -2) {
+              if (velem_array[idx1d].value == -2 && is_micro_porous(idx1d)) {
                 // Solid
 
                 dpl::sfor<3>([&](auto e) {
                   auto adj_idx = idx1d - map_idx[e];
-                  if (loaded < darcy_darcy_throats && velems[adj_idx] == -2) {
+                  if (loaded < darcy_darcy_throats && velem_array[adj_idx].value == -2  && is_micro_porous(adj_idx)) {
                     auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
                     
                     pnm.throat_[attribs::adj][new_throat_idx] = //{0, 0};
@@ -963,9 +935,9 @@ namespace xpm
 
         
         
-        pnm.node_count_ += darcy_node_con_cluster_adj_count + darcy_node_inner_adj_count;
+        pnm.node_count_ += darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count;
 
-        pnm.throat_count_ += darcy_node_con_cluster_adj_count + darcy_darcy_throats;
+        pnm.throat_count_ += darcy_node_connected_cluster_adj_count + darcy_darcy_throats;
 
         
       
@@ -981,6 +953,7 @@ namespace xpm
       
       // for (pnm_idx i = 0; i < pnm.node_count_; ++i)
       //   pressure[i] = (1.*i)/pnm.node_count_;
+
       std::cout << "\n\nGeneratePressureInput_START";
       
       auto input = pnm.GeneratePressureInput();
@@ -992,33 +965,33 @@ namespace xpm
 
       {
         using namespace boost::interprocess;
-
-
+      
+      
         {
           shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-          input.Save(smo);
+          input.save(smo);
         }
-
+      
         std::cout << "\n\nSaved hypre input";
       
         auto start = std::chrono::high_resolution_clock::now();
         
         auto solve_result = std::system(
-          std::format("mpiexec -n 16 \"{}\" -s",
+          std::format("mpiexec -n 8 \"{}\" -s",
             "xpm_project.exe"
           ).c_str());
-
+      
         auto stop = std::chrono::high_resolution_clock::now();
- 
+      
         cout << "\n\nMPI hypre solve time: " <<
           duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
-
-
+      
+      
         shared_memory_object smo_output{open_only, "xpm-hypre-output", read_only};
         mapped_region mr_ouput{smo_output, read_only};
         // auto* ptr = static_cast<double*>(mr_ouput.get_address());
-
-
+      
+      
         std::memcpy(pressure.data(), mr_ouput.get_address(), input.nrows*sizeof(double));
         
           // auto val = std::accumulate(ptr, ptr + input.nrows, 0.0);
@@ -1140,7 +1113,7 @@ namespace xpm
 
 
         {
-          phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
+          // phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
           // velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
           // darcy_adj_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("darcy_adj"));
           

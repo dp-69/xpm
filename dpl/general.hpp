@@ -31,6 +31,9 @@
 #include <future>
 
 
+#define def_static_key(name) \
+  inline constexpr struct name##_t {} name;
+
 namespace dpl
 {
   template <typename... T>

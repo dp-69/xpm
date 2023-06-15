@@ -104,7 +104,7 @@ namespace dpl::hypre
     ij_vector(HYPRE_BigInt nvalues) {
       allocate_only(nvalues);
     }
-  
+
     ij_vector(HYPRE_BigInt nvalues, const HYPRE_Complex* values) {
       allocate_assign(nvalues, values);
     }
@@ -115,9 +115,9 @@ namespace dpl::hypre
     }
 
     HYPRE_ParVector par_ref() const {
-      HYPRE_ParVector pointer;
-      HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&pointer));
-      return pointer;
+      HYPRE_ParVector ref;
+      HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&ref));
+      return ref;
     }
 
     void get_values(HYPRE_Int nvalues, const HYPRE_BigInt* indices, HYPRE_Complex* values) const {

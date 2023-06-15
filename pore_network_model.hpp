@@ -18,11 +18,54 @@
 
 
 
-#define static_key(name) \
-  inline constexpr struct name##_t {} name;
+
 
 namespace xpm
 {
+  namespace property
+  {
+    struct phase
+    {
+      std::uint8_t value;
+
+      friend bool operator==(const phase& lhs, const phase& rhs) { return lhs.value == rhs.value; }
+      friend bool operator!=(const phase& lhs, const phase& rhs) { return !(lhs == rhs); }
+    };
+
+    static inline constexpr phase pore = {0};
+    static inline constexpr phase solid = {1};
+    static inline constexpr phase microporous = {2};
+
+
+    /**
+     * \brief
+     * input file value description
+     *   -2: solid (validated),
+     *   -1: inlet/outlet (do not know?),
+     *   0, 1: do not exist (validated),
+     *   >=2: cluster
+     *
+     *
+     * output vector value description
+     *    -2: solid | the same
+     *    -1: inlet/outlet (do not know?) | the same
+     *    >=0: clusters | subtracted 2
+     */
+    struct velem
+    {
+      std::int32_t value;
+
+      
+
+      bool non_pore() {
+        return value == -2;
+      }
+    };
+
+
+  }
+
+
   namespace geometric_properties
   {
     struct equilateral_triangle_properties
@@ -39,12 +82,12 @@ namespace xpm
   }
   
   namespace attribs {
-    static_key(pos)
-    static_key(r_ins)
-    static_key(adj)
-    static_key(length)
-    static_key(length0)
-    static_key(length1)
+    def_static_key(pos)
+    def_static_key(r_ins)
+    def_static_key(adj)
+    def_static_key(length)
+    def_static_key(length0)
+    def_static_key(length1)
   }
 
   using mapped_file_source = boost::iostreams::mapped_file_source;
@@ -426,9 +469,9 @@ namespace xpm
       mapped_file_source file(network_path.string() + "_VElems.raw");
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
-      std::vector<std::int32_t> velems(dim.prod());
+      auto velems = std::make_unique<property::velem[]>(dim.prod());
       
-      auto* velems_ptr = velems.data();
+      auto* velems_ptr = velems.get();
 
       pnm_3idx velems_factor{1, dim.x() + 2, (dim.x() + 2)*(dim.y() + 2)};
       pnm_3idx ijk;
@@ -438,30 +481,7 @@ namespace xpm
           for (ijk.x() = 0; ijk.x() < dim.x(); ++ijk.x()) {
             auto val = file_ptr[velems_factor.dot(ijk + 1)];
 
-            // if (val == -2) { // Solid?
-            //   int p = 3;
-            // }
-            //
-            // if (val == -1) { // Inlet/Outlet facing ?
-            //   int p = 3;
-            // }
-            //
-            // if (val == 0) { // THere is no zero
-            //   int p = 3;
-            // }
-            //
-            // if (val == 1) {
-            //   int k = 3;
-            // }
-            //
-            // if (val == 2) {
-            //   int k = 3;
-            // }
-
-            // *velems_ptr++ = val;
-            // *velems_ptr++ = val < 0 ? val + 2 : val;
-
-            *velems_ptr++ = val > 0 ? val - 2 : val;
+            *velems_ptr++ = {val > 0 ? val - 2 : val};
           }
 
       return velems;
@@ -489,7 +509,7 @@ namespace xpm
       //     throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i]));
       // };
 
-      dpl::hypre::sparse_matrix matrix(node_count_);
+      dpl::hypre::sparse_matrix_builder matrix(node_count_);
 
       std::vector<double> free_terms(node_count_, 0);
       

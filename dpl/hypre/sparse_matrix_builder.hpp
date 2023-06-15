@@ -32,7 +32,7 @@
 
 namespace dpl::hypre
 {
-  class sparse_matrix
+  class sparse_matrix_builder
   {                    
     HYPRE_BigInt off_diag_count_;    
     
@@ -44,9 +44,9 @@ namespace dpl::hypre
     std::vector<HYPRE_Complex> diag;
     std::vector<std::forward_list<std::tuple<HYPRE_BigInt, HYPRE_Complex>>> off_diag;
     
-    sparse_matrix() = default;
+    sparse_matrix_builder() = default;
     
-    explicit sparse_matrix(HYPRE_BigInt n) {
+    explicit sparse_matrix_builder(HYPRE_BigInt n) {
       nrows = n;
       diag.assign(n, 0);            
       // constants_.assign(n, 0);

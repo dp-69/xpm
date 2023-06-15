@@ -99,7 +99,11 @@ namespace dpl
     soa_impl_() = default;
 
     explicit soa_impl_(Args...) {}
-    
+
+    auto size() const {
+      return size_;
+    }
+
     void resize(const size_type count) {
       this->apply([this, count](auto& attrib) {
         this->resize_(attrib, count);

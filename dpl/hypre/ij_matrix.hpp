@@ -69,9 +69,9 @@ namespace dpl::hypre
     }
 
     auto par_ref() const {
-      HYPRE_ParCSRMatrix csr;
-      HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&csr));
-      return csr;
+      HYPRE_ParCSRMatrix ref;
+      HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&ref));
+      return ref;
     }
 
     ij_matrix(HYPRE_BigInt nrows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* coefs) {
