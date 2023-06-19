@@ -56,20 +56,52 @@
 
 namespace xpm
 {
-  
+  class GlyphMapperFace
+  {
+  protected:
+    vtkNew<vtkPoints> points_;
+    std::vector<pnm_idx> original_indices_;
+
+    vtkNew<vtkGlyph3DMapper> glyph_mapper_;
+    vtkNew<vtkActor> actor_;
+    vtkNew<vtkDoubleArray> color_arr_;
+  public:
+
+    // vtkNew<vtkPoints> POLY_points__;
+    // vtkNew<vtkCellArray> POLY_cells__;
+    // vtkNew<vtkActor> POLY_actor__;
+    // vtkNew<vtkPolyData> POLY_polydata__;
+    // vtkNew<vtkDataSetMapper> POLY_mapper_;
 
 
+    auto* GetActor() const {
+      // return POLY_actor__.Get();
+
+      return actor_.Get();
+    }
+
+    auto* GetGlyphMapper() const {
+      return glyph_mapper_.Get();
+    }
+
+    auto& GetIndices() const {
+      return original_indices_;
+    }
+
+    auto* GetColorArray() const {
+      return color_arr_.Get();
+    }
+
+    
+  };
   
   template<int face_idx>
-  class ImageDataGlyphMapperFace
+  class GlyphMapperFaceGeneric : public GlyphMapperFace
   {
     using face = dpl::face_cubic<face_idx>;
     using dims = dpl::cdims<face::dim>;
 
     static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {
-
-      
-      
       auto quad = vtkSmartPointer<vtkPolyData>::New();
 
       vtkNew<vtkPoints> points;
@@ -105,28 +137,31 @@ namespace xpm
       return quad;
     }
 
-    vtkNew<vtkPoints> points_;
     
   public:
-    vtkNew<vtkGlyph3DMapper> glyphs_;
-    vtkNew<vtkDoubleArray> darcy_adj_out_;
-    vtkNew<vtkActor> actor_;
-    
     void Init(double half_length = 0.5) {
-      darcy_adj_out_->SetName("darcy_adj");
+      
+      // POLY_polydata__->SetPoints(POLY_points__);
+      // POLY_polydata__->SetPolys(POLY_cells__);
+      // POLY_polydata__->GetCellData()->SetScalars(color_arr_);
+
+
+
+
+      // color_arr_->SetName("darcy_adj");
 
       vtkNew<vtkPolyData> polydata;
-      polydata->GetPointData()->SetScalars(darcy_adj_out_);
+      polydata->GetPointData()->SetScalars(color_arr_);
       polydata->SetPoints(points_);
 
-      glyphs_->OrientOff();
-      glyphs_->SetScaleFactor(half_length); 
-      glyphs_->SetScaleModeToNoDataScaling();
-      glyphs_->SetInputData(polydata);
-      glyphs_->SetSourceData(Quad());
+      glyph_mapper_->OrientOff();
+      glyph_mapper_->SetScaleFactor(half_length/*1.0000*/); 
+      glyph_mapper_->SetScaleModeToNoDataScaling();
+      glyph_mapper_->SetInputData(polydata);
+      glyph_mapper_->SetSourceData(Quad(/*half_length/2*/));
     }
 
-    void Populate(const v3i& cells, const v3d& cell_size, const auto& filter, const auto& post) {
+    void Populate(const v3i& cells, const v3d& cell_size, const auto& filter) {
       pnm_3idx map_idx{1, cells.x(), cells.x()*cells.y()};
       pnm_3idx ijk;
       
@@ -152,7 +187,27 @@ namespace xpm
               pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
 
               points_->InsertNextPoint(pos);
-              post(idx1d);
+              original_indices_.push_back(idx1d);
+              // post(idx1d);
+
+              // auto pts_count = POLY_points__->GetNumberOfPoints();
+              //
+              // pos[dims::e0] = 0;
+              // pos[dims::e1] = (e1)*cell_size[dims::e1];
+              // pos[dims::e2] = (e2)*cell_size[dims::e2];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e1] = (e1)*cell_size[dims::e1];
+              // POLY_points__->InsertNextPoint(pos);
+              // vtkIdType indices[] = {pts_count + 3, pts_count + 2, pts_count + 1, pts_count + 0};
+              // POLY_cells__->InsertNextCell(4, indices);
+
             }
           }
           
@@ -168,16 +223,43 @@ namespace xpm
               pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
               pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
 
+
+
+              // auto pts_count = POLY_points__->GetNumberOfPoints();
+              //
+              // pos[dims::e0] = (e0 + 1)*cell_size[dims::e0];
+              // pos[dims::e1] = (e1)*cell_size[dims::e1];
+              // pos[dims::e2] = (e2)*cell_size[dims::e2];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e1] = (e1)*cell_size[dims::e1];
+              // POLY_points__->InsertNextPoint(pos);
+
               if constexpr (face::is_upper) {
                 if (filtered) {
                   points_->InsertNextPoint(pos);
-                  post(idx1d);
+                  original_indices_.push_back(idx1d);
+                  // post(idx1d);
+
+                  // vtkIdType indices[] = {pts_count + 0, pts_count + 1, pts_count + 2, pts_count + 3};
+                  // POLY_cells__->InsertNextCell(4, indices);
                 }
               }
               else {
                 if (adj_filtered) {
                   points_->InsertNextPoint(pos);
-                  post(adj_idx1d);
+                  original_indices_.push_back(adj_idx1d);
+                  // post(adj_idx1d);
+
+
+                  // vtkIdType indices[] = {pts_count + 3, pts_count + 2, pts_count + 1, pts_count + 0};
+                  // POLY_cells__->InsertNextCell(4, indices);
                 }
               }
             }
@@ -193,10 +275,35 @@ namespace xpm
               pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
               
               points_->InsertNextPoint(pos);
-              post(idx1d);
+              original_indices_.push_back(idx1d);
+              // post(idx1d);
+
+
+
+
+
+              // auto pts_count = POLY_points__->GetNumberOfPoints();
+              //
+              // pos[dims::e0] = (e0_count)*cell_size[dims::e0];
+              // pos[dims::e1] = (e1)*cell_size[dims::e1];
+              // pos[dims::e2] = (e2)*cell_size[dims::e2];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
+              // POLY_points__->InsertNextPoint(pos);
+              //
+              // pos[dims::e1] = (e1)*cell_size[dims::e1];
+              // POLY_points__->InsertNextPoint(pos);
+              // vtkIdType indices[] = {pts_count + 0, pts_count + 1, pts_count + 2, pts_count + 3};
+              // POLY_cells__->InsertNextCell(4, indices);
             }
           }
         }
+
+      color_arr_->SetNumberOfTuples(points_->GetNumberOfPoints());
     }
   };
 
@@ -206,24 +313,16 @@ namespace xpm
   public:
 
     void Init(double half_length) {
-      dpl::sfor<6>([this, half_length](auto i) {
+      dpl::sfor<6>([=](auto i) {
         std::get<i>(faces_).Init(half_length);
       });
     }
 
-    void Populate(const v3i& dims, const v3d& cell_size, const auto& filter, const auto& value/*, vtkIntArray* velems_adj_arr*/) {
+    void Populate(const v3i& dims, const v3d& cell_size, const auto& filter) {
       auto start = std::chrono::high_resolution_clock::now();
       
-      dpl::psfor<6>([=, this](auto i) {
-        auto* face_mapper = &std::get<i>(faces_);
-
-        face_mapper->Populate(dims, cell_size, filter, 
-          [=](pnm_idx idx) {
-            auto val = value(idx);//velems_adj_arr->GetTypedComponent(idx, 0);
-            face_mapper->darcy_adj_out_->InsertNextTypedTuple(&val);
-          }
-        );
-
+      dpl::psfor<6>([=](auto i) {
+        std::get<i>(faces_).Populate(dims, cell_size, filter);
         // std::cout << "\n\nFaces " << i;
       });
 
@@ -234,12 +333,12 @@ namespace xpm
     }
 
     std::tuple<
-      ImageDataGlyphMapperFace<0>,
-      ImageDataGlyphMapperFace<1>,
-      ImageDataGlyphMapperFace<2>,
-      ImageDataGlyphMapperFace<3>,
-      ImageDataGlyphMapperFace<4>,
-      ImageDataGlyphMapperFace<5>
+      GlyphMapperFaceGeneric<0>,
+      GlyphMapperFaceGeneric<1>,
+      GlyphMapperFaceGeneric<2>,
+      GlyphMapperFaceGeneric<3>,
+      GlyphMapperFaceGeneric<4>,
+      GlyphMapperFaceGeneric<5>
     > faces_;
   };
 
@@ -275,14 +374,8 @@ namespace xpm
     vtkNew<vtkLookupTable> lut_pressure_;
     
     vtkNew<vtkLookupTable> lut_continuous_;
-    vtkNew<vtkLookupTable> lut_pore_solid_;
+    // vtkNew<vtkLookupTable> lut_pore_solid_;
     vtkNew<vtkLookupTable> lut_velem_;
-
-    
-    
-    
-    // vtkNew<vtkImageData> image_data_;
-    // vtkNew<vtkThreshold> threshold_;
 
 
 
@@ -296,8 +389,8 @@ namespace xpm
 
 
 
-    std::unique_ptr<property::phase[]> phase_array;
-    std::unique_ptr<property::velem[]> velem_array;
+    std::unique_ptr<voxel_tag::phase[]> phase_arr;
+    std::unique_ptr<voxel_tag::velem[]> velem_arr;
 
     /*
      * connected pore node of a solid voxel. Gives a cluster number [0, n].
@@ -305,7 +398,7 @@ namespace xpm
      * -1 for solid voxels not connected
      * 
      */
-    std::unique_ptr<std::int32_t[]> img_darcy_adj_array;
+    std::unique_ptr<std::int32_t[]> img_darcy_adj_arr;
     
 
 
@@ -315,12 +408,12 @@ namespace xpm
     
 
 
-    static auto CreateNetworkAssembly(const pore_network_model& pnm, vtkLookupTable* lut) {
-      auto net = vtkSmartPointer<vtkAssembly>::New();
-      net->AddPart(CreateNodeActor(pnm, lut, [&](pnm_idx i) { return pnm.node_[attribs::r_ins][i]; }));
-      net->AddPart(CreateThroatActor(pnm, lut, [&](pnm_idx i) { return pnm.throat_[attribs::r_ins][i]; }));
-      return net;
-    }
+    // static auto CreateNetworkAssembly(const pore_network_model& pnm, vtkLookupTable* lut) {
+    //   auto net = vtkSmartPointer<vtkAssembly>::New();
+    //   net->AddPart(CreateNodeActor(pnm, lut, [&](pnm_idx i) { return pnm.node_[attribs::r_ins][i]; }));
+    //   net->AddPart(CreateThroatActor(pnm, lut, [&](pnm_idx i) { return pnm.throat_[attribs::r_ins][i]; }));
+    //   return net;
+    // }
 
 
 
@@ -335,7 +428,7 @@ namespace xpm
     
 
 
-
+     
     
   public:
     void LoadImage() {
@@ -357,6 +450,10 @@ namespace xpm
       //   std::uint8_t pore = 0;
       //   std::uint8_t microporous = 2;  
       // } input_spec;
+
+
+
+
 
 
 
@@ -386,46 +483,50 @@ namespace xpm
 
 
       
-      lut_pore_solid_->IndexedLookupOn();
-      lut_pore_solid_->SetNumberOfTableValues(2);
-      lut_pore_solid_->SetTableValue(0, 0.6, 0.6, 0.6);
-      lut_pore_solid_->SetAnnotation(vtkVariant(0), "SOLID");
-      lut_pore_solid_->SetTableValue(1, 0, 0, 0);
-      lut_pore_solid_->SetAnnotation(vtkVariant(1), "PORE");
+      // lut_pore_solid_->IndexedLookupOn();  // TODO
+      // lut_pore_solid_->SetNumberOfTableValues(2);
+      // lut_pore_solid_->SetTableValue(0, 0.6, 0.6, 0.6);
+      // lut_pore_solid_->SetAnnotation(vtkVariant(0), "SOLID");
+      // lut_pore_solid_->SetTableValue(1, 0, 0, 0);
+      // lut_pore_solid_->SetAnnotation(vtkVariant(1), "PORE");
       
    
 
       
+
+
       
       size_t image_size;
       pnm_3idx dim;
 
+      // std::streamsize
 
-      
       {
         std::ifstream is(image_path);
         is.seekg(0, std::ios_base::end);
+
+        auto k = is.tellg();
         image_size = is.tellg();
         is.seekg(0, std::ios_base::beg);
-        phase_array = std::make_unique<property::phase[]>(image_size);
-        is.read(reinterpret_cast<char*>(phase_array.get()), image_size);
+        phase_arr = std::make_unique<voxel_tag::phase[]>(image_size);
+        is.read(reinterpret_cast<char*>(phase_arr.get()), image_size);
 
         size_t pore_voxels = 0;
         size_t solid_voxels = 0;
         size_t microporous_voxels = 0;
 
         for (size_t i = 0; i < image_size; ++i) {
-          auto& val = phase_array[i];
+          auto& val = phase_arr[i];
           if (val.value == input_spec.pore) {
-            val = property::pore;
+            val = presets::pore;
             ++pore_voxels;
           }
           else if (val.value == input_spec.solid) {
-            val = property::solid;
+            val = presets::solid;
             ++solid_voxels;
           }
           else if (val.value == input_spec.microporous) {
-            val = property::microporous;
+            val = presets::microporous;
             ++microporous_voxels;
           }
         }
@@ -438,66 +539,33 @@ namespace xpm
       dim = std::round(std::cbrt(image_size));
 
       {
-        velem_array = std::move(pore_network_model::read_icl_velems(velems_path, dim));
+        velem_arr = pore_network_model::read_icl_velems(velems_path, dim);
 
         std::cout << "\n\nVelems file read";
 
-        // auto [minelem, maxelem] = std::ranges::minmax_element(velems);
-        
-        // for (pnm_idx i = 0/*, count = velems.size()*/; i < size; ++i) {
-        //   // if (phase_buffer[i] == 3 && velems[i] != -2) {
-        //   //   int error = 1;
-        //   // }
-        //   
-        //   velem_array->InsertTypedComponent(i, 0, velems[i].value);
-        // }    
-        
-        
-        // velem_array->SetName("velem");
-        // image_data_->GetCellData()->AddArray(velem_array);
-
-        std::cout << "\n\nVelems array filled";
-
-
-        
-
-        auto mapped_range = std::ranges::subrange{velem_array.get(), velem_array.get() + image_size} | std::views::transform([](property::velem x) { return x.value; });
-        auto [min, max] = std::ranges::minmax_element(mapped_range);
-        auto count = *max - *min + 1;
+        auto mapped_range = std::ranges::subrange{velem_arr.get(), velem_arr.get() + image_size}
+          | std::views::transform([](voxel_tag::velem x) { return x.value; });
+        auto max = *std::ranges::max_element(mapped_range);
+        auto count = max - (-2)/**min*/ + 1;
 
         std::cout << "\n\nRANGES MINMAX VELEMS";
         
-        // lut_velem_->IndexedLookupOn();
         lut_velem_->SetNumberOfTableValues(count);
 
-        // vtkStdString nan_text = "Nan";
-        
         for (int32_t i = 0; i < count; ++i) {
           auto coef = static_cast<double>(i*45%count)/count;
-
           auto color = QColor::fromHsl(coef*255, 175, 122);
           lut_velem_->SetTableValue(i, color.redF(), color.greenF(), color.blueF());  // NOLINT(clang-diagnostic-double-promotion)
-          // lut_velem_->SetAnnotation(vtkVariant(i), nan_text/*std::to_string(i)*/); // KILLS PERFORMANCE A LOT!
-
-          
         }
 
-        // lut_velem_->ResetAnnotations();
-        lut_velem_->SetTableValue(0, 0.4, 0.4, 0.4);
-        lut_velem_->SetTableValue(1, 0.55, 0.55, 0.55);
-        lut_velem_->SetTableRange(*min, *max);
+        lut_velem_->SetTableValue(0, 0.4, 0.4, 0.4);        // -2 velem value
+        lut_velem_->SetTableValue(1, 0.55, 0.55, 0.55);     // -1 velem value
+        lut_velem_->SetTableRange(-2/**min*/, max);
         
-
         std::cout << "\n\nlut_velem_ created";
         
-        // dpl::vtk::PopulateLutRedWhiteBlue(lut_velem_);
-        // lut_velem_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-
         {
-          // img_darcy_adj_array->SetNumberOfComponents(1);
-          // img_darcy_adj_array->SetNumberOfTuples(dim.prod());
-
-          img_darcy_adj_array = std::make_unique<std::int32_t[]>(dim.prod());
+          img_darcy_adj_arr = std::make_unique<std::int32_t[]>(dim.prod());
 
           pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
         
@@ -508,129 +576,42 @@ namespace xpm
               for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
                 int32_t adj = -1; // Solid not connected 
                 
-                if (phase_array[idx1d] == property::microporous && velem_array[idx1d].value < 0) { // Solid
+                if (phase_arr[idx1d] == presets::microporous/* && velem_arr[idx1d].value < 0*/) { // Solid
                   if (i > 0)
-                    if (auto adj_velem = velem_array[idx1d - map_idx.x()].value; adj_velem > 1)
+                    if (auto adj_velem = velem_arr[idx1d - map_idx.x()].value; adj_velem >= 0)
                       adj = adj_velem;
         
                   if (i < dim.x() - 1)
-                    if (auto adj_velem = velem_array[idx1d + map_idx.x()].value; adj_velem > 1)
+                    if (auto adj_velem = velem_arr[idx1d + map_idx.x()].value; adj_velem >= 0)
                       adj = adj_velem;
         
         
                   if (j > 0)
-                    if (auto adj_velem = velem_array[idx1d - map_idx.y()].value; adj_velem > 1)
+                    if (auto adj_velem = velem_arr[idx1d - map_idx.y()].value; adj_velem >= 0)
                       adj = adj_velem;
         
                   if (j < dim.y() - 1)
-                    if (auto adj_velem = velem_array[idx1d + map_idx.y()].value; adj_velem > 1)
+                    if (auto adj_velem = velem_arr[idx1d + map_idx.y()].value; adj_velem >= 0)
                       adj = adj_velem;
         
         
                   if (k > 0)
-                    if (auto adj_velem = velem_array[idx1d - map_idx.z()].value; adj_velem > 1)
+                    if (auto adj_velem = velem_arr[idx1d - map_idx.z()].value; adj_velem >= 0)
                       adj = adj_velem;
         
                   if (k < dim.z() - 1)
-                    if (auto adj_velem = velem_array[idx1d + map_idx.z()].value; adj_velem > 1)
+                    if (auto adj_velem = velem_arr[idx1d + map_idx.z()].value; adj_velem >= 0)
                       adj = adj_velem;
                 }
                 else
                   adj = -2; // Pore voxel
 
-                img_darcy_adj_array[idx1d] = adj;
-                // img_darcy_adj_array->InsertNextTypedTuple(&adj);
+                img_darcy_adj_arr[idx1d] = adj;
               }
-        
-          
-          // img_darcy_adj_array->SetName("darcy_adj");
-          // image_data_->GetCellData()->AddArray(img_darcy_adj_array);
         
           std::cout << "\n\nVelems_adj array produced and filled";
         }
       }
-
-
-      
-
-      
-      
-      
-      // auto dim_side = std::round(std::cbrt(size));
-      // image_data_->SetDimensions(v3i{dim_side + 1});
-      // image_data_->SetSpacing(v3d{1.0/dim_side});
-      // image_data_->SetOrigin(v3d{0});
-
-      
-      
-
-
-      // vtkDataArray* selected_arr = img_darcy_adj_array;
-
-      // vtkDataArray* selected_arr = velem_array;
-      
-      
-      // image_data_->GetCellData()->SetActiveScalars(selected_arr->GetName());
-
-      // vtkNew<vtkDataSetMapper> mapper;
-      //
-      // {
-      //   mapper->SetInputData(image_data_);
-      //   mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName()); // This is needed only for vtkImageData without vtkThreshold
-      //
-      //   mapper->SetColorModeToMapScalars(); 
-      //   mapper->UseLookupTableScalarRangeOn();
-      //   mapper->SetScalarModeToUseCellData();
-      //   mapper->SetLookupTable(image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : lut_velem_);
-      // }
-      
-      // {
-      //
-      //   threshold_->SetInputData(image_data_);
-      //   threshold_->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, velem_adjacent_array->GetName());
-      //   
-      //   // threshold_->SetLowerThreshold(2);
-      //   // threshold_->SetUpperThreshold(100000);
-      //   
-      //   threshold_->SetLowerThreshold(5);
-      //   threshold_->SetUpperThreshold(1e9);
-      //
-      //
-      //   mapper->SetInputData(threshold_->GetOutput());
-      //   
-      //   // mapper->SetInputData(image_data_);
-      //   // mapper->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, selected_arr->GetName()); // This is needed only for vtkImageData without vtkThreshold
-      //
-      //   mapper->SetColorModeToMapScalars(); 
-      //   mapper->UseLookupTableScalarRangeOn();
-      //   mapper->SetScalarModeToUseCellData();
-      //   mapper->SetLookupTable(image_data_->GetCellData()->GetScalars() == phase_array ? lut_pore_solid_ : lut_velem_);
-      //
-      //   image_data_->Modified();
-      //   threshold_->Modified();
-      //   threshold_->Update();
-      //
-      // }
-      
-
-
-
-      
-      
-      
-
-      
-      //
-      // image_actor_->SetMapper(mapper);
-      // image_actor_->GetProperty()->SetEdgeVisibility(false/*true*/);
-      // image_actor_->GetProperty()->SetEdgeColor(v3d{0.5} /*0, 0, 0*/);
-      //
-      // image_actor_->GetProperty()->SetAmbient(0.5);
-      // image_actor_->GetProperty()->SetDiffuse(0.4);
-      // image_actor_->GetProperty()->BackfaceCullingOn();
-      
-
-      // renderer_->AddActor(image_actor_);
     }
 
 
@@ -644,6 +625,9 @@ namespace xpm
       // v3i dim = 500;
 
 
+      v3i processors{4, 2, 2};
+
+
       // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\10x10x10\10x10x10)"
       // R"(C:\dev\.temp\images\SS-1000\XNet)"
       // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
@@ -651,7 +635,7 @@ namespace xpm
 
 
 
-      auto filter = [this](pnm_idx idx) { return phase_array[idx] == property::microporous; };
+      // auto filter = [this](pnm_idx idx) { return phase_arr[idx] == presets::microporous; };
 
 
       
@@ -679,11 +663,11 @@ namespace xpm
 
         edges.name = "Edges";
         edges.get = [this] {
-          return std::get<0>(img_mapper.faces_).actor_->GetProperty()->GetEdgeVisibility();
+          return std::get<0>(img_mapper.faces_).GetActor()->GetProperty()->GetEdgeVisibility();
         };
         edges.set = [this](bool v) {
           dpl::sfor<6>([this, v](auto i) {
-            std::get<i>(img_mapper.faces_).actor_->GetProperty()->SetEdgeVisibility(v);
+            static_cast<GlyphMapperFace&>(std::get<i>(img_mapper.faces_)).GetActor()->GetProperty()->SetEdgeVisibility(v);
             render_window_->Render();
           });
         };
@@ -776,10 +760,10 @@ namespace xpm
         vtkIdType darcy_node_inner_adj_count = 0;
         
         for (vtkIdType i = 0; i < image_size; ++i) {
-          if (img_darcy_adj_array[i] >= 0 && is_micro_porous(i))
+          if (img_darcy_adj_arr[i] >= 0 && phase_arr[i] == presets::microporous)
             ++darcy_node_connected_cluster_adj_count;
 
-          if (img_darcy_adj_array[i] == -1 && is_micro_porous(i))
+          if (img_darcy_adj_arr[i] == -1 && phase_arr[i] == presets::microporous)
             ++darcy_node_inner_adj_count;
         }
 
@@ -797,30 +781,33 @@ namespace xpm
         //     [&](int32_t darcy_adj) { return darcy_adj == -1; });
         
       
-        
-        // auto* velems = static_cast<int*>(velem_array->GetVoidPointer(0));
         pnm_3idx map_idx{1, dim.x(), dim.x()*dim.y()};
 
-
         pnm_idx darcy_darcy_throats = 0;
-
-
-        
         
         for (pnm_idx k = 1; k < dim.z(); ++k)
           for (pnm_idx j = 1; j < dim.y(); ++j)
             for (pnm_idx i = 1; i < dim.x(); ++i) {
               auto idx1d = map_idx.dot({i, j, k});
 
-              if (velem_array[idx1d].value == -2 && is_micro_porous(idx1d)) // Solid
+              if (/*velem_arr[idx1d].value == -2 && */phase_arr[idx1d] == presets::microporous) // Solid
                 dpl::sfor<3>([&](auto e) {
                   auto adj_idx = idx1d - map_idx[e];
 
-                  if (velem_array[adj_idx].value == -2 && is_micro_porous(adj_idx))
+                  if (/*velem_arr[adj_idx].value == -2 && */phase_arr[adj_idx] == presets::microporous)
                     ++darcy_darcy_throats;  
                 });
             }
 
+        auto darcy_inlet_outlet = 0;
+
+        for (pnm_idx k = 0; k < dim.z(); ++k)
+          for (pnm_idx j = 0; j < dim.y(); ++j) {
+            if (phase_arr[map_idx.dot({0, j, k})] == presets::microporous)
+              ++darcy_inlet_outlet;
+            if (phase_arr[map_idx.dot({dim.x() - 1, j, k})] == presets::microporous)
+              ++darcy_inlet_outlet;
+          }
 
         //darcy_darcy_throats = 0;
 
@@ -833,7 +820,7 @@ namespace xpm
         std::cout << "\n\nPRE_RESIZE";
         
         pnm.node_.resize(pnm.node_count_ + darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count);
-        pnm.throat_.resize(pnm.throat_count_ + darcy_node_connected_cluster_adj_count + darcy_darcy_throats);
+        pnm.throat_.resize(pnm.throat_count_ + darcy_node_connected_cluster_adj_count + darcy_darcy_throats + darcy_inlet_outlet);
 
         std::cout << "\n\nPOST_RESIZE";
         
@@ -857,9 +844,11 @@ namespace xpm
         for (pnm_idx idx1d = 0, k = 0; k < dim.z(); ++k)
           for (pnm_idx j = 0; j < dim.y(); ++j)
             for (pnm_idx i = 0; i < dim.x(); ++i, ++idx1d) {
-              auto darcy_adj_idx1d = img_darcy_adj_array[idx1d];
+              auto darcy_adj_idx1d = img_darcy_adj_arr[idx1d];
+
               
-              if (darcy_adj_idx1d >= 0 && is_micro_porous(idx1d)) { // Solid
+
+              if (darcy_adj_idx1d >= 0 && phase_arr[idx1d] == presets::microporous) { // Solid
                 auto voxel_to_row_inc_curr = voxel_to_row_inc++;
                 voxel_to_row_inc_map[idx1d] = voxel_to_row_inc_curr;
 
@@ -881,7 +870,7 @@ namespace xpm
                                
                 ++new_throat_incr;
               }
-              else if (darcy_adj_idx1d == -1 && is_micro_porous(idx1d)) {
+              else if (darcy_adj_idx1d == -1 && phase_arr[idx1d] == presets::microporous) {
                 auto voxel_to_row_inc_curr = voxel_to_row_inc++;
                 voxel_to_row_inc_map[idx1d] = voxel_to_row_inc_curr;
               
@@ -908,12 +897,13 @@ namespace xpm
 
               auto idx1d = map_idx.dot({i, j, k});
               
-              if (velem_array[idx1d].value == -2 && is_micro_porous(idx1d)) {
+              if (/*velem_arr[idx1d].value == -2 && */phase_arr[idx1d] == presets::microporous) {
                 // Solid
 
                 dpl::sfor<3>([&](auto e) {
                   auto adj_idx = idx1d - map_idx[e];
-                  if (loaded < darcy_darcy_throats && velem_array[adj_idx].value == -2  && is_micro_porous(adj_idx)) {
+                  
+                  if (loaded < darcy_darcy_throats && /*velem_arr[adj_idx].value == -2 && */phase_arr[adj_idx] == presets::microporous) {
                     auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
                     
                     pnm.throat_[attribs::adj][new_throat_idx] = //{0, 0};
@@ -935,10 +925,44 @@ namespace xpm
 
         
         
+
+
+         for (pnm_idx k = 0; k < dim.z(); ++k)
+          for (pnm_idx j = 0; j < dim.y(); ++j) {
+            
+            if (auto idx1d = map_idx.dot({0, j, k}); phase_arr[idx1d] == presets::microporous) {
+              auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
+              
+              pnm.throat_[attribs::adj][new_throat_idx] = {pnm.node_count_ + voxel_to_row_inc_map[idx1d], pnm.inlet() + darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count};
+              pnm.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4; //min_r_ins;
+              
+              pnm.throat_[attribs::length0][new_throat_idx] = 0;
+              pnm.throat_[attribs::length][new_throat_idx] = cell_size.x();
+              pnm.throat_[attribs::length1][new_throat_idx] = 0;
+              
+              ++new_throat_incr;
+            }
+
+            if (auto idx1d = map_idx.dot({dim.x() - 1, j, k}); phase_arr[idx1d] == presets::microporous) {
+              auto new_throat_idx = pnm.throat_count_ + new_throat_incr;
+              
+              pnm.throat_[attribs::adj][new_throat_idx] = {pnm.node_count_ + voxel_to_row_inc_map[idx1d], pnm.outlet() + darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count};
+              pnm.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4; //min_r_ins;
+              
+              pnm.throat_[attribs::length0][new_throat_idx] = 0;
+              pnm.throat_[attribs::length][new_throat_idx] = cell_size.x();
+              pnm.throat_[attribs::length1][new_throat_idx] = 0;
+              
+              ++new_throat_incr;
+            }
+          }
+
+
+        
         pnm.node_count_ += darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count;
+        pnm.throat_count_ += darcy_node_connected_cluster_adj_count + darcy_darcy_throats + darcy_inlet_outlet;
 
-        pnm.throat_count_ += darcy_node_connected_cluster_adj_count + darcy_darcy_throats;
-
+        // darcy_node_connected_cluster_adj_count + darcy_node_inner_adj_count
         
       
       
@@ -951,12 +975,27 @@ namespace xpm
 
       std::vector<double> pressure(pnm.node_count_);
       
-      // for (pnm_idx i = 0; i < pnm.node_count_; ++i)
-      //   pressure[i] = (1.*i)/pnm.node_count_;
+      for (pnm_idx i = 0; i < pnm.node_count_; ++i)
+        pressure[i] = (1.*i)/pnm.node_count_;
+
+
+      std::cout << "\n\nparallel_partitioning_START";
+      
+
+      auto partitioning = pnm.parallel_partitioning(processors);
+
+      for (auto i = 0; i < processors.prod(); ++i)
+        std::cout << std::format("\nblock {}, rows {}--{}, size {}",
+          i, partitioning.rows_per_block[i].first, partitioning.rows_per_block[i].second,
+          partitioning.rows_per_block[i].second - partitioning.rows_per_block[i].first);
+
+
+      std::cout << "\n\nparallel_partitioning_END";
+
 
       std::cout << "\n\nGeneratePressureInput_START";
       
-      auto input = pnm.GeneratePressureInput();
+      auto input = pnm.generate_pressure_input(partitioning);
 
       std::cout << "\n\nGeneratePressureInput_END";
       
@@ -969,32 +1008,39 @@ namespace xpm
       
         {
           shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-          input.save(smo);
+          dpl::hypre::save(input, partitioning.rows_per_block, smo);
+          // input.save(smo);
         }
       
         std::cout << "\n\nSaved hypre input";
       
         auto start = std::chrono::high_resolution_clock::now();
+
         
+
         auto solve_result = std::system(
-          std::format("mpiexec -n 8 \"{}\" -s",
+          std::format("mpiexec -n {} \"{}\" -s",
+            processors.prod(),
             "xpm_project.exe"
           ).c_str());
       
         auto stop = std::chrono::high_resolution_clock::now();
       
         cout << "\n\nMPI hypre solve time: " <<
-          duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
+          duration_cast<std::chrono::seconds>(stop - start).count() << "s" << endl;
       
       
-        shared_memory_object smo_output{open_only, "xpm-hypre-output", read_only};
-        mapped_region mr_ouput{smo_output, read_only};
-        // auto* ptr = static_cast<double*>(mr_ouput.get_address());
-      
-      
-        std::memcpy(pressure.data(), mr_ouput.get_address(), input.nrows*sizeof(double));
-        
-          // auto val = std::accumulate(ptr, ptr + input.nrows, 0.0);
+        shared_memory_object smo{open_only, "xpm-hypre-output", read_only};
+        mapped_region mr{smo, read_only};
+
+        auto opt_pressure = std::make_unique<double[]>(input.nrows);
+
+        std::memcpy(opt_pressure.get(), mr.get_address(), input.nrows*sizeof(double));
+
+        for (HYPRE_BigInt i = 0; i < input.nrows; ++i)
+          pressure[partitioning.optimised_to_normal[i]] = opt_pressure[i];
+
+        // auto val = std::accumulate(ptr, ptr + input.nrows, 0.0);
               
               
       }
@@ -1028,144 +1074,99 @@ namespace xpm
       
 
       auto get_pressure = [&pressure](pnm_idx i){ return i < pressure.size() ? pressure[i] : 1; };
-      
-      
-        
-         auto assembly = vtkSmartPointer<vtkAssembly>::New();
-        assembly->AddPart(CreateNodeActor(pnm, lut_pressure_, 
-          get_pressure
+
+
+      auto assembly = vtkSmartPointer<vtkAssembly>::New();
+      assembly->AddPart(CreateNodeActor(pnm, lut_pressure_,
+        get_pressure
         //   [&](pnm_idx i) {
         //   return i < pressure.size() ? pressure[i] : 0;
         //
         //   
         // }
-        
-        ));
-        assembly->AddPart(CreateThroatActor(pnm, lut_pressure_, [&](pnm_idx i) {
-          auto [n0, n1] = pnm.throat_[attribs::adj][i];
+      ));
 
-          return (
-            (n0 == pnm.inlet() ? 1.0 : n0 == pnm.outlet() ? 0.0 : get_pressure(n0)/*pressure[n0]*/) +
-            (n1 == pnm.inlet() ? 1.0 : n1 == pnm.outlet() ? 0.0 : get_pressure(n1)/*pressure[n1]*/))/2.0;
+      assembly->AddPart(CreateThroatActor(pnm, lut_pressure_, [&](pnm_idx i) {
+        auto [n0, n1] = pnm.throat_[attribs::adj][i];
 
-          // return 0;pressure[i];
-        }));
-        renderer_->AddActor(assembly);
-        
-        
-        
-        // color_array->SetName("color");
-        
-        
-        
-        
+        return (
+          (n0 == pnm.inlet() ? 1.0 : n0 == pnm.outlet() ? 0.0 : get_pressure(n0)/*pressure[n0]*/) +
+          (n1 == pnm.inlet() ? 1.0 : n1 == pnm.outlet() ? 0.0 : get_pressure(n1)/*pressure[n1]*/)) / 2.0;
 
+        // return 0;pressure[i];
+      }));
+
+      renderer_->AddActor(assembly);
+        
+        
+        
+      
 
 
 
       
-        std::cout << "\n\nNetwork actor created";
+      std::cout << "\n\nNetwork actor created";
+
 
       
-      
-      
 
 
-      if (false) {
-        // auto [min, max] = std::ranges::minmax_element(icl_pnm_inv.node_.range(attribs::r_ins));
-        //
-        // lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-        //
-        // renderer_->AddActor(CreateNetworkAssembly(icl_pnm_inv, lut_continuous_));
-        //
-        // std::cout << "\n\nNetwork actor created";
-
-
-        
-        
-       
-      }
-      else
       {
-
-        // auto [min, max] = std::ranges::minmax_element(pnm.node_.range(attribs::r_ins));
-        //
-        // lut_continuous_->SetTableRange(*min - (*max - *min)*0.1, *max + (*max - *min)*0.1);
-        //
-        // renderer_->AddActor(CreateNetworkAssembly(pnm, lut_continuous_));
-        //
-        // std::cout << "\n\nNetwork actor created";
         
-
-
-        
-        
-
-        
-        // image_actor_->SetUserTransform()
-        // {
-        //   vtkNew<vtkTransform> trans;
-        //   trans->PostMultiply();
-        //   trans->Scale(v3d{pnm.physical_size.x()});
-        //   // trans->Translate(icl_pnm_inv.physical_size.x(), 0, 0);
-        //   // image_actor_->SetUserTransform(trans);
-        // }
-
-
-        {
-          // phase_in = static_cast<vtkUnsignedCharArray*>(image_data_->GetCellData()->GetArray("phase"));
-          // velems_arr_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("velem"));
-          // darcy_adj_in = static_cast<vtkIntArray*>(image_data_->GetCellData()->GetArray("darcy_adj"));
           
+        {
+          auto scale_factor = /*1.0*/pnm.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
+            
+          img_mapper.Init(scale_factor);
           {
-            auto scale_factor = /*1.0*/pnm.physical_size.x()/dim.x(); // needed for vtk 8.2 floating point arithmetics
-            
-            
-            
-            img_mapper.Init(scale_factor);
-            
-
-
-
-            {
-              img_mapper.Populate(dim, pnm.physical_size/dim, filter, [&](pnm_idx idx) {
-
-                return pressure[old_node + voxel_to_row_inc_map[idx]];
-                
-
-              }/*img_darcy_adj_array*/);
+            img_mapper.Populate(dim, pnm.physical_size/dim, 
+              [this](pnm_idx idx1d) {
+                // return true;
+                return phase_arr[idx1d] == presets::microporous;
+              }
+            );
               
-              dpl::sfor<6>([&](auto i) {
-                auto& mapper = std::get<i>(img_mapper.faces_);
+            dpl::sfor<6>([&](auto face_idx) {
+              GlyphMapperFace& face = std::get<face_idx>(img_mapper.faces_);
+
+              pnm_idx i = 0;
+              for (auto idx1d : face.GetIndices()) {
+                face.GetColorArray()->SetTypedComponent(i++, 0, 
+                  // img_darcy_adj_arr[idx1d]
+                  // velem_arr[idx1d].value
+                  phase_arr[idx1d] == presets::microporous ? pressure[pnm.node_count_ + voxel_to_row_inc_map[idx1d]] : 0
+                  
+                );
+              }
+
+              auto* glyphs = face.GetGlyphMapper(); //face.POLY_mapper_.Get();
+              auto* actor = face.GetActor(); //face.POLY_actor__.Get();//;
+
+              // glyphs->SetLookupTable(lut_velem_);
+              glyphs->SetLookupTable(lut_pressure_);
+              
+              glyphs->SetColorModeToMapScalars();
+              glyphs->UseLookupTableScalarRangeOn();
+              glyphs->SetScalarModeToUsePointData();
+              // glyphs->SetScalarModeToUseCellData();
+              
+              actor->SetMapper(glyphs);
+
+              actor->GetProperty()->SetEdgeVisibility(/*false*/false);
+              actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
                 
-                vtkGlyph3DMapper* glyphs = mapper.glyphs_.Get();
-                vtkActor* actor = mapper.actor_.Get();
+              actor->GetProperty()->SetAmbient(0.5);
+              actor->GetProperty()->SetDiffuse(0.4);
+              actor->GetProperty()->BackfaceCullingOn();
+              
+              // face.POLY_mapper_->SetInputData(face.POLY_polydata__);
+              // face.POLY_actor__->SetMapper(face.POLY_mapper_);
 
-
-
-                glyphs->SetLookupTable(lut_pressure_);
-                glyphs->SetColorModeToMapScalars();
-                glyphs->UseLookupTableScalarRangeOn();
-                glyphs->SetScalarModeToUsePointData();
-
-
-                actor->SetMapper(glyphs);
-
-                actor->GetProperty()->SetEdgeVisibility(/*false*/false);
-                actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
-                
-                actor->GetProperty()->SetAmbient(0.5);
-                actor->GetProperty()->SetDiffuse(0.4);
-                actor->GetProperty()->BackfaceCullingOn();
-                
-                renderer_->AddActor(actor);
-              });
-            }
+              renderer_->AddActor(actor);
+            });
           }
         }
-
       }
-
 
 
       renderer_->ResetCamera();

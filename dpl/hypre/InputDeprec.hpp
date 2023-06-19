@@ -78,37 +78,41 @@ namespace dpl::hypre
 
 
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
-  inline auto load_QQ(const boost::interprocess::mapped_region& region/*smo_t& smo*/) {
-    ls_known_ref lkr;
-
+  inline void load(const boost::interprocess::mapped_region& region, ls_known_ref& lkr, std::pair<HYPRE_BigInt, HYPRE_BigInt>*& rows) {
     using namespace boost::interprocess;
 
-
     // mapped_region region(smo, read_only);
-
 
     auto* ptr = region.get_address();
 
     lkr.nrows = *(HYPRE_BigInt*)ptr;
-    ptr = (char*)ptr + sizeof(HYPRE_Int);
+    ptr = (char*)ptr + sizeof(HYPRE_BigInt);
 
     auto coefs_count = *(HYPRE_BigInt*)ptr;
     ptr = (char*)ptr + sizeof(HYPRE_BigInt);
 
 
-    lkr.ncols = (HYPRE_Int*)ptr;
-    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_Int);
+    lkr.ncols = (HYPRE_BigInt*)ptr;
+    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_BigInt);
 
     lkr.b = (HYPRE_Complex*)ptr;
-    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_Real);
+    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_Complex);
 
     lkr.cols = (HYPRE_BigInt*)ptr;
-    ptr = (char*)ptr + coefs_count * sizeof(HYPRE_Int);
+    ptr = (char*)ptr + coefs_count * sizeof(HYPRE_BigInt);
 
     lkr.values = (HYPRE_Complex*)ptr;
+    ptr = (char*)ptr + coefs_count * sizeof(HYPRE_Complex);
 
 
-    return lkr;
+    #ifdef HYPRE_SEQUENTIAL
+      rows.first = 0;
+      rows.second = lkr.nrows - 1;
+    #else
+      int rank;
+      MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+      rows = static_cast<std::pair<HYPRE_BigInt, HYPRE_BigInt>*>(ptr) + rank;
+    #endif
   }
 #endif
 
@@ -183,6 +187,12 @@ namespace dpl::hypre
       HYPRE_BoomerAMGCreate(&solver);      
 
       HYPRE_BoomerAMGSetTol(solver, 1.e-20);
+      // HYPRE_BoomerAMGSetCoarsenType(solver, 10);
+      // HYPRE_BoomerAMGSetRestriction(solver, 2);
+      // HYPRE_BoomerAMGSetTruncFactor(solver, 4);
+      // HYPRE_BoomerAMGSetInterpType(solver, 6);
+      // HYPRE_BoomerAMGSetStrongThreshold(solver, 0);
+      // HYPRE_BoomerAMGSetTruncFactor(solver, 0);
 
       // ReSharper disable CppInconsistentNaming
       ij_matrix A_matrix{in.nrows, in.ncols, in.cols, in.values};
@@ -228,78 +238,6 @@ namespace dpl::hypre
         constants.data()
       };
     }
-
-#ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
-    using smo_t = boost::interprocess::shared_memory_object;
-
-    void save(smo_t& smo) {
-      // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
-      using namespace boost::interprocess;
-      
-      auto coefs_count = cols_of_coefs.size();
-      
-      auto buffer_size = sizeof(HYPRE_Int) + sizeof(HYPRE_Int) +
-        nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Real))
-      + coefs_count*(sizeof(HYPRE_Int) + sizeof(HYPRE_Real));
-      
-      smo.truncate(buffer_size);
-      
-      mapped_region region(smo, read_write);
-      auto* ptr = region.get_address();
-
-      *(HYPRE_Int*)ptr = nrows;
-      ptr = (char*)ptr + sizeof(HYPRE_Int);
-      
-      *(HYPRE_Int*)ptr = coefs_count;
-      ptr = (char*)ptr + sizeof(HYPRE_Int);
-      
-      std::memcpy(ptr, ncols_per_row.data(), nrows*sizeof(HYPRE_Int));
-      ptr = (char*)ptr + nrows*sizeof(HYPRE_Int);
-
-      std::memcpy(ptr, constants.data(), nrows*sizeof(HYPRE_Real));
-      ptr = (char*)ptr + nrows*sizeof(HYPRE_Real);
-
-      std::memcpy(ptr, cols_of_coefs.data(), coefs_count*sizeof(HYPRE_Int));
-      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Int);
-
-      std::memcpy(ptr, coefs.data(), coefs_count*sizeof(HYPRE_Real));
-      // ptr += nrows*sizeof(HYPRE_Real);
-    }
-
-    void load(smo_t& smo) {
-      using namespace boost::interprocess;
-
-      mapped_region region(smo, read_only);
-
-      auto* ptr = region.get_address();
-
-      nrows = *(HYPRE_Int*)ptr;
-      ptr = (char*)ptr + sizeof(HYPRE_Int);
-
-      auto coefs_count = *(HYPRE_Int*)ptr;
-      ptr = (char*)ptr + sizeof(HYPRE_Int);
-
-
-      ncols_per_row.resize(nrows);
-      std::memcpy(ncols_per_row.data(), ptr, nrows*sizeof(HYPRE_Int));
-      ptr = (char*)ptr + nrows*sizeof(HYPRE_Int);
-      
-      constants.resize(nrows);
-      std::memcpy(constants.data(), ptr, nrows*sizeof(HYPRE_Real));
-      ptr = (char*)ptr + nrows*sizeof(HYPRE_Real);
-      
-      cols_of_coefs.resize(coefs_count);
-      std::memcpy(cols_of_coefs.data(), ptr, coefs_count*sizeof(HYPRE_Int));
-      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Int);
-      
-      coefs.resize(coefs_count);
-      std::memcpy(coefs.data(), ptr, coefs_count*sizeof(HYPRE_Real));
-      // ptr += nrows*sizeof(HYPRE_Real);
-    }
-
-#endif
-
-    
 
     InputDeprec() = default;
 
@@ -405,7 +343,80 @@ namespace dpl::hypre
   };
 
 
-  
+
+
+  #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
+    using smo_t = boost::interprocess::shared_memory_object;
+
+    inline void save(const InputDeprec& input, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
+      // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
+      using namespace boost::interprocess;
+      
+      auto coefs_count = input.cols_of_coefs.size();
+      
+      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(HYPRE_BigInt) +
+        input.nrows*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex))
+      + coefs_count*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
+        blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
+      
+      smo.truncate(buffer_size);
+      
+      mapped_region region(smo, read_write);
+      auto* ptr = region.get_address();
+
+      *(HYPRE_BigInt*)ptr = input.nrows;
+      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+      
+      *(HYPRE_BigInt*)ptr = coefs_count;
+      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+      
+      std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_BigInt));
+      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_BigInt);
+
+      std::memcpy(ptr, input.constants.data(), input.nrows*sizeof(HYPRE_Complex));
+      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
+
+      std::memcpy(ptr, input.cols_of_coefs.data(), coefs_count*sizeof(HYPRE_BigInt));
+      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
+
+      std::memcpy(ptr, input.coefs.data(), coefs_count*sizeof(HYPRE_Complex));
+      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Complex);
+
+      std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
+    }
+
+    // inline void load(smo_t& smo, InputDeprec& input) {
+    //   using namespace boost::interprocess;
+    //
+    //   mapped_region region(smo, read_only);
+    //
+    //   auto* ptr = region.get_address();
+    //
+    //   input.nrows = *(HYPRE_BigInt*)ptr;
+    //   ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+    //
+    //   auto coefs_count = *(HYPRE_BigInt*)ptr;
+    //   ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+    //
+    //
+    //   input.ncols_per_row.resize(input.nrows);
+    //   std::memcpy(input.ncols_per_row.data(), ptr, input.nrows*sizeof(HYPRE_BigInt));
+    //   ptr = (char*)ptr + input.nrows*sizeof(HYPRE_BigInt);
+    //   
+    //   input.constants.resize(input.nrows);
+    //   std::memcpy(input.constants.data(), ptr, input.nrows*sizeof(HYPRE_Complex));
+    //   ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
+    //   
+    //   input.cols_of_coefs.resize(coefs_count);
+    //   std::memcpy(input.cols_of_coefs.data(), ptr, coefs_count*sizeof(HYPRE_BigInt));
+    //   ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
+    //   
+    //   input.coefs.resize(coefs_count);
+    //   std::memcpy(input.coefs.data(), ptr, coefs_count*sizeof(HYPRE_Complex));
+    //   // ptr += nrows*sizeof(HYPRE_Complex);
+    // }
+#endif
+
 }
 
 

@@ -27,37 +27,7 @@
 
 
 int main(int argc, char* argv[])
-{
-  
-
-  
-  // using namespace boost::interprocess;
-  //   {
-  //     shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
-  //
-  //   std::cout << "shared_memory_object instantiated";
-  //   getchar();
-  //   
-  //
-  //   dpl::hypre::Input input;
-  //     input.Load(smo);
-  //
-  //   std::cout << "Hypre Loaded";
-  //     getchar();
-  //   
-  //   }
-  //
-  //
-  // std::cout << "\n\nFreed";
-  // getchar();
-
-
-  
-  // for (int i = 0; i < argc; ++i)
-  //   std::cout << std::format("arg{}: {}\n", i, argv[i]);
-
-  
-  
+{  
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     using namespace boost::interprocess;
     
@@ -90,7 +60,11 @@ int main(int argc, char* argv[])
     shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
     mapped_region region(smo, read_only);
 
-    lk_ref = dpl::hypre::load_QQ(region);
+
+    std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
+
+    dpl::hypre::load(region, lk_ref, range_ptr);
+    dpl::hypre::mpi_block::range = *range_ptr;
 
 
     // input.load(smo);
@@ -101,9 +75,9 @@ int main(int argc, char* argv[])
 
     #ifdef HYPRE_SEQUENTIAL
       static constexpr auto jlower = 0;
-      const auto jupper = nrows - 1;
+      const auto jupper = lk_ref.nrows - 1;
     #else
-      auto [jlower, jupper] = dpl::hypre::mpi_part(lk_ref.nrows);
+      auto [jlower, jupper] = dpl::hypre::mpi_block::range; //dpl::hypre::mpi_part(lk_ref.nrows);
     #endif
   
     auto count = jupper - jlower + 1;
@@ -129,19 +103,43 @@ int main(int argc, char* argv[])
 
     std::unique_ptr<double[]> pressure;
     // std::vector<double> pressure;
-    double* receive_ptr = nullptr;
+    double* receive_ptr = nullptr; 
 
-    
-    
+
+    // TODO: memory leaks into std::unique_ptr
+    int* recvcounts = nullptr;
+    int* displs = nullptr;
     
     if (w_rank == root) {
       receive_ptr = new double[lk_ref.nrows];
       pressure.reset(receive_ptr);
+
+      recvcounts = new int[w_size];
+      displs = new int[w_size];
+
+      for (int i = 0; i < w_size; ++i) {
+        recvcounts[i] = range_ptr[i].second - range_ptr[i].first + 1;
+        displs[i] = range_ptr[i].first;
+      }
     }
 
-    MPI_Gather(
+    
+    
+
+    // if (w_rank == root) {
+    //   std::cout << "\n\nPRE_GATHER" << std::flush;
+    //   
+    // }
+    //
+    //
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    
+    
+
+    MPI_Gatherv(
       pressure_part.get(), count, MPI_DOUBLE,
-      receive_ptr, count, MPI_DOUBLE,
+      receive_ptr, recvcounts, displs, MPI_DOUBLE,
       root, MPI_COMM_WORLD);
 
     // if (w_rank == root)

@@ -22,7 +22,10 @@
 
 namespace xpm
 {
-  namespace property
+  using v3i = dpl::vector3i;
+  using v3d = dpl::vector3d;
+
+  namespace voxel_tag
   {
     struct phase
     {
@@ -32,30 +35,15 @@ namespace xpm
       friend bool operator!=(const phase& lhs, const phase& rhs) { return !(lhs == rhs); }
     };
 
-    static inline constexpr phase pore = {0};
-    static inline constexpr phase solid = {1};
-    static inline constexpr phase microporous = {2};
-
-
     /**
      * \brief
-     * input file value description
-     *   -2: solid (validated),
-     *   -1: inlet/outlet (do not know?),
-     *   0, 1: do not exist (validated),
-     *   >=2: cluster
-     *
-     *
-     * output vector value description
-     *    -2: solid | the same
-     *    -1: inlet/outlet (do not know?) | the same
-     *    >=0: clusters | subtracted 2
+     *   -2: non-pore (solid or microporous) | the same
+     *   -1: inlet/outlet (do not know?) | the same
+     *   >=0: pore clusters
      */
     struct velem
     {
       std::int32_t value;
-
-      
 
       bool non_pore() {
         return value == -2;
@@ -65,6 +53,12 @@ namespace xpm
 
   }
 
+  namespace presets
+  {
+    static inline constexpr voxel_tag::phase pore = {0};
+    static inline constexpr voxel_tag::phase solid = {1};
+    static inline constexpr voxel_tag::phase microporous = {2};  
+  }
 
   namespace geometric_properties
   {
@@ -450,28 +444,25 @@ namespace xpm
     //   return map;
     // }
 
-    
+
+
+
+
+
     /**
      * \brief
      * input file value description
      *   -2: solid (validated),
      *   -1: inlet/outlet (do not know?),
      *   0, 1: do not exist (validated),
-     *   >=2: cluster
-     *
-     *
-     * output vector value description
-     *    -2: solid | the same
-     *    -1: inlet/outlet (do not know?) | the same
-     *    >=0: clusters | subtracted 2
+     *   >=2: cluster (0, 1 are inlet and outlet node indices in Statoil format)
      */
-    static auto read_icl_velems(const std::filesystem::path& network_path, const pnm_3idx& dim) {
+    static std::unique_ptr<voxel_tag::velem[]> read_icl_velems(const std::filesystem::path& network_path, const pnm_3idx& dim) {
       mapped_file_source file(network_path.string() + "_VElems.raw");
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
-      auto velems = std::make_unique<property::velem[]>(dim.prod());
-      
-      auto* velems_ptr = velems.get();
+      auto result = std::make_unique<voxel_tag::velem[]>(dim.prod());
+      auto* ptr = result.get();
 
       pnm_3idx velems_factor{1, dim.x() + 2, (dim.x() + 2)*(dim.y() + 2)};
       pnm_3idx ijk;
@@ -481,21 +472,79 @@ namespace xpm
           for (ijk.x() = 0; ijk.x() < dim.x(); ++ijk.x()) {
             auto val = file_ptr[velems_factor.dot(ijk + 1)];
 
-            *velems_ptr++ = {val > 0 ? val - 2 : val};
+            *ptr++ = {val > 0 ? val - 2 : val};
           }
 
-      return velems;
+      return result;
     }
 
 
 
 
 
-
+    struct parallel_parts_mapping
+    {
+      std::unique_ptr<pnm_idx[]> normal_to_optimised;
+      std::unique_ptr<pnm_idx[]> optimised_to_normal;
+      std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>> rows_per_block;
+    };
     
-    
+    parallel_parts_mapping parallel_partitioning(v3i blocks) {
+      auto block_size = physical_size/blocks;
 
-    auto GeneratePressureInput() {
+      v3i map_idx{1, blocks.x(), blocks.x()*blocks.y()};
+
+      using idx_block = std::pair<pnm_idx, int>;
+
+      std::vector<idx_block> partioning;
+
+      for (pnm_idx i = 0; i < node_count_; ++i) {
+        auto block_idx = node_[attribs::pos][i]/block_size;
+
+        partioning.emplace_back(
+          i,
+          map_idx.dot({
+            std::clamp<int>(std::floor(block_idx.x()), 0, blocks.x() - 1),    // NOLINT(clang-diagnostic-float-conversion)
+            std::clamp<int>(std::floor(block_idx.y()), 0, blocks.y() - 1),    // NOLINT(clang-diagnostic-float-conversion)
+            std::clamp<int>(std::floor(block_idx.z()), 0, blocks.z() - 1)})   // NOLINT(clang-diagnostic-float-conversion)
+        );  
+      }
+
+      std::ranges::sort(partioning, [](const idx_block& l, const idx_block& r) {
+        return l.second < r.second;
+      });
+
+
+      parallel_parts_mapping mapping;
+
+      mapping.normal_to_optimised = std::make_unique<pnm_idx[]>(node_count_);
+      mapping.optimised_to_normal = std::make_unique<pnm_idx[]>(node_count_);
+
+      // std::vector<pnm_idx> mapping;
+
+      int block_count = blocks.prod();
+      auto row_count_per_block = std::make_unique<pnm_idx[]>(block_count);
+      mapping.rows_per_block.resize(block_count);
+
+      for (auto i = 0; i < block_count; ++i)
+        row_count_per_block[i] = 0;
+
+      for (pnm_idx i = 0; i < node_count_; ++i) {
+        mapping.normal_to_optimised[partioning[i].first] = i;
+        mapping.optimised_to_normal[i] = partioning[i].first;
+        ++row_count_per_block[partioning[i].second];
+      }
+
+      int first_row = 0;
+      for (auto i = 0; i < block_count; ++i) {
+        mapping.rows_per_block[i] = {first_row, first_row + row_count_per_block[i]};
+        first_row += row_count_per_block[i] + 1;
+      }
+
+      return mapping;
+    }
+
+    auto generate_pressure_input(const parallel_parts_mapping& mapping) {
 
       using eq_tri = geometric_properties::equilateral_triangle_properties;
       using namespace attribs;
@@ -512,14 +561,12 @@ namespace xpm
       dpl::hypre::sparse_matrix_builder matrix(node_count_);
 
       std::vector<double> free_terms(node_count_, 0);
-      
+
+
+      auto* map = mapping.normal_to_optimised.get();
       
       for (pnm_idx i = 0; i < throat_count_; ++i) {
         auto [n0, n1] = throat_[adj][i];
-
-        // auto k = throat_[length0][i];
-        // auto w = throat_[length1][i];
-        // auto Q = throat_[length][i];
 
         if (i%(throat_count_/10) == 0) {
           std::cout << (1.0*i)/throat_count_ << '\n';
@@ -531,23 +578,23 @@ namespace xpm
           throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])));
 
         if (n0 == inlet()) {
-          free_terms[n1] += coef/**1 Pa*/;
-          matrix.add_diag(n1, coef);
+          free_terms[map[n1]] += coef/**1 Pa*/;
+          matrix.add_diag(map[n1], coef);
         }
         else if (n1 == inlet()) {
-          free_terms[n0] += coef/**1 Pa*/;
-          matrix.add_diag(n0, coef);
+          free_terms[map[n0]] += coef/**1 Pa*/;
+          matrix.add_diag(map[n0], coef);
         }
         else if (n0 == outlet()) {
           // free_terms[n1] += coef/**0 Pa*/;
-          matrix.add_diag(n1, coef);
+          matrix.add_diag(map[n1], coef);
         }
         else if (n1 == outlet()) {
           // free_terms[n0] += coef/**0 Pa*/;
-          matrix.add_diag(n0, coef);
+          matrix.add_diag(map[n0], coef);
         }
         else /*if (n0 != outlet() && n1 != outlet())*/ {
-          matrix.add_paired_diff_coef(n0, n1, -coef);
+          matrix.add_paired_diff_coef(map[n0], map[n1], -coef);
         }
       }
 
@@ -556,10 +603,6 @@ namespace xpm
       return dpl::hypre::InputDeprec /*input*/{matrix, std::move(free_terms)};
 
 
-
-      
-
-      
       // return input.Solve();
     }
   };

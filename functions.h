@@ -15,8 +15,7 @@
 
 namespace xpm
 {
-  using v3i = dpl::vector3i;
-  using v3d = dpl::vector3d;
+  
 
   
 

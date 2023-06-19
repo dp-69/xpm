@@ -41,7 +41,7 @@ namespace dpl::hypre
         const auto iupper = nrows - 1;
       #else
         static constexpr auto comm = MPI_COMM_WORLD;
-        auto [ilower, iupper] = mpi_part(nrows);
+        auto [ilower, iupper] = dpl::hypre::mpi_block::range; // mpi_part(nrows);
       #endif
       
       HYPRE_IJMatrixCreate(comm, ilower, iupper, ilower, iupper, &m_);

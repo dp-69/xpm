@@ -32,7 +32,15 @@
 
 namespace dpl::hypre
 {
+
+
 #ifndef HYPRE_SEQUENTIAL
+  namespace mpi_block
+  {
+    static std::pair<HYPRE_BigInt, HYPRE_BigInt> range;
+  }
+
+
   inline std::tuple<HYPRE_BigInt, HYPRE_BigInt> mpi_part(HYPRE_BigInt nrows) {
     int w_size, w_rank;
     MPI_Comm_size(MPI_COMM_WORLD, &w_size);
@@ -70,7 +78,7 @@ namespace dpl::hypre
       const auto jupper = nvalues - 1;
     #else
       static constexpr auto comm = MPI_COMM_WORLD;
-      auto [jlower, jupper] = mpi_part(nvalues);
+      auto [jlower, jupper] = dpl::hypre::mpi_block::range; // mpi_part(nvalues);
     #endif
 
       HYPRE_IJVectorCreate(comm, jlower, jupper, &v_);
@@ -86,7 +94,7 @@ namespace dpl::hypre
       const auto jupper = nvalues - 1;
     #else
       static constexpr auto comm = MPI_COMM_WORLD;
-      auto [jlower, jupper] = mpi_part(nvalues);
+      auto [jlower, jupper] = dpl::hypre::mpi_block::range; // mpi_part(nvalues);
     #endif
       
       HYPRE_IJVectorCreate(comm, jlower, jupper, &v_);
