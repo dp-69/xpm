@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
     std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
 
     dpl::hypre::load(region, lk_ref, range_ptr);
-    dpl::hypre::mpi_block::range = *range_ptr;
+    
 
 
     // input.load(smo);
@@ -77,6 +77,7 @@ int main(int argc, char* argv[])
       static constexpr auto jlower = 0;
       const auto jupper = lk_ref.nrows - 1;
     #else
+      dpl::hypre::mpi_block::range = *range_ptr;
       auto [jlower, jupper] = dpl::hypre::mpi_block::range; //dpl::hypre::mpi_part(lk_ref.nrows);
     #endif
   

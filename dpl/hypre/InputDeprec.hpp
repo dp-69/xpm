@@ -106,8 +106,8 @@ namespace dpl::hypre
 
 
     #ifdef HYPRE_SEQUENTIAL
-      rows.first = 0;
-      rows.second = lkr.nrows - 1;
+      rows->first = 0;
+      rows->second = lkr.nrows - 1;
     #else
       int rank;
       MPI_Comm_rank(MPI_COMM_WORLD, &rank);
