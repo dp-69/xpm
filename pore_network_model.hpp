@@ -548,29 +548,68 @@ namespace xpm
 
       using eq_tri = geometric_properties::equilateral_triangle_properties;
       using namespace attribs;
-      
-      // auto calc_coef = [&pnm](pnm_idx i) {
-      //   auto [n0, n1] = throat_[adj][i];
-      //   
-      //   return
-      //     (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
-      //     (inner_node(n1) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n1])) : 0.0) +
-      //     throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i]));
-      // };
-
-      dpl::hypre::sparse_matrix_builder matrix(node_count_);
-
-      std::vector<double> free_terms(node_count_, 0);
-
 
       auto* map = mapping.normal_to_optimised.get();
       
+      dpl::hypre::ls_known_storage lks;
+
+      dpl::hypre::ls_known_storage_builder builder{lks};
+
+      builder.allocate_rows(node_count_);
+
+      // lks.nrows = node_count_;
+      // lks.ncols = std::make_unique<HYPRE_Int[]>(node_count_);
+      // lks.b = std::make_unique<HYPRE_Complex[]>(node_count_);
+      //
+      // for (pnm_idx i = 0; i < node_count_; ++i) {
+      //   lks.ncols[i] = 1; // diag coef
+      //   lks.b[i] = 0;
+      // }
+      //
+      // lks.nvalues = node_count_; // diag coef
+
       for (pnm_idx i = 0; i < throat_count_; ++i) {
         auto [n0, n1] = throat_[adj][i];
 
-        if (i%(throat_count_/10) == 0) {
-          std::cout << (1.0*i)/throat_count_ << '\n';
+        if (inner_node(n0) && inner_node(n1)) {
+          builder.reserve_connection(map[n0], map[n1]);
+          // ++lks.ncols[map[n0]];
+          // ++lks.ncols[map[n1]];
+          // lks.nvalues += 2;
         }
+      }
+
+      builder.allocate_values();
+
+      // lks.cols = std::make_unique<HYPRE_BigInt[]>(lks.nvalues);
+      // lks.values = std::make_unique<HYPRE_Complex[]>(lks.nvalues);
+      //
+      //
+      // auto diag_shift = std::make_unique<pnm_idx[]>(node_count_);
+      // auto off_shift = std::make_unique<pnm_idx[]>(node_count_);
+      //
+      //
+      // diag_shift[0] = 0;
+      // off_shift[0] = 0; // pre increment will be required
+      // lks.cols[0] = 0;
+      // lks.values[0] = 0; // diag
+      //
+      // for (pnm_idx i = 1; i < node_count_; ++i) {
+      //   auto s = diag_shift[i - 1] + lks.ncols[i - 1];
+      //   diag_shift[i] = s;
+      //   off_shift[i] = s; // pre increment will be required
+      //   lks.cols[s] = i;
+      //   lks.values[s] = 0; // diag
+      // }
+
+
+
+      for (pnm_idx i = 0; i < throat_count_; ++i) {
+        auto [n0, n1] = throat_[adj][i];
+
+        // if (i%(throat_count_/10) == 0) {
+        //   std::cout << (1.0*i)/throat_count_ << '\n';
+        // }
         
         auto coef = -1.0/(
           (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
@@ -578,30 +617,113 @@ namespace xpm
           throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])));
 
         if (n0 == inlet()) {
-          free_terms[map[n1]] += coef/**1 Pa*/;
-          matrix.add_diag(map[n1], coef);
+          builder.add_b(map[n1], coef/**1 Pa*/);
+          builder.add_diag(map[n1], coef);
+
+          // lks.b[map[n1]] += coef/**1 Pa*/;
+          // lks.values[diag_shift[map[n1]]] += coef; // diag
         }
         else if (n1 == inlet()) {
-          free_terms[map[n0]] += coef/**1 Pa*/;
-          matrix.add_diag(map[n0], coef);
+          builder.add_b(map[n0], coef/**1 Pa*/);
+          builder.add_diag(map[n0], coef);
+
+          // lks.b[map[n0]] += coef/**1 Pa*/;
+          // lks.values[diag_shift[map[n0]]] += coef; // diag
         }
         else if (n0 == outlet()) {
-          // free_terms[n1] += coef/**0 Pa*/;
-          matrix.add_diag(map[n1], coef);
+          // builder.add_b(map[n1], coef/**0 Pa*/);
+          builder.add_diag(map[n1], coef);
+
+          // // free_terms[n1] += coef/**0 Pa*/;
+          // lks.values[diag_shift[map[n1]]] += coef; // diag
         }
         else if (n1 == outlet()) {
-          // free_terms[n0] += coef/**0 Pa*/;
-          matrix.add_diag(map[n0], coef);
+          // builder.add_b(map[n0], coef/**0 Pa*/);
+          builder.add_diag(map[n0], coef);
+
+          // // free_terms[n0] += coef/**0 Pa*/;
+          // lks.values[diag_shift[map[n0]]] += coef; // diag
         }
         else /*if (n0 != outlet() && n1 != outlet())*/ {
-          matrix.add_paired_diff_coef(map[n0], map[n1], -coef);
+          builder.set_connection(map[n0], map[n1], coef);
+
+          // lks.values[diag_shift[map[n0]]] += coef; // diag
+          // auto off_n0 = ++off_shift[map[n0]];
+          // lks.cols[off_n0] = map[n1];
+          // lks.values[off_n0] = -coef;
+          //
+          //
+          // lks.values[diag_shift[map[n1]]] += coef; // diag
+          // auto off_n1 = ++off_shift[map[n1]];
+          // lks.cols[off_n1] = map[n0];
+          // lks.values[off_n1] = -coef;
         }
       }
 
-      std::cout << "\n\nSparseMatrix created";
+      return lks;
 
-      return dpl::hypre::InputDeprec /*input*/{matrix, std::move(free_terms)};
 
+
+
+
+
+
+
+
+
+      // dpl::hypre::sparse_matrix_builder matrix(node_count_);
+      //
+      // std::vector<double> free_terms(node_count_, 0);
+      //
+      //
+      //
+      //
+      // std::cout << "\n\nSparseMatrix creation START...\n";
+      //
+      // for (pnm_idx i = 0; i < throat_count_; ++i) {
+      //   auto [n0, n1] = throat_[adj][i];
+      //
+      //   if (i%(throat_count_/10) == 0) {
+      //     std::cout << (1.0*i)/throat_count_ << '\n';
+      //   }
+      //   
+      //   auto coef = -1.0/(
+      //     (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
+      //     (inner_node(n1) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n1])) : 0.0) +
+      //     throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])));
+      //
+      //   if (n0 == inlet()) {
+      //     free_terms[map[n1]] += coef/**1 Pa*/;
+      //     matrix.add_diag(map[n1], coef);
+      //   }
+      //   else if (n1 == inlet()) {
+      //     free_terms[map[n0]] += coef/**1 Pa*/;
+      //     matrix.add_diag(map[n0], coef);
+      //   }
+      //   else if (n0 == outlet()) {
+      //     // free_terms[n1] += coef/**0 Pa*/;
+      //     matrix.add_diag(map[n1], coef);
+      //   }
+      //   else if (n1 == outlet()) {
+      //     // free_terms[n0] += coef/**0 Pa*/;
+      //     matrix.add_diag(map[n0], coef);
+      //   }
+      //   else /*if (n0 != outlet() && n1 != outlet())*/ {
+      //     matrix.add_paired_diff_coef(map[n0], map[n1], -coef);
+      //   }
+      // }
+      //
+      // std::cout << "\n\nSparseMatrix creation END|||";
+      //
+      // // getchar();
+      //
+      // std::cout << "\n\nInputDeprec creation START...";
+      //
+      // auto inputDepr = dpl::hypre::InputDeprec /*input*/{matrix, std::move(free_terms)};
+      //
+      // std::cout << "\n\nInputDeprec creation END|||";
+      //
+      // return inputDepr;
 
       // return input.Solve();
     }

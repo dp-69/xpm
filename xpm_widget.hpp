@@ -1007,12 +1007,13 @@ namespace xpm
       std::cout << "\n\nparallel_partitioning_END";
 
 
-      std::cout << "\n\nGeneratePressureInput_START";
+      std::cout << "\n\nGeneratePressureInput START...";
       
       auto input = pnm.generate_pressure_input(partitioning);
 
-      std::cout << "\n\nGeneratePressureInput_END";
-      
+      std::cout << "\n\nGeneratePressureInput END|||";
+
+      std::cout << "\n\nSave hypre input START...";
 
 
       {
@@ -1021,11 +1022,13 @@ namespace xpm
       
         {
           shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-          dpl::hypre::save(input, partitioning.rows_per_block, smo);
+          dpl::hypre::save(input.get_ref(), input.nvalues, partitioning.rows_per_block, smo);
           // input.save(smo);
         }
       
-        std::cout << "\n\nSaved hypre input";
+        std::cout << "\n\nSave hypre input END|||";
+
+        std::cout << "\n\nHypre solve MPI START...";
       
         auto start = std::chrono::high_resolution_clock::now();
       
@@ -1039,8 +1042,8 @@ namespace xpm
       
         auto stop = std::chrono::high_resolution_clock::now();
       
-        cout << "\n\nMPI hypre solve time: " <<
-          duration_cast<std::chrono::seconds>(stop - start).count() << "s" << endl;
+        cout << "\n\nHypre solve MPI: " <<
+          duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||" << endl;
       
       
         shared_memory_object smo{open_only, "xpm-hypre-output", read_only};

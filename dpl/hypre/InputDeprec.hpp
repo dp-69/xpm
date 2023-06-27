@@ -63,7 +63,7 @@ namespace dpl::hypre
   /**
    * \brief
    *    nrows = length(ncols) = length(b), number of rows
-   *    sum(ncols) = length(cols) = length(values), number of non-zero coefficients
+   *    nvalues = sum(ncols) = length(cols) = length(values), number of non-zero coefficients
    */
   struct ls_known_ref
   {
@@ -71,10 +71,108 @@ namespace dpl::hypre
     
     HYPRE_Int* ncols;       // number of non-zero columns
     HYPRE_BigInt* cols;     // non-zero columns
-    HYPRE_Complex* values;  // non-zero coefficients
+    HYPRE_Complex* values;  // non-zero coefs
 
     HYPRE_Complex* b;       // constant terms
   };
+
+  struct ls_known_storage
+  {
+    HYPRE_BigInt nrows;                       // number of rows
+    std::unique_ptr<HYPRE_Int[]> ncols;       // number of non-zero columns
+    std::unique_ptr<HYPRE_Complex[]> b;       // constant terms
+
+    size_t nvalues;                           // number of non-zero coefs
+    std::unique_ptr<HYPRE_BigInt[]> cols;     // non-zero columns
+    std::unique_ptr<HYPRE_Complex[]> values;  // non-zero coefs
+
+    auto get_ref() {
+      return ls_known_ref {
+        nrows,
+        ncols.get(),
+        cols.get(),
+        values.get(),
+        b.get()
+      };
+    }
+  };
+
+  class ls_known_storage_builder
+  {
+    ls_known_storage& lks;
+
+    std::unique_ptr<HYPRE_BigInt[]> diag_shift;
+    std::unique_ptr<HYPRE_BigInt[]> off_shift;
+
+  public:
+    explicit ls_known_storage_builder(ls_known_storage& storage)
+      : lks(storage) {}
+
+    // ReSharper disable CppMemberFunctionMayBeConst
+
+    void allocate_rows(HYPRE_BigInt nrows) {
+      lks.nrows = nrows;
+      lks.ncols = std::make_unique<HYPRE_Int[]>(nrows);
+      lks.b = std::make_unique<HYPRE_Complex[]>(nrows);
+
+      for (HYPRE_BigInt i = 0; i < nrows; ++i) {
+        lks.ncols[i] = 1; // diag coef
+        lks.b[i] = 0;
+      }
+
+      lks.nvalues = nrows;
+    }
+
+    void reserve_connection(HYPRE_BigInt i0, HYPRE_BigInt i1) {
+      ++lks.ncols[i0];
+      ++lks.ncols[i1];
+      lks.nvalues += 2;
+    }
+
+    void allocate_values() {
+      lks.cols = std::make_unique<HYPRE_BigInt[]>(lks.nvalues);
+      lks.values = std::make_unique<HYPRE_Complex[]>(lks.nvalues);
+
+      diag_shift = std::make_unique<HYPRE_BigInt[]>(lks.nrows);
+      off_shift = std::make_unique<HYPRE_BigInt[]>(lks.nrows);
+
+      diag_shift[0] = 0;
+      off_shift[0] = 0; // pre increment will be required
+      lks.cols[0] = 0;
+      lks.values[0] = 0; // diag
+      
+      for (HYPRE_BigInt i = 1; i < lks.nrows; ++i) {
+        auto s = diag_shift[i - 1] + lks.ncols[i - 1];
+        diag_shift[i] = s;
+        off_shift[i] = s; // pre increment will be required
+        lks.cols[s] = i;
+        lks.values[s] = 0; // diag
+      }
+    }
+
+    void add_b(HYPRE_BigInt i, double x) {
+      lks.b[i] += x;
+    }
+
+    void add_diag(HYPRE_BigInt i, double x) {
+      lks.values[diag_shift[i]] += x;
+    }
+
+    void set_connection(HYPRE_BigInt i0, HYPRE_BigInt i1, double x) {
+      lks.values[diag_shift[i0]] += x; // diag
+      auto off_i0 = ++off_shift[i0];
+      lks.cols[off_i0] = i1;
+      lks.values[off_i0] = -x;
+
+      lks.values[diag_shift[i1]] += x; // diag
+      auto off_i1 = ++off_shift[i1];
+      lks.cols[off_i1] = i0;
+      lks.values[off_i1] = -x;
+    }
+
+    // ReSharper restore CppMemberFunctionMayBeConst
+  };
+
 
 
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
@@ -260,8 +358,8 @@ namespace dpl::hypre
             
       for (HYPRE_Int row_idx = 0, coef_idx = 0; row_idx < nrows; row_idx++) {                
         auto diag_idx = coef_idx++;
-        cols_of_coefs[diag_idx] = row_idx;
-        coefs[diag_idx] = m.diag[row_idx];        
+        cols_of_coefs[diag_idx] = row_idx; // diagonal coef
+        coefs[diag_idx] = m.diag[row_idx]; //       
         
         for (auto [j, j_off_coef] : m.off_diag[row_idx]) {
           ++ncols_per_row[row_idx];
@@ -380,6 +478,44 @@ namespace dpl::hypre
       ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
 
       std::memcpy(ptr, input.coefs.data(), coefs_count*sizeof(HYPRE_Complex));
+      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Complex);
+
+      std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
+    }
+
+    inline void save(const ls_known_ref& input, auto nvalues, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
+      // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
+      using namespace boost::interprocess;
+
+      
+      auto coefs_count = nvalues;
+      
+      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(HYPRE_BigInt) +
+        input.nrows*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex))
+      + coefs_count*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
+        blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
+      
+      smo.truncate(buffer_size);
+      
+      mapped_region region(smo, read_write);
+      auto* ptr = region.get_address();
+
+      *(HYPRE_BigInt*)ptr = input.nrows;
+      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+      
+      *(HYPRE_BigInt*)ptr = coefs_count;
+      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+      
+      std::memcpy(ptr, input.ncols, input.nrows*sizeof(HYPRE_BigInt));
+      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_BigInt);
+
+      std::memcpy(ptr, input.b, input.nrows*sizeof(HYPRE_Complex));
+      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
+
+      std::memcpy(ptr, input.cols, coefs_count*sizeof(HYPRE_BigInt));
+      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
+
+      std::memcpy(ptr, input.values, coefs_count*sizeof(HYPRE_Complex));
       ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Complex);
 
       std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
