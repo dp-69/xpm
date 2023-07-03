@@ -33,9 +33,9 @@ int main(int argc, char* argv[])
     
     MPI_Init(&argc, &argv);
   
-    int w_size, w_rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &w_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
+    int mpi_size, mpi_rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 
     static constexpr auto root = 0;
     
@@ -44,7 +44,8 @@ int main(int argc, char* argv[])
     // MPI_Get_processor_name(processor_name, &name_len);
 
     // std::cout << std::format("Hello world from {}/{} (proc ID {})\n",
-    //   w_rank, w_size, GetCurrentProcessId()) << std::flush;
+    //   mpi_rank, mpi_size, GetCurrentProcessId()) << std::flush;
+    // MPI_Barrier(MPI_COMM_WORLD);
 
 
     // using namespace std::chrono;
@@ -80,13 +81,29 @@ int main(int argc, char* argv[])
       dpl::hypre::mpi_block::range = *range_ptr;
       auto [jlower, jupper] = dpl::hypre::mpi_block::range; //dpl::hypre::mpi_part(lk_ref.nrows);
     #endif
-  
+
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (mpi_rank == root) {
+      // std::cout << std::format("rank {}, range {}--{}", mpi_rank, dpl::hypre::mpi_block::range.first, dpl::hypre::mpi_block::range.second) << std::flush;
+      // std::cout << "\n\nPRE_GATHER" << std::flush;
+    // }
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+
     auto count = jupper - jlower + 1;
     
     auto indices = std::make_unique<HYPRE_BigInt[]>(count);
     for (HYPRE_BigInt i = 0; i < count; ++i)
       indices[i] = jlower + i;
     auto pressure_part = std::make_unique<HYPRE_Complex[]>(count);
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (mpi_rank == root)
+    //   std::cout << "\n\nPRE_SOLVE" << std::flush;
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    // try {
 
     dpl::hypre::solve(
       lk_ref/*.get_ref()*/,
@@ -96,29 +113,47 @@ int main(int argc, char* argv[])
         pressure_part.get()
       });
 
+    // }
+    // catch (std::exception& e){
+    //   std::cout << std::format("exception in rank {}", mpi_rank) << std::flush;
+    // }
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (w_rank == root) {
+    //   std::cout << "\n\nPOST_SOLVE" << std::flush;
+    // }
+    // MPI_Barrier(MPI_COMM_WORLD);
+
 
     // auto pressure_part = input.Solve();
 
     // if (w_rank == root)
     //   t2 = std::chrono::high_resolution_clock::now();
 
-    std::unique_ptr<double[]> pressure;
+    std::unique_ptr<double[]> pressure_utpr;
     // std::vector<double> pressure;
-    double* receive_ptr = nullptr; 
+    double* recvbuf = nullptr; 
 
 
-    // TODO: memory leaks into std::unique_ptr
+    std::unique_ptr<int[]> recvcounts_utpr;
+    std::unique_ptr<int[]> displs_utpr;
     int* recvcounts = nullptr;
     int* displs = nullptr;
     
-    if (w_rank == root) {
-      receive_ptr = new double[lk_ref.nrows];
-      pressure.reset(receive_ptr);
+    if (mpi_rank == root) {
+      recvbuf = new double[lk_ref.nrows];
+      recvcounts = new int[mpi_size];
+      displs = new int[mpi_size];
 
-      recvcounts = new int[w_size];
-      displs = new int[w_size];
+      pressure_utpr.reset(recvbuf);
+      recvcounts_utpr.reset(recvcounts);
+      displs_utpr.reset(displs);
 
-      for (int i = 0; i < w_size; ++i) {
+
+      for (int i = 0; i < mpi_size; ++i) {
         recvcounts[i] = range_ptr[i].second - range_ptr[i].first + 1;
         displs[i] = range_ptr[i].first;
       }
@@ -126,13 +161,9 @@ int main(int argc, char* argv[])
 
     
     
-
-    // if (w_rank == root) {
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (mpi_rank == root)
     //   std::cout << "\n\nPRE_GATHER" << std::flush;
-    //   
-    // }
-    //
-    //
     // MPI_Barrier(MPI_COMM_WORLD);
 
     
@@ -140,8 +171,14 @@ int main(int argc, char* argv[])
 
     MPI_Gatherv(
       pressure_part.get(), count, MPI_DOUBLE,
-      receive_ptr, recvcounts, displs, MPI_DOUBLE,
+      recvbuf, recvcounts, displs, MPI_DOUBLE,
       root, MPI_COMM_WORLD);
+
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (mpi_rank == root)
+    //   std::cout << "\n\nPOST_GATHER" << std::flush;
+    // MPI_Barrier(MPI_COMM_WORLD);
 
     // if (w_rank == root)
     //   t3 = std::chrono::high_resolution_clock::now();
@@ -149,14 +186,14 @@ int main(int argc, char* argv[])
     {
       // auto from_pnm = pnm.GenerateInput();
       
-      if (w_rank == root) {
+      if (mpi_rank == root) {
         // auto sum = std::accumulate(pressure.begin(), pressure.end(), 0.0);
 
 
         shared_memory_object smo{open_or_create, "xpm-hypre-output", read_write};
         smo.truncate(lk_ref.nrows*sizeof(double));
         mapped_region region(smo, read_write);
-        std::memcpy(region.get_address(), receive_ptr, lk_ref.nrows*sizeof(double));
+        std::memcpy(region.get_address(), recvbuf, lk_ref.nrows*sizeof(double));
 
 
         // std::cout <<

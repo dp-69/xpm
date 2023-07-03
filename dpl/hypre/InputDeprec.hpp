@@ -95,81 +95,86 @@ namespace dpl::hypre
         b.get()
       };
     }
+
+
   };
 
   class ls_known_storage_builder
   {
-    ls_known_storage& lks;
+    ls_known_storage lks_;
 
     std::unique_ptr<HYPRE_BigInt[]> diag_shift;
     std::unique_ptr<HYPRE_BigInt[]> off_shift;
 
   public:
-    explicit ls_known_storage_builder(ls_known_storage& storage)
-      : lks(storage) {}
+    // explicit ls_known_storage_builder(ls_known_storage& storage)
+    //   : lks_(storage) {}
 
     // ReSharper disable CppMemberFunctionMayBeConst
 
     void allocate_rows(HYPRE_BigInt nrows) {
-      lks.nrows = nrows;
-      lks.ncols = std::make_unique<HYPRE_Int[]>(nrows);
-      lks.b = std::make_unique<HYPRE_Complex[]>(nrows);
+      lks_.nrows = nrows;
+      lks_.ncols = std::make_unique<HYPRE_Int[]>(nrows);
+      lks_.b = std::make_unique<HYPRE_Complex[]>(nrows);
 
       for (HYPRE_BigInt i = 0; i < nrows; ++i) {
-        lks.ncols[i] = 1; // diag coef
-        lks.b[i] = 0;
+        lks_.ncols[i] = 1; // diag coef
+        lks_.b[i] = 0;
       }
 
-      lks.nvalues = nrows;
+      lks_.nvalues = nrows;
     }
 
     void reserve_connection(HYPRE_BigInt i0, HYPRE_BigInt i1) {
-      ++lks.ncols[i0];
-      ++lks.ncols[i1];
-      lks.nvalues += 2;
+      ++lks_.ncols[i0];
+      ++lks_.ncols[i1];
+      lks_.nvalues += 2;
     }
 
     void allocate_values() {
-      lks.cols = std::make_unique<HYPRE_BigInt[]>(lks.nvalues);
-      lks.values = std::make_unique<HYPRE_Complex[]>(lks.nvalues);
+      lks_.cols = std::make_unique<HYPRE_BigInt[]>(lks_.nvalues);
+      lks_.values = std::make_unique<HYPRE_Complex[]>(lks_.nvalues);
 
-      diag_shift = std::make_unique<HYPRE_BigInt[]>(lks.nrows);
-      off_shift = std::make_unique<HYPRE_BigInt[]>(lks.nrows);
+      diag_shift = std::make_unique<HYPRE_BigInt[]>(lks_.nrows);
+      off_shift = std::make_unique<HYPRE_BigInt[]>(lks_.nrows);
 
       diag_shift[0] = 0;
       off_shift[0] = 0; // pre increment will be required
-      lks.cols[0] = 0;
-      lks.values[0] = 0; // diag
+      lks_.cols[0] = 0;
+      lks_.values[0] = 0; // diag
       
-      for (HYPRE_BigInt i = 1; i < lks.nrows; ++i) {
-        auto s = diag_shift[i - 1] + lks.ncols[i - 1];
+      for (HYPRE_BigInt i = 1; i < lks_.nrows; ++i) {
+        auto s = diag_shift[i - 1] + lks_.ncols[i - 1];
         diag_shift[i] = s;
         off_shift[i] = s; // pre increment will be required
-        lks.cols[s] = i;
-        lks.values[s] = 0; // diag
+        lks_.cols[s] = i;
+        lks_.values[s] = 0; // diag
       }
     }
 
-    void add_b(HYPRE_BigInt i, double x) {
-      lks.b[i] += x;
+    void add_b(HYPRE_BigInt i, double value) {
+      lks_.b[i] += value;
     }
 
-    void add_diag(HYPRE_BigInt i, double x) {
-      lks.values[diag_shift[i]] += x;
+    void add_diag(HYPRE_BigInt i, double value) {
+      lks_.values[diag_shift[i]] += value;
     }
 
-    void set_connection(HYPRE_BigInt i0, HYPRE_BigInt i1, double x) {
-      lks.values[diag_shift[i0]] += x; // diag
+    void set_connection(HYPRE_BigInt i0, HYPRE_BigInt i1, double value) {
+      lks_.values[diag_shift[i0]] += value; // diag
       auto off_i0 = ++off_shift[i0];
-      lks.cols[off_i0] = i1;
-      lks.values[off_i0] = -x;
+      lks_.cols[off_i0] = i1;
+      lks_.values[off_i0] = -value;
 
-      lks.values[diag_shift[i1]] += x; // diag
+      lks_.values[diag_shift[i1]] += value; // diag
       auto off_i1 = ++off_shift[i1];
-      lks.cols[off_i1] = i0;
-      lks.values[off_i1] = -x;
+      lks_.cols[off_i1] = i0;
+      lks_.values[off_i1] = -value;
     }
 
+    auto get_storage() {
+      return std::move(lks_);
+    }
     // ReSharper restore CppMemberFunctionMayBeConst
   };
 
@@ -293,25 +298,52 @@ namespace dpl::hypre
       // HYPRE_BoomerAMGSetTruncFactor(solver, 0);
 
       // ReSharper disable CppInconsistentNaming
-      ij_matrix A_matrix{in.nrows, in.ncols, in.cols, in.values};
-      ij_vector b_vector{in.nrows, in.b};
-      ij_vector x_vector{in.nrows};
+      ij_matrix ij_A{in.nrows, in.ncols, in.cols, in.values};
+      ij_vector ij_b{in.nrows, in.b};
+      ij_vector ij_x{in.nrows};
       
-      auto* ref_A = A_matrix.par_ref();
-      auto* ref_b = b_vector.par_ref();
-      auto* ref_x = x_vector.par_ref();
+      auto* ref_A = ij_A.par_ref();
+      auto* ref_b = ij_b.par_ref();
+      auto* ref_x = ij_x.par_ref();
       // ReSharper restore CppInconsistentNaming
-      
+
+
+
       // const auto t0 = std::chrono::system_clock::now();
 
+
+      // int w_rank;
+      // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
+      //
+      // MPI_Barrier(MPI_COMM_WORLD);
+      // if (w_rank == 0)
+      //   std::cout << "\n\nPRE_HYPRE_BoomerAMGSetup" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
       HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
+
+      //   std::cout << "\n\n----LLULLL" << std::flush;
+      //
+      // MPI_Barrier(MPI_COMM_WORLD);
+      // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
+      // if (w_rank == 0)
+      //   std::cout << "\n\nPRE_HYPRE_BoomerAMGSolve" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
       HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
+
+      // MPI_Barrier(MPI_COMM_WORLD);
+      // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
+      // if (w_rank == 0)
+      //   std::cout << "\n\nPOST_HYPRE_BoomerAMGSolve" << std::flush;
+      // MPI_Barrier(MPI_COMM_WORLD);
+
 
       // const auto t1 = std::chrono::system_clock::now();
       // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
       HYPRE_BoomerAMGDestroy(solver);                  
     
-      x_vector.get_values(out.nvalues, out.indices, out.values);
+      ij_x.get_values(out.nvalues, out.indices, out.values);
     }
 
 
@@ -370,74 +402,6 @@ namespace dpl::hypre
         }                                                
       }          
     }
-    
-    // void Solve(HYPRE_BigInt* indices_ptr, HYPRE_Int indices_count, HYPRE_Complex* output_ptr) {                  
-    //   HYPRE_Solver solver;
-    //   
-    //   HYPRE_BoomerAMGCreate(&solver);      
-    //
-    //   HYPRE_BoomerAMGSetTol(solver, 1.e-20);
-    //   
-    //   // ReSharper disable once CppInconsistentNaming
-    //   ij_matrix A_ij_matrix{nrows, ncols_per_row.data(), cols_of_coefs.data(), coefs.data()};
-    //   ij_vector b_ij_vector{nrows, constants.data()};
-    //   ij_vector x_ij_vector{nrows};
-    //   
-    //   auto* ref_A = A_ij_matrix.par_ref();
-    //   auto* ref_b = b_ij_vector.par_ref();
-    //   auto* ref_x = x_ij_vector.par_ref();           
-    //   
-    //   // const auto t0 = std::chrono::system_clock::now();
-    //   // result = HYPRE_AMSSetup(solver, A_parcsr, B_par, x_par);
-    //   // result = HYPRE_AMSSolve(solver, A_parcsr, B_par, x_par);
-    //
-    //   HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
-    //   HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
-    //
-    //   // char msg[2048];
-    //   // if (result)
-    //   //   HYPRE_DescribeError(result, msg);
-    //   // HYPRE_ClearError(HYPRE_ERROR_CONV);
-    //   
-    //   // const auto t1 = std::chrono::system_clock::now();
-    //   // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
-    //   HYPRE_BoomerAMGDestroy(solver);                  
-    //
-    //   x_ij_vector.get_values(indices_count, indices_ptr, output_ptr);
-    // }
-    
-    // void Solve(HYPRE_BigInt count, HYPRE_Complex* output_ptr) {
-    //   std::vector<HYPRE_Int> indices(count);
-    //   for (HYPRE_Int i = 0; i < count; ++i)
-    //     indices[i] = i;
-    //   
-    //   Solve(indices.data(), count, output_ptr);  
-    // }
-
-    // auto Solve() {
-    //   #ifdef HYPRE_SEQUENTIAL
-    //     static constexpr auto jlower = 0;
-    //     const auto jupper = nrows - 1;
-    //   #else
-    //     auto [jlower, jupper] = mpi_part(nrows);
-    //   #endif
-    //
-    //   auto count = jupper - jlower + 1;
-    //
-    //   ls_unknown_storage lus{count, jlower}; 
-    //
-    //   // for (HYPRE_BigInt i = 0; i < count; ++i)
-    //   //   lus.data[keys::index][i] = jlower + i;
-    //
-    //   solve(get_ref(), lus.get_ref());
-    //   
-    //   std::vector<double> x(count);
-    //   for (HYPRE_BigInt i = 0; i < count; ++i)
-    //     x[i] = lus.data[keys::value][i];
-    //
-    //   return x;
-    // }
-
   };
 
 
@@ -484,9 +448,7 @@ namespace dpl::hypre
     }
 
     inline void save(const ls_known_ref& input, auto nvalues, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
-      // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
       using namespace boost::interprocess;
-
       
       auto coefs_count = nvalues;
       
@@ -520,37 +482,6 @@ namespace dpl::hypre
 
       std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
     }
-
-    // inline void load(smo_t& smo, InputDeprec& input) {
-    //   using namespace boost::interprocess;
-    //
-    //   mapped_region region(smo, read_only);
-    //
-    //   auto* ptr = region.get_address();
-    //
-    //   input.nrows = *(HYPRE_BigInt*)ptr;
-    //   ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-    //
-    //   auto coefs_count = *(HYPRE_BigInt*)ptr;
-    //   ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-    //
-    //
-    //   input.ncols_per_row.resize(input.nrows);
-    //   std::memcpy(input.ncols_per_row.data(), ptr, input.nrows*sizeof(HYPRE_BigInt));
-    //   ptr = (char*)ptr + input.nrows*sizeof(HYPRE_BigInt);
-    //   
-    //   input.constants.resize(input.nrows);
-    //   std::memcpy(input.constants.data(), ptr, input.nrows*sizeof(HYPRE_Complex));
-    //   ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
-    //   
-    //   input.cols_of_coefs.resize(coefs_count);
-    //   std::memcpy(input.cols_of_coefs.data(), ptr, coefs_count*sizeof(HYPRE_BigInt));
-    //   ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
-    //   
-    //   input.coefs.resize(coefs_count);
-    //   std::memcpy(input.coefs.data(), ptr, coefs_count*sizeof(HYPRE_Complex));
-    //   // ptr += nrows*sizeof(HYPRE_Complex);
-    // }
 #endif
 
 }
