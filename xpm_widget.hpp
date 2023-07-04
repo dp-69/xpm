@@ -426,24 +426,24 @@ namespace xpm
     
   public:
     void LoadImage() {
-      // auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)";
-      // auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
-      // constexpr struct
-      // {
-      //   std::uint8_t solid = 1;       // dummy value, no '1' is in the image
-      //   std::uint8_t pore = 255;
-      //   std::uint8_t microporous = 0; // we read actual solid '0' as microporous
-      // } input_spec;
-
-
-      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)";
+      auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
       constexpr struct
       {
-        std::uint8_t solid = 3;       
-        std::uint8_t pore = 0;
-        std::uint8_t microporous = 2;  
+        std::uint8_t solid = 1;       // dummy value, no '1' is in the image
+        std::uint8_t pore = 255;
+        std::uint8_t microporous = 0; // we read actual solid '0' as microporous
       } input_spec;
+
+
+      // auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      // auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      // constexpr struct
+      // {
+      //   std::uint8_t solid = 3;       
+      //   std::uint8_t pore = 0;
+      //   std::uint8_t microporous = 2;  
+      // } input_spec;
 
 
 
@@ -591,15 +591,21 @@ namespace xpm
     
     
     void Init() {
-      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
-      // v3i dim = 252;
+      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
+      v3i dim = 252;
 
-      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
-      v3i dim = 500;
+      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      // v3i dim = 500;
 
+      v3i processors{1};
 
-      // v3i processors{1};
-      v3i processors{4, 4, 2};
+      auto proc_count = std::thread::hardware_concurrency();
+
+      if (proc_count == 12)
+        processors = {2, 2, 3};
+      else if (proc_count == 32)
+        processors = {4, 4, 2};
+
 
       using std::filesystem::path;
 
@@ -611,21 +617,13 @@ namespace xpm
       auto cache_path = std::format("cache/{}-pressure-{:.2f}mD.bin",
         path(pnm_path).parent_path().filename().string(), const_permeability/darcy_term*1e3);
 
-      
-      
-
-
 
 
       // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\10x10x10\10x10x10)"
       // R"(C:\dev\.temp\images\SS-1000\XNet)"
       // R"(E:\hwu\research126\d\modelling\networks\TwoScaleNet\MulNet)"
 
-
-
-
       // auto filter = [this](pnm_idx idx) { return phase_arr[idx] == presets::microporous; };
-
 
       
       qvtk_widget_ = new QVTKWidgetRef;
@@ -695,7 +693,6 @@ namespace xpm
       // setCentralWidget(qvtk_widget_);
 
 
-
       dpl::vtk::PopulateLutRedWhiteBlue(lut_pressure_);
       dpl::vtk::PopulateLutRedWhiteBlue(lut_continuous_);
 
@@ -703,6 +700,7 @@ namespace xpm
 
       pore_network_model pnm{pnm_path, pore_network_model::file_format::statoil};
 
+      
 
       std::cout << "\n\nNetwork loaded";
 
