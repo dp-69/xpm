@@ -289,7 +289,7 @@ namespace dpl::hypre
       
       HYPRE_BoomerAMGCreate(&solver);      
 
-      HYPRE_BoomerAMGSetTol(solver, 1.e-20);
+      HYPRE_BoomerAMGSetTol(solver, 1.e-40);
       // HYPRE_BoomerAMGSetCoarsenType(solver, 10);
       // HYPRE_BoomerAMGSetRestriction(solver, 2);
       // HYPRE_BoomerAMGSetTruncFactor(solver, 4);

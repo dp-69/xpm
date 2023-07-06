@@ -6,6 +6,7 @@
 #include <dpl/soa.hpp>
 
 #include <boost/iostreams/device/mapped_file.hpp>
+#include <boost/pending/disjoint_sets.hpp>
 
 #include <concepts>
 #include <filesystem>
@@ -595,6 +596,36 @@ namespace xpm
       }
 
       return builder.get_storage();
+    }
+
+
+
+    auto ConnectedClusters() {
+      std::vector<pnm_idx> parent(100);
+      std::vector<std::uint16_t> rank(100);
+
+      std::iota(parent.begin(), parent.end(), 0);
+
+      boost::disjoint_sets ds0{rank.data(), parent.data()};
+      
+
+      ds0.union_set(1, 20);
+      ds0.union_set(1, 5);
+
+
+      boost::disjoint_sets ds{rank.data(), parent.data()};
+
+
+
+      auto k1 = ds.find_set(1);
+      auto k2 = ds.find_set(2);
+
+      auto k5 = ds.find_set(5);
+
+      auto k20 = ds.find_set(20);
+
+      return ds;
+
     }
   };
 }

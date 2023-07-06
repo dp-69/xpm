@@ -66,6 +66,7 @@ add_executable(xpm_project # WIN32
 target_include_directories(xpm_project PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_compile_features(xpm_project PUBLIC cxx_std_20)
 
+target_compile_definitions(xpm_project PRIVATE XPM_DEBUG_OUTPUT)
 
 
 add_subdirectory(dpl)
