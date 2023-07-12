@@ -343,10 +343,10 @@ namespace dpl
 
 
   
-  template <typename Type, int n>
-  class vector_n : public _vector_oper<vector_n<Type, n>, Type, n>
+  template <typename T, int n>
+  class vector_n : public _vector_oper<vector_n<T, n>, T, n>
   {
-    Type ptr_[n];
+    T ptr_[n];
 
     template <typename V_, typename ...Rest>
     constexpr void _assign(const V_& val, Rest... args) {
@@ -373,26 +373,26 @@ namespace dpl
       return ptr_[i];
     }
 
-    friend class _vector_oper<vector_n<Type, n>, Type, n>;
-    friend class _vector_rec<vector_n<Type, n>, Type, 0>;
-    friend class _vector_rec<vector_n<Type, n>, Type, 1>;
-    friend class _vector_rec<vector_n<Type, n>, Type, 2>;
+    friend class _vector_oper<vector_n<T, n>, T, n>;
+    friend class _vector_rec<vector_n<T, n>, T, 0>;
+    friend class _vector_rec<vector_n<T, n>, T, 1>;
+    friend class _vector_rec<vector_n<T, n>, T, 2>;
 
   public:
-    operator Type*() { return ptr_; }
-    operator const Type*() const { return ptr_; }
+    operator T*() { return ptr_; }
+    operator const T*() const { return ptr_; }
     
     vector_n() = default;
 
 
-    template <typename U, std::enable_if_t<std::is_same_v<U, Type> || std::is_arithmetic_v<U>, int> = 0>
+    template <typename U, std::enable_if_t<std::is_same_v<U, T> || std::is_arithmetic_v<U>, int> = 0>
     constexpr vector_n(const U val) : ptr_{} {
       sfor<n>([&](auto i) { ptr_[i] = val; });
     }
 
     template <typename ...Args,
       std::enable_if_t<sizeof...(Args) == n && 
-      are_assignable<Type&, Args...>::value
+      are_assignable<T&, Args...>::value
       , int> = 0>
     constexpr vector_n(Args... args) : ptr_{} {
       // static_assert(sizeof...(Args) == n_, "Number of arguments is not equal to the size of vector");
@@ -458,10 +458,10 @@ namespace dpl
 
 
   
-  template <typename Type, int n>
-  class vector_n_map : public _vector_oper<vector_n_map<Type, n>, Type, n>
+  template <typename T, int n>
+  class vector_n_map : public _vector_oper<vector_n_map<T, n>, T, n>
   {
-    Type* ptr_;
+    T* ptr_;
 
     template <int i>
     auto& _get() {
@@ -481,16 +481,16 @@ namespace dpl
       return ptr_[i];
     }
 
-    friend class _vector_oper<vector_n_map<Type, n>, Type, n>;
-    friend class _vector_rec<vector_n_map<Type, n>, Type, 0>;
-    friend class _vector_rec<vector_n_map<Type, n>, Type, 1>;
-    friend class _vector_rec<vector_n_map<Type, n>, Type, 2>;
+    friend class _vector_oper<vector_n_map<T, n>, T, n>;
+    friend class _vector_rec<vector_n_map<T, n>, T, 0>;
+    friend class _vector_rec<vector_n_map<T, n>, T, 1>;
+    friend class _vector_rec<vector_n_map<T, n>, T, 2>;
 
   public:
-    operator Type*() { return ptr_; }
-    operator const Type*() const { return ptr_; }
+    operator T*() { return ptr_; }
+    operator const T*() const { return ptr_; }
 
-    vector_n_map(Type* ptr) : ptr_(ptr) {}
+    vector_n_map(T* ptr) : ptr_(ptr) {}
   };
 
 

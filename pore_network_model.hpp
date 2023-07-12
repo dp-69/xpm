@@ -1,95 +1,13 @@
 #pragma once
 
 
+#include "declarations.hpp"
+
 #include <dpl/hypre/InputDeprec.hpp>
-#include <dpl/static_vector.hpp>
 #include <dpl/soa.hpp>
-
-#include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/pending/disjoint_sets.hpp>
-
-#include <concepts>
-#include <filesystem>
-// #include <fstream>
-#include <vector>
-#include <cstring>
-
-#include <stdint.h>
-
-
-
-
-
 
 namespace xpm
 {
-  using v3i = dpl::vector3i;
-  using v3d = dpl::vector3d;
-
-  namespace voxel_tag
-  {
-    struct phase
-    {
-      std::uint8_t value;
-
-      friend bool operator==(const phase& lhs, const phase& rhs) { return lhs.value == rhs.value; }
-      friend bool operator!=(const phase& lhs, const phase& rhs) { return !(lhs == rhs); }
-    };
-
-    /**
-     * \brief
-     *   -2: non-pore (solid or microporous) | the same
-     *   -1: inlet/outlet (do not know?) | the same
-     *   >=0: pore clusters
-     */
-    struct velem
-    {
-      std::int32_t value;
-
-      bool non_pore() {
-        return value == -2;
-      }
-    };
-
-
-  }
-
-  namespace presets
-  {
-    static inline constexpr voxel_tag::phase pore = {0};
-    static inline constexpr voxel_tag::phase solid = {1};
-    static inline constexpr voxel_tag::phase microporous = {2};  
-  }
-
-  namespace geometric_properties
-  {
-    struct equilateral_triangle_properties
-    {
-      static constexpr double area(double r_ins = 1) {
-        return 5.19615242271*r_ins*r_ins;
-      }
-
-      // k * G, k - coefficient, G - shape factor
-      static constexpr double conductance(double area = 1, double viscosity = 1) {
-        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
-      }
-    };
-  }
-  
-  namespace attribs {
-    def_static_key(pos)
-    def_static_key(r_ins)
-    def_static_key(adj)
-    def_static_key(length)
-    def_static_key(length0)
-    def_static_key(length1)
-  }
-
-  using mapped_file_source = boost::iostreams::mapped_file_source;
-  
-  using pnm_idx = int64_t;
-  using pnm_3idx = dpl::vector_n<pnm_idx, 3>;
-  
   class pore_network_model
   {
     static void skip_until(char* &ptr, char val) {   
@@ -195,7 +113,7 @@ namespace xpm
     // }
     
     
-    pnm_idx parse_statoil_text_idx(std::integral auto idx) const {
+    idx1d_t parse_statoil_text_idx(std::integral auto idx) const {
       if (idx == -1)
         return node_count_;
   
@@ -217,8 +135,8 @@ namespace xpm
      *    INLET_IDX = node_count_ \n
      *    OUTLET_IDX = node_count_ + 1
      */
-    pnm_idx node_count_ = 0;
-    pnm_idx throat_count_ = 0;
+    idx1d_t node_count_ = 0;
+    idx1d_t throat_count_ = 0;
 
 
     dpl::soa<
@@ -227,7 +145,7 @@ namespace xpm
     > node_;
 
     dpl::soa<
-      attribs::adj_t, std::pair<pnm_idx, pnm_idx>,
+      attribs::adj_t, std::pair<idx1d_t, idx1d_t>,
       attribs::r_ins_t, double,
       attribs::length_t, double,
       attribs::length0_t, double,
@@ -301,7 +219,7 @@ namespace xpm
     /**
      * \brief inlet and outlet are outer nodes, other nodes are inner.
      */
-    bool inner_node(pnm_idx i) const {
+    bool inner_node(idx1d_t i) const {
       return i < node_count_;
     }
 
@@ -329,7 +247,7 @@ namespace xpm
     void read_from_binary_file(const std::filesystem::path& network_path) {
       using namespace attribs;
 
-      mapped_file_source file(network_path.string());
+      boost::iostreams::mapped_file_source file(network_path.string());
       auto* ptr = const_cast<char*>(file.data());
 
       parse_bin(ptr, node_count_);
@@ -341,7 +259,7 @@ namespace xpm
       parse_bin(ptr, node_.ptr(pos), node_count_);
       parse_bin(ptr, node_.ptr(r_ins), node_count_);
       
-      for (pnm_idx i = 0; i < throat_count_; ++i) {
+      for (idx1d_t i = 0; i < throat_count_; ++i) {
         dpl::vector2i pair;
         parse_bin(ptr, pair);
         throat_[adj][i] = {pair.x(), pair.y()};
@@ -362,14 +280,14 @@ namespace xpm
       auto network_path_str = network_path.string();
 
       {
-        mapped_file_source node1_file(network_path_str + "_node1.dat");
+        boost::iostreams::mapped_file_source node1_file(network_path_str + "_node1.dat");
         auto* node1_ptr = const_cast<char*>(node1_file.data());
         parse_text(node1_ptr, node_count_);
         parse_text(node1_ptr, physical_size);
 
         node_.resize(node_count_);
         
-        for (pnm_idx i = 0, count = node_count_; i < count; ++i) {
+        for (idx1d_t i = 0, count = node_count_; i < count; ++i) {
           skip_word(node1_ptr);
           parse_text(node1_ptr, node_[pos][i]);
           skip_line(node1_ptr);
@@ -377,15 +295,15 @@ namespace xpm
       }
 
       {
-        mapped_file_source throat1_file(network_path_str + "_link1.dat");
+        boost::iostreams::mapped_file_source throat1_file(network_path_str + "_link1.dat");
         auto* throat1_ptr = const_cast<char*>(throat1_file.data());
         parse_text(throat1_ptr, throat_count_);   
 
         throat_.resize(throat_count_);
         
-        pnm_idx value;
+        idx1d_t value;
         
-        for (pnm_idx i = 0; i < throat_count_; ++i) {       
+        for (idx1d_t i = 0; i < throat_count_; ++i) {       
           skip_word(throat1_ptr);
 
           parse_text(throat1_ptr, value);
@@ -402,10 +320,10 @@ namespace xpm
       }      
 
       {
-        mapped_file_source throat2_file(network_path_str + "_link2.dat");
+        boost::iostreams::mapped_file_source throat2_file(network_path_str + "_link2.dat");
         auto* throat2_ptr = const_cast<char*>(throat2_file.data());
 
-        for (pnm_idx i = 0; i < throat_count_; ++i) {
+        for (idx1d_t i = 0; i < throat_count_; ++i) {
           dpl::sfor<3>([&throat2_ptr] {
             skip_word(throat2_ptr);  
           });
@@ -419,14 +337,14 @@ namespace xpm
       }
 
       {
-        mapped_file_source node2_file(network_path_str + "_node2.dat");
+        boost::iostreams::mapped_file_source node2_file(network_path_str + "_node2.dat");
         auto* node2_ptr = const_cast<char*>(node2_file.data());        
 
         // auto r_ins_node = r_ins_.begin() + throat_count_;
         // auto volume_node = volume.begin() + throat_count_;
         // auto shape_factor_node = shapeFactor.begin() + throat_count_;
 
-        for (pnm_idx i = 0, count = node_count_; i < count; i++) {          
+        for (idx1d_t i = 0, count = node_count_; i < count; i++) {          
           skip_word(node2_ptr);
           skip_word(node2_ptr); // parse_text(node2_ptr, volume_node[i]); // TODO
           parse_text(node2_ptr, node_[r_ins][i]);
@@ -450,34 +368,7 @@ namespace xpm
 
 
 
-    /**
-     * \brief
-     * input file value description
-     *   -2: solid (validated),
-     *   -1: inlet/outlet (do not know?),
-     *   0, 1: do not exist (validated),
-     *   >=2: cluster (0, 1 are inlet and outlet node indices in Statoil format)
-     */
-    static std::unique_ptr<voxel_tag::velem[]> read_icl_velems(const std::filesystem::path& network_path, const pnm_3idx& dim) {
-      mapped_file_source file(network_path.string() + "_VElems.raw");
-      const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
-
-      auto result = std::make_unique<voxel_tag::velem[]>(dim.prod());
-      auto* ptr = result.get();
-
-      pnm_3idx velems_factor{1, dim.x() + 2, (dim.x() + 2)*(dim.y() + 2)};
-      pnm_3idx ijk;
-      
-      for (ijk.z() = 0; ijk.z() < dim.z(); ++ijk.z())
-        for (ijk.y() = 0; ijk.y() < dim.y(); ++ijk.y())
-          for (ijk.x() = 0; ijk.x() < dim.x(); ++ijk.x()) {
-            auto val = file_ptr[velems_factor.dot(ijk + 1)];
-
-            *ptr++ = {val > 0 ? val - 2 : val};
-          }
-
-      return result;
-    }
+    
 
 
 
@@ -485,8 +376,8 @@ namespace xpm
 
     struct parallel_parts_mapping
     {
-      std::unique_ptr<pnm_idx[]> normal_to_optimised;
-      std::unique_ptr<pnm_idx[]> optimised_to_normal;
+      std::unique_ptr<idx1d_t[]> normal_to_optimised;
+      std::unique_ptr<idx1d_t[]> optimised_to_normal;
       std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>> rows_per_block;
     };
     
@@ -495,11 +386,11 @@ namespace xpm
 
       v3i map_idx{1, blocks.x(), blocks.x()*blocks.y()};
 
-      using idx_block = std::pair<pnm_idx, int>;
+      using idx_block = std::pair<idx1d_t, int>;
 
       std::vector<idx_block> partioning;
 
-      for (pnm_idx i = 0; i < node_count_; ++i) {
+      for (idx1d_t i = 0; i < node_count_; ++i) {
         auto block_idx = node_[attribs::pos][i]/block_size;
 
         partioning.emplace_back(
@@ -518,19 +409,19 @@ namespace xpm
 
       parallel_parts_mapping mapping;
 
-      mapping.normal_to_optimised = std::make_unique<pnm_idx[]>(node_count_);
-      mapping.optimised_to_normal = std::make_unique<pnm_idx[]>(node_count_);
+      mapping.normal_to_optimised = std::make_unique<idx1d_t[]>(node_count_);
+      mapping.optimised_to_normal = std::make_unique<idx1d_t[]>(node_count_);
 
       // std::vector<pnm_idx> mapping;
 
       int block_count = blocks.prod();
-      auto row_count_per_block = std::make_unique<pnm_idx[]>(block_count);
+      auto row_count_per_block = std::make_unique<idx1d_t[]>(block_count);
       mapping.rows_per_block.resize(block_count);
 
       for (auto i = 0; i < block_count; ++i)
         row_count_per_block[i] = 0;
 
-      for (pnm_idx i = 0; i < node_count_; ++i) {
+      for (idx1d_t i = 0; i < node_count_; ++i) {
         mapping.normal_to_optimised[partioning[i].first] = i;
         mapping.optimised_to_normal[i] = partioning[i].first;
         ++row_count_per_block[partioning[i].second];
@@ -555,13 +446,13 @@ namespace xpm
 
       builder.allocate_rows(node_count_);
 
-      for (pnm_idx i = 0; i < throat_count_; ++i)
+      for (idx1d_t i = 0; i < throat_count_; ++i)
         if (auto [n0, n1] = throat_[adj][i]; inner_node(n0) && inner_node(n1))
           builder.reserve_connection(map[n0], map[n1]);
 
       builder.allocate_values();
 
-      for (pnm_idx i = 0; i < throat_count_; ++i) {
+      for (idx1d_t i = 0; i < throat_count_; ++i) {
         auto [n0, n1] = throat_[adj][i];
 
         // if (i%(throat_count_/10) == 0) {
@@ -596,36 +487,6 @@ namespace xpm
       }
 
       return builder.get_storage();
-    }
-
-
-
-    auto ConnectedClusters() {
-      std::vector<pnm_idx> parent(100);
-      std::vector<std::uint16_t> rank(100);
-
-      std::iota(parent.begin(), parent.end(), 0);
-
-      boost::disjoint_sets ds0{rank.data(), parent.data()};
-      
-
-      ds0.union_set(1, 20);
-      ds0.union_set(1, 5);
-
-
-      boost::disjoint_sets ds{rank.data(), parent.data()};
-
-
-
-      auto k1 = ds.find_set(1);
-      auto k2 = ds.find_set(2);
-
-      auto k5 = ds.find_set(5);
-
-      auto k20 = ds.find_set(20);
-
-      return ds;
-
     }
   };
 }
