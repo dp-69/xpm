@@ -158,7 +158,7 @@ namespace xpm
   struct image_data
   {
     idx3d_t dim;
-    idx1d_t size1d;
+    idx1d_t size;
 
     std::unique_ptr<voxel_tag::phase[]> phase;
     std::unique_ptr<voxel_tag::velem[]> velem;
@@ -170,7 +170,7 @@ namespace xpm
     std::unique_ptr<std::int32_t[]> adj_macro_of_darcy;
 
     void eval_adj_macro() {
-      adj_macro_of_darcy = std::make_unique<std::int32_t[]>(size1d);
+      adj_macro_of_darcy = std::make_unique<std::int32_t[]>(size);
 
       idx3d_t map_idx{1, dim.x(), dim.x()*dim.y()};
 

@@ -144,8 +144,15 @@ namespace xpm
       attribs::r_ins_t, double
     > node_;
 
+    /**
+     * \brief (left < right) in adj_t,
+     *        i.e. macro node is in the left and
+     *        inlet or outlet are in the right
+     *
+     *        there cannot be an inlet-outlet connecting throat
+     */
     dpl::soa<
-      attribs::adj_t, std::pair<idx1d_t, idx1d_t>,
+      attribs::adj_t, std::pair<idx1d_t, idx1d_t>,     
       attribs::r_ins_t, double,
       attribs::length_t, double,
       attribs::length0_t, double,
@@ -244,7 +251,7 @@ namespace xpm
     //   // return r_ins_[throat_count_ + i];
     // }
 
-    void read_from_binary_file(const std::filesystem::path& network_path) {
+    void read_from_binary_file(const std::filesystem::path& network_path) { // TODO
       using namespace attribs;
 
       boost::iostreams::mapped_file_source file(network_path.string());
@@ -306,12 +313,14 @@ namespace xpm
         for (idx1d_t i = 0; i < throat_count_; ++i) {       
           skip_word(throat1_ptr);
 
-          parse_text(throat1_ptr, value);
-          throat_[adj][i].first = parse_statoil_text_idx(value); 
+          auto& [left, right] = throat_[adj][i];
 
           parse_text(throat1_ptr, value);
-          throat_[adj][i].second = parse_statoil_text_idx(value);        
+          left = parse_statoil_text_idx(value); 
 
+          parse_text(throat1_ptr, value);
+          right = parse_statoil_text_idx(value);        
+          
           parse_text(throat1_ptr, throat_[r_ins][i]);
           // parse_text(throat1_ptr, shapeFactor[i]); //TODO
 
@@ -351,7 +360,14 @@ namespace xpm
           // parse_text(node2_ptr, shape_factor_node[i]); // TODO
           skip_line(node2_ptr);
         }        
-      }        
+      }
+
+      for (idx1d_t i = 0; i < throat_count_; i++)
+        if (auto& [l, r] = throat_[adj][i];
+          l > r) {
+          std::swap(l, r);
+          std::swap(throat_[length0][i], throat_[length1][i]);
+        }
     }
 
     // auto read_icl_velems(const std::filesystem::path& network_path) const {
