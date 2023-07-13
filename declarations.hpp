@@ -28,21 +28,16 @@ namespace xpm
 
     /**
      * \brief
-     *   -2: non-pore (solid or microporous) | the same
-     *   -1: inlet/outlet (do not know?) | the same
-     *   >=0: pore clusters
+     *   -1  : for non-pore voxels
+     *   >=0 : pore node of a pore-voxel
      */
     struct velem
     {
       std::int32_t value;
 
-      bool non_pore() {
-        return value == -2;
-      }
-
-      auto& operator*() {
-        return value;
-      }
+      // auto& operator*() {
+      //   return value;
+      // }
 
       const auto& operator*() const {
         return value;
@@ -84,6 +79,9 @@ namespace xpm
   }
 
 
+  /**
+   * \brief maximum node count
+   */
   using idx1d_t = int32_t;
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
@@ -161,22 +159,77 @@ namespace xpm
     idx1d_t size;
 
     std::unique_ptr<voxel_tag::phase[]> phase;
+
+    
+    /**
+     * \brief
+     *    for a pore voxel, velem is a pore node it belongs
+     *    for a microporous voxel, velem is an adjacent pore node
+     */
     std::unique_ptr<voxel_tag::velem[]> velem;
 
-    /*
-     * adjacent macro node of a microporous voxel. Gives a cluster number: [0, n].
-     * else: -1
-     */
-    std::unique_ptr<std::int32_t[]> adj_macro_of_darcy;
 
-    void eval_adj_macro() {
-      adj_macro_of_darcy = std::make_unique<std::int32_t[]>(size);
+    std::unique_ptr<voxel_tag::velem[]> adj_macro_of_darcy;
 
-      idx3d_t map_idx{1, dim.x(), dim.x()*dim.y()};
+
+    struct
+    {
+      idx1d_t nodes = 0;
+
+      size_t macro_throats = 0;
+      size_t darcy_throats = 0;
+      size_t inlet_outlet_throats = 0;
+
+      std::unique_ptr<idx1d_t[]> index; // compresses microporous voxel indices
+
+      double node_r_ins;
+      double throat_r_ins;
+    } darcy;
+
+
+    void eval_darcy_size() {
+      using namespace presets;
+
+      for (idx1d_t i = 0; i < size; ++i)
+        if (phase[i] == microporous) {
+          if (*adj_macro_of_darcy[i] >= 0)
+            ++darcy.macro_throats;
+          ++darcy.nodes;
+        }
+
 
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
       idx1d_t idx1d = 0;
+
+      auto map_idx = idx_mapper(dim);
+
+      for (k = 0; k < dim.z(); ++k)
+        for (j = 0; j < dim.y(); ++j) {
+          if (phase[map_idx(0, j, k)] == microporous)
+            ++darcy.inlet_outlet_throats;
+          if (phase[map_idx(dim.x() - 1, j, k)] == microporous)
+            ++darcy.inlet_outlet_throats;
+
+          for (i = 0; i < dim.x(); ++i, ++idx1d)
+            if (phase[idx1d] == microporous)
+              dpl::sfor<3>([&](auto d) {
+                if (ijk[d] < dim[d] - 1)
+                  if (phase[idx1d + map_idx[d]] == microporous)
+                    ++darcy.darcy_throats;
+              });
+        }
+    }
+
+
+    void eval_adj_macro() {
+      adj_macro_of_darcy = std::make_unique<voxel_tag::velem[]>(size);
+
+      idx3d_t ijk;
+      auto& [i, j, k] = ijk;
+      idx1d_t idx1d = 0;
+
+      auto map_idx = idx_mapper(dim);
 
       for (k = 0; k < dim.z(); ++k)
         for (j = 0; j < dim.y(); ++j) 
@@ -194,7 +247,7 @@ namespace xpm
                     adj = adj_velem;
               });
 
-            adj_macro_of_darcy[idx1d] = adj;
+            adj_macro_of_darcy[idx1d] = {adj};
           }
 
       #ifdef XPM_DEBUG_OUTPUT  
@@ -270,7 +323,7 @@ namespace xpm
         for (j = 0; j < dim.y(); ++j) 
           for (i = 0; i < dim.x(); ++i) {
             auto val = file_ptr[velems_factor.dot(ijk + 1)];
-            *ptr++ = {val > 0 ? val - 2 : val};
+            *ptr++ = {val > 0 ? val - 2 : -1/*val*/};
           }
 
       return result;

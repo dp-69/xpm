@@ -1,6 +1,6 @@
 #pragma once
 
-#include "xpm/pore_network_model.hpp"
+#include "xpm/pore_network.hpp"
 
 #include <vtkActor.h>
 #include <vtkLookupTable.h>
@@ -37,7 +37,7 @@ namespace xpm
     };
   }
   
-  vtkSmartPointer<vtkActor> CreateNodeActor(const pore_network_model& pnm, vtkLookupTable* lut, const auto& color_map) {
+  vtkSmartPointer<vtkActor> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
     using namespace attribs;
 
     
@@ -98,7 +98,7 @@ namespace xpm
     return actor;
   }
 
-  vtkSmartPointer<vtkActor> CreateThroatActor(const pore_network_model& pnm, vtkLookupTable* lut, const auto& color_map) {
+  vtkSmartPointer<vtkActor> CreateThroatActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
     using namespace attribs;
 
     vtkNew<vtkPolyData> polydata;
@@ -148,7 +148,7 @@ namespace xpm
 
     vtkNew<vtkPoints> points;
 
-    for (idx1d_t i = 0, count = pnm.throat_count_; i < count; ++i)
+    for (size_t i = 0, count = pnm.throat_count_; i < count; ++i)
       if (auto [n0, n1] = pnm.throat_[adj][i];
         pnm.inner_node(n0) && pnm.inner_node(n1)) {
         auto& n0_pos = pnm.node_[pos][n0];

@@ -116,8 +116,8 @@ namespace dpl::hypre
       lks_.nrows = nrows;
       lks_.ncols = std::make_unique<HYPRE_Int[]>(nrows);
       lks_.b = std::make_unique<HYPRE_Complex[]>(nrows);
-
-      for (HYPRE_BigInt i = 0; i < nrows; ++i) {
+      
+      for (auto i : dpl::range(nrows)) {
         lks_.ncols[i] = 1; // diag coef
         lks_.b[i] = 0;
       }
@@ -172,7 +172,7 @@ namespace dpl::hypre
       lks_.values[off_i1] = -value;
     }
 
-    auto get_storage() {
+    auto acquire_storage() {
       return std::move(lks_);
     }
     // ReSharper restore CppMemberFunctionMayBeConst

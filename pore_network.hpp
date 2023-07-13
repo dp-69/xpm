@@ -8,7 +8,7 @@
 
 namespace xpm
 {
-  class pore_network_model
+  class pore_network
   {
     static void skip_until(char* &ptr, char val) {   
       while (*ptr != '\0' && *ptr++ != val) {}    
@@ -40,6 +40,10 @@ namespace xpm
     
     static void parse_text(char* &ptr, long long& val) {
       val = strtoll(ptr, &ptr, 10);
+    }
+
+    static void parse_text(char* &ptr, unsigned long long& val) {
+      val = strtoull(ptr, &ptr, 10);
     }
 
     static void parse_text(char* &ptr, double& val) {
@@ -136,7 +140,7 @@ namespace xpm
      *    OUTLET_IDX = node_count_ + 1
      */
     idx1d_t node_count_ = 0;
-    idx1d_t throat_count_ = 0;
+    size_t throat_count_ = 0;
 
 
     dpl::soa<
@@ -145,11 +149,10 @@ namespace xpm
     > node_;
 
     /**
-     * \brief (left < right) in adj_t,
-     *        i.e. macro node is in the left and
-     *        inlet or outlet are in the right
-     *
-     *        there cannot be an inlet-outlet connecting throat
+     * \brief
+     * (left < right) in adj_t\n
+     * left is always an inner node\n
+     * right is an inner or outer (inlet/outlet) node
      */
     dpl::soa<
       attribs::adj_t, std::pair<idx1d_t, idx1d_t>,     
@@ -159,21 +162,6 @@ namespace xpm
       attribs::length1_t, double
     > throat_;
     
-    
-
-    
-    // std::vector<std::pair<pnm_idx, pnm_idx>> throats;        
-
-    // std::vector<dpl::vector3d> node_pos;
-
-    
-    // Throat values go first, then node values.      
-    // std::vector<double> r_ins_; 
-    // std::vector<double> volume;
-    // std::vector<double> shapeFactor;
-    // std::vector<double> lengthThroat;
-    // std::vector<double> _length0;
-    // std::vector<double> _length1;
 
     enum class file_format
     {
@@ -181,19 +169,22 @@ namespace xpm
       binary_dp69
     };
 
-    pore_network_model() = default;
-    
-    pore_network_model(const pore_network_model& other) = delete;
-    pore_network_model(pore_network_model&& other) noexcept = default;
-    pore_network_model& operator=(const pore_network_model& other) = delete;
-    pore_network_model& operator=(pore_network_model&& other) noexcept = default;
+    pore_network() = default;
+    ~pore_network() = default;
 
-    pore_network_model(const std::filesystem::path& p, file_format ff) {
+    pore_network(const pore_network& other) = delete;
+    pore_network(pore_network&& other) noexcept = default;
+    pore_network& operator=(const pore_network& other) = delete;
+    pore_network& operator=(pore_network&& other) noexcept = default;
+
+    pore_network(const std::filesystem::path& p, file_format ff) {
       if (ff == file_format::statoil)
         read_from_text_file(p);
       else if (ff == file_format::binary_dp69)
         read_from_binary_file(p);
     }
+
+    
 
 
     
@@ -238,27 +229,21 @@ namespace xpm
       return node_count_ + 1;
     }
     
-    // bool inlet(pnm_idx i) const {
-    //   return i == inlet();
-    // }
-    //
-    // bool outlet(pnm_idx i) const {
-    //   return i == outlet();
-    // }
-
     // auto node_r_ins(pnm_idx i) const {
     //   return node_[attribs::r_ins][i];
     //   // return r_ins_[throat_count_ + i];
     // }
 
     void read_from_binary_file(const std::filesystem::path& network_path) { // TODO
+      throw std::exception("[read_from_binary_file] not implemented correctly");
+
       using namespace attribs;
 
       boost::iostreams::mapped_file_source file(network_path.string());
       auto* ptr = const_cast<char*>(file.data());
 
       parse_bin(ptr, node_count_);
-      parse_bin(ptr, throat_count_);
+      parse_bin(ptr, throat_count_); // TODO
 
       node_.resize(node_count_);
       throat_.resize(throat_count_);
@@ -310,7 +295,7 @@ namespace xpm
         
         idx1d_t value;
         
-        for (idx1d_t i = 0; i < throat_count_; ++i) {       
+        for (size_t i = 0; i < throat_count_; ++i) {       
           skip_word(throat1_ptr);
 
           auto& [left, right] = throat_[adj][i];
@@ -332,7 +317,7 @@ namespace xpm
         boost::iostreams::mapped_file_source throat2_file(network_path_str + "_link2.dat");
         auto* throat2_ptr = const_cast<char*>(throat2_file.data());
 
-        for (idx1d_t i = 0; i < throat_count_; ++i) {
+        for (size_t i = 0; i < throat_count_; ++i) {
           dpl::sfor<3>([&throat2_ptr] {
             skip_word(throat2_ptr);  
           });
@@ -362,7 +347,7 @@ namespace xpm
         }        
       }
 
-      for (idx1d_t i = 0; i < throat_count_; i++)
+      for (size_t i = 0; i < throat_count_; i++)
         if (auto& [l, r] = throat_[adj][i];
           l > r) {
           std::swap(l, r);
@@ -381,7 +366,21 @@ namespace xpm
 
 
 
+    /**
+     * \brief coefficient of a throat
+     * \param i throat index
+     */
+    double coef(size_t i) {
+      using eq_tri = geometric_properties::equilateral_triangle_properties;
+      using namespace attribs;
 
+      auto [left, right] = throat_[adj][i];
+
+      return -1.0/(
+        throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][left])) +
+        throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])) +
+        (inner_node(right) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][right])) : 0.0));
+    }
 
 
     
@@ -390,119 +389,130 @@ namespace xpm
 
 
 
-    struct parallel_parts_mapping
+    struct rows_decomposition
     {
-      std::unique_ptr<idx1d_t[]> normal_to_optimised;
-      std::unique_ptr<idx1d_t[]> optimised_to_normal;
-      std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>> rows_per_block;
+      std::unique_ptr<idx1d_t[]> normal_to_decomposed;
+      std::unique_ptr<idx1d_t[]> decomposed_to_normal;
+      std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>> rows_per_block; // [from, to] inclusive in both sides
     };
     
-    parallel_parts_mapping parallel_partitioning(v3i blocks) {
+    rows_decomposition decompose_rows(v3i blocks) {
       auto block_size = physical_size/blocks;
-
-      v3i map_idx{1, blocks.x(), blocks.x()*blocks.y()};
 
       using idx_block = std::pair<idx1d_t, int>;
 
-      std::vector<idx_block> partioning;
+      std::vector<idx_block> block_ordered_indices(node_count_);
 
-      for (idx1d_t i = 0; i < node_count_; ++i) {
-        auto block_idx = node_[attribs::pos][i]/block_size;
+      auto map_idx = idx_mapper(blocks);
 
-        partioning.emplace_back(
-          i,
-          map_idx.dot({
-            std::clamp<int>(std::floor(block_idx.x()), 0, blocks.x() - 1),    // NOLINT(clang-diagnostic-float-conversion)
-            std::clamp<int>(std::floor(block_idx.y()), 0, blocks.y() - 1),    // NOLINT(clang-diagnostic-float-conversion)
-            std::clamp<int>(std::floor(block_idx.z()), 0, blocks.z() - 1)})   // NOLINT(clang-diagnostic-float-conversion)
-        );  
+      for (auto i : dpl::range(node_count_)) {
+        v3i block_idx = node_[attribs::pos][i]/block_size;
+
+        block_ordered_indices[i] = {i,
+          map_idx(
+            std::clamp(block_idx.x(), 0, blocks.x() - 1), // NOLINT(clang-diagnostic-float-conversion)
+            std::clamp(block_idx.y(), 0, blocks.y() - 1), // NOLINT(clang-diagnostic-float-conversion)
+            std::clamp(block_idx.z(), 0, blocks.z() - 1)) // NOLINT(clang-diagnostic-float-conversion)
+        };
       }
 
-      std::ranges::sort(partioning, [](const idx_block& l, const idx_block& r) {
-        return l.second < r.second;
-      });
+      std::ranges::sort(block_ordered_indices, [](const idx_block& l, const idx_block& r) { return l.second < r.second; });
 
+      rows_decomposition mapping;
 
-      parallel_parts_mapping mapping;
+      mapping.normal_to_decomposed = std::make_unique<idx1d_t[]>(node_count_);
+      mapping.decomposed_to_normal = std::make_unique<idx1d_t[]>(node_count_);
 
-      mapping.normal_to_optimised = std::make_unique<idx1d_t[]>(node_count_);
-      mapping.optimised_to_normal = std::make_unique<idx1d_t[]>(node_count_);
-
-      // std::vector<pnm_idx> mapping;
-
-      int block_count = blocks.prod();
+      auto block_count = blocks.prod();
       auto row_count_per_block = std::make_unique<idx1d_t[]>(block_count);
       mapping.rows_per_block.resize(block_count);
 
-      for (auto i = 0; i < block_count; ++i)
+      for (auto i : dpl::range(block_count))
         row_count_per_block[i] = 0;
-
-      for (idx1d_t i = 0; i < node_count_; ++i) {
-        mapping.normal_to_optimised[partioning[i].first] = i;
-        mapping.optimised_to_normal[i] = partioning[i].first;
-        ++row_count_per_block[partioning[i].second];
+      
+      for (auto i : dpl::range(node_count_)) {
+        mapping.normal_to_decomposed[block_ordered_indices[i].first] = i;
+        mapping.decomposed_to_normal[i] = block_ordered_indices[i].first;
+        ++row_count_per_block[block_ordered_indices[i].second];
       }
 
       int first_row = 0;
-      for (auto i = 0; i < block_count; ++i) {
+      for (auto i : dpl::range(block_count)) {
         mapping.rows_per_block[i] = {first_row, first_row + row_count_per_block[i] - 1};
-        first_row += row_count_per_block[i]/* + 1*/;
+        first_row += row_count_per_block[i];
       }
 
       return mapping;
     }
 
-    auto generate_pressure_input(const parallel_parts_mapping& mapping, const auto& coef_map) {
-      using eq_tri = geometric_properties::equilateral_triangle_properties;
+
+    auto generate_pressure_input_BASIC() {
       using namespace attribs;
 
-      auto* map = mapping.normal_to_optimised.get();
+      dpl::hypre::ls_known_storage_builder builder;
+
+      builder.allocate_rows(node_count_);
+
+      for (auto i : dpl::range(throat_count_))
+        if (auto [l, r] = throat_[adj][i]; inner_node(r))
+          builder.reserve_connection(l, r);
+
+      builder.allocate_values();
+
+      for (auto i : dpl::range(throat_count_)) {
+        auto [l, r] = throat_[adj][i];
+
+        auto coef = this->coef(i);
+
+        if (r == inlet()) {
+          builder.add_b(l, coef/**1 Pa*/);
+          builder.add_diag(l, coef);
+        }
+        else if (r == outlet()) {
+          // builder.add_b(map[n0], coef/**0 Pa*/);
+          builder.add_diag(l, coef);
+        }
+        else
+          builder.set_connection(l, r, coef);
+      }
+
+      return builder.acquire_storage();
+    }
+
+
+    auto generate_pressure_input(const rows_decomposition& mapping, const auto& coef_map) {
+      using namespace attribs;
+
+      auto* map = mapping.normal_to_decomposed.get();
       
       dpl::hypre::ls_known_storage_builder builder;
 
       builder.allocate_rows(node_count_);
 
-      for (idx1d_t i = 0; i < throat_count_; ++i)
+      for (size_t i = 0; i < throat_count_; ++i)
         if (auto [n0, n1] = throat_[adj][i]; inner_node(n0) && inner_node(n1))
           builder.reserve_connection(map[n0], map[n1]);
 
       builder.allocate_values();
 
-      for (idx1d_t i = 0; i < throat_count_; ++i) {
-        auto [n0, n1] = throat_[adj][i];
-
-        // if (i%(throat_count_/10) == 0) {
-        //   std::cout << (1.0*i)/throat_count_ << '\n';
-        // }
+      for (size_t i = 0; i < throat_count_; ++i) {
+        auto [l, r] = throat_[adj][i];
 
         auto coef = coef_map(i);
 
-        // auto coef = -1.0/(
-        //   (inner_node(n0) ? throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n0])) : 0.0) +
-        //   (inner_node(n1) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][n1])) : 0.0) +
-        //   throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])));
-
-        if (n0 == inlet()) {
-          builder.add_b(map[n1], coef/**1 Pa*/);
-          builder.add_diag(map[n1], coef);
+        if (r == inlet()) {
+          builder.add_b(map[l], coef/**1 Pa*/);
+          builder.add_diag(map[l], coef);
         }
-        else if (n1 == inlet()) {
-          builder.add_b(map[n0], coef/**1 Pa*/);
-          builder.add_diag(map[n0], coef);
-        }
-        else if (n0 == outlet()) {
-          // builder.add_b(map[n1], coef/**0 Pa*/);
-          builder.add_diag(map[n1], coef);
-        }
-        else if (n1 == outlet()) {
+        else if (r == outlet()) {
           // builder.add_b(map[n0], coef/**0 Pa*/);
-          builder.add_diag(map[n0], coef);
+          builder.add_diag(map[l], coef);
         }
         else
-          builder.set_connection(map[n0], map[n1], coef);
+          builder.set_connection(map[l], map[r], coef);
       }
 
-      return builder.get_storage();
+      return builder.acquire_storage();
     }
   };
 }

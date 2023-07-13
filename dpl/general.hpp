@@ -30,6 +30,11 @@
 #include <cmath>
 #include <future>
 
+#ifdef __cpp_lib_ranges
+#include <ranges>
+#endif
+
+
 
 #define def_static_key(name) \
   inline constexpr struct name##_t {} name;
@@ -149,7 +154,13 @@ namespace dpl
   // };
 
 
-  
+  #ifdef __cpp_lib_concepts
+  template<std::integral T>
+  constexpr auto range(T size) { return std::ranges::iota_view{static_cast<T>(0), size}; }
+  #endif
+
+
+
   struct extrapolant
   {
     struct linear {};
