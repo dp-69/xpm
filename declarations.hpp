@@ -159,17 +159,12 @@ namespace xpm
     idx1d_t size;
 
     std::unique_ptr<voxel_tag::phase[]> phase;
-
-    
     /**
      * \brief
      *    for a pore voxel, velem is a pore node it belongs
      *    for a microporous voxel, velem is an adjacent pore node
      */
     std::unique_ptr<voxel_tag::velem[]> velem;
-
-
-    std::unique_ptr<voxel_tag::velem[]> adj_macro_of_darcy;
 
 
     struct
@@ -181,6 +176,7 @@ namespace xpm
       size_t inlet_outlet_throats = 0;
 
       std::unique_ptr<idx1d_t[]> index; // compresses microporous voxel indices
+      
 
       double node_r_ins;
       double throat_r_ins;
@@ -192,7 +188,7 @@ namespace xpm
 
       for (idx1d_t i = 0; i < size; ++i)
         if (phase[i] == microporous) {
-          if (*adj_macro_of_darcy[i] >= 0)
+          if (*velem[i] >= 0)
             ++darcy.macro_throats;
           ++darcy.nodes;
         }
@@ -222,9 +218,7 @@ namespace xpm
     }
 
 
-    void eval_adj_macro() {
-      adj_macro_of_darcy = std::make_unique<voxel_tag::velem[]>(size);
-
+    void eval_microporous_adj() {
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
       idx1d_t idx1d = 0;
@@ -236,18 +230,21 @@ namespace xpm
           for (i = 0; i < dim.x(); ++i, ++idx1d) {
             int32_t adj = -1;
                 
-            if (phase[idx1d] == presets::microporous)
+            if (phase[idx1d] == presets::microporous) {
               dpl::sfor<3>([&](auto d) {
                 if (ijk[d] > 0)
-                  if (auto adj_velem = *velem[idx1d - map_idx[d]]; adj_velem >= 0)
-                    adj = adj_velem;
-          
+                  if (auto adj_idx = idx1d - map_idx[d]; phase[adj_idx] == presets::pore)
+                    if (auto adj_velem = *velem[adj_idx]; adj_velem >= 0)
+                      adj = adj_velem;
+
                 if (ijk[d] < dim[d] - 1)
-                  if (auto adj_velem = *velem[idx1d + map_idx[d]]; adj_velem >= 0)
-                    adj = adj_velem;
+                  if (auto adj_idx = idx1d + map_idx[d]; phase[adj_idx] == presets::pore)
+                    if (auto adj_velem = *velem[adj_idx]; adj_velem >= 0)
+                      adj = adj_velem;
               });
 
-            adj_macro_of_darcy[idx1d] = {adj};
+              velem[idx1d] = {adj};
+            }
           }
 
       #ifdef XPM_DEBUG_OUTPUT  
@@ -255,6 +252,9 @@ namespace xpm
       #endif
     }
   };
+
+
+  
 
 
   namespace parse
