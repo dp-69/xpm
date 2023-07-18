@@ -166,64 +166,16 @@ namespace xpm
      */
     std::unique_ptr<voxel_tag::velem[]> velem;
 
-
-    struct
-    {
-      idx1d_t nodes = 0;
-
-      size_t macro_throats = 0;
-      size_t darcy_throats = 0;
-      size_t inlet_outlet_throats = 0;
-
-      std::unique_ptr<idx1d_t[]> index; // compresses microporous voxel indices
-      
-
-      double node_r_ins;
-      double throat_r_ins;
-    } darcy;
-
-
-    void eval_darcy_size() {
-      using namespace presets;
-
-      for (idx1d_t i = 0; i < size; ++i)
-        if (phase[i] == microporous) {
-          if (*velem[i] >= 0)
-            ++darcy.macro_throats;
-          ++darcy.nodes;
-        }
-
-
-      idx3d_t ijk;
-      auto& [i, j, k] = ijk;
-      idx1d_t idx1d = 0;
-
-      auto map_idx = idx_mapper(dim);
-
-      for (k = 0; k < dim.z(); ++k)
-        for (j = 0; j < dim.y(); ++j) {
-          if (phase[map_idx(0, j, k)] == microporous)
-            ++darcy.inlet_outlet_throats;
-          if (phase[map_idx(dim.x() - 1, j, k)] == microporous)
-            ++darcy.inlet_outlet_throats;
-
-          for (i = 0; i < dim.x(); ++i, ++idx1d)
-            if (phase[idx1d] == microporous)
-              dpl::sfor<3>([&](auto d) {
-                if (ijk[d] < dim[d] - 1)
-                  if (phase[idx1d + map_idx[d]] == microporous)
-                    ++darcy.darcy_throats;
-              });
-        }
+    auto idx1d_mapper() const {
+      return idx_mapper(dim);
     }
 
-
-    void eval_microporous_adj() {
+    void eval_microporous_velem() {
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
       idx1d_t idx1d = 0;
 
-      auto map_idx = idx_mapper(dim);
+      auto map_idx = idx1d_mapper();
 
       for (k = 0; k < dim.z(); ++k)
         for (j = 0; j < dim.y(); ++j) 
