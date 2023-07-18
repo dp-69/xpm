@@ -1,6 +1,6 @@
 #pragma once
 
-#include "xpm/pore_network.hpp"
+#include "xpm/pore_network_image.hpp"
 
 #include <vtkActor.h>
 #include <vtkLookupTable.h>

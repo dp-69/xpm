@@ -235,9 +235,10 @@ namespace dpl::hypre
       keys::value_t, HYPRE_Complex
     > data;
 
-    // ls_unknown_storage(HYPRE_BigInt size) {
-    //   data.resize(size);
-    // }
+    ls_unknown_storage(HYPRE_BigInt size, HYPRE_BigInt jlower = 0) {
+      data.resize(size);
+      std::iota(data[keys::index].get(), data[keys::index].get() + size, jlower);
+    }
 
 
 
@@ -291,7 +292,7 @@ namespace dpl::hypre
     HYPRE_BoomerAMGCreate(&solver);      
 
     HYPRE_BoomerAMGSetTol(solver, 1.e-20);
-    // HYPRE_BoomerAMGSetMaxIter(solver, 20);
+    // HYPRE_BoomerAMGSetMaxIter(solver, 20); // this is the most impactful
     // HYPRE_BoomerAMGSetMaxLevels(solver, 50);
     // HYPRE_BoomerAMGSetPMaxElmts(solver, 0);
     // HYPRE_BoomerAMGSetMaxCoarseSize(solver, 18);

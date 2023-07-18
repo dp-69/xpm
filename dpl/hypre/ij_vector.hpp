@@ -33,32 +33,32 @@ namespace dpl::hypre
   #ifndef HYPRE_SEQUENTIAL
   namespace mpi_block
   {
-    static std::pair<HYPRE_BigInt, HYPRE_BigInt> range;
+    static std::pair<HYPRE_BigInt, HYPRE_BigInt> range; // TODO - needs to be reviwed
   }
 
 
-  inline std::tuple<HYPRE_BigInt, HYPRE_BigInt> mpi_part(HYPRE_BigInt nrows) {
-    int w_size, w_rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &w_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-    
-    auto count = nrows/w_size;
-    auto remainder = nrows%w_size;
-    HYPRE_BigInt start, stop;
-
-    if (w_rank < remainder) {
-      // The first 'remainder' ranks get 'count + 1' tasks each
-      start = w_rank*(count + 1);
-      stop = start + count;
-    }
-    else {
-      // The remaining 'size - remainder' ranks get 'count' task each
-      start = w_rank*count + remainder;
-      stop = start + (count - 1);
-    }
-
-    return {start, stop};
-  }
+  // inline std::tuple<HYPRE_BigInt, HYPRE_BigInt> mpi_part(HYPRE_BigInt nrows) {
+  //   int w_size, w_rank;
+  //   MPI_Comm_size(MPI_COMM_WORLD, &w_size);
+  //   MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
+  //   
+  //   auto count = nrows/w_size;
+  //   auto remainder = nrows%w_size;
+  //   HYPRE_BigInt start, stop;
+  //
+  //   if (w_rank < remainder) {
+  //     // The first 'remainder' ranks get 'count + 1' tasks each
+  //     start = w_rank*(count + 1);
+  //     stop = start + count;
+  //   }
+  //   else {
+  //     // The remaining 'size - remainder' ranks get 'count' task each
+  //     start = w_rank*count + remainder;
+  //     stop = start + (count - 1);
+  //   }
+  //
+  //   return {start, stop};
+  // }
   #endif
   
 

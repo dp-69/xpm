@@ -358,7 +358,6 @@ namespace xpm
 
     using QPropertyTreeView = dpl::qt::property_editor::QPropertyTreeView;
     
-    std::unique_ptr<QPropertyTreeView> tree_view_factory_;
     QPropertyTreeView* tree_view_ = nullptr; 
 
     
@@ -366,7 +365,7 @@ namespace xpm
     vtkNew<vtkRenderer> renderer_; 
     vtkNew<vtkGenericOpenGLRenderWindow> render_window_;
     
-    vtkRenderWindowInteractor* interactor_;
+    // vtkRenderWindowInteractor* interactor_;
     QVTKWidgetRef* qvtk_widget_;
     dpl::vtk::TidyAxes tidy_axes_;
 
@@ -379,34 +378,22 @@ namespace xpm
     vtkNew<vtkLookupTable> lut_node_throat_;
 
 
-
-    // vtkNew<vtkActor> image_actor_;
-
+    ImageDataGlyphMapper img_glyph_mapper_;
 
 
 
-    ImageDataGlyphMapper img_mapper;
+
+
+
 
 
     image_data img_;
 
-    // std::unique_ptr<voxel_tag::phase[]> phase_arr;
-    // std::unique_ptr<voxel_tag::velem[]> velem_arr;
-    //
-    // /*
-    //  * relevant for microporous phase only. 
-    //  *
-    //  * connected pore node of a microporous voxel. Gives a cluster number [0, n].
-    //  * -2 for pore voxels,
-    //  * -1 for solid voxels not connected
-    //  * 
-    //  */
-    // std::unique_ptr<std::int32_t[]> adj_macro_of_darcy_arr;
     
 
 
-    bool use_cache = true;
-    bool save_cache = true;
+    bool use_cache = false;
+    bool save_cache = false;
 
     
 
@@ -469,19 +456,7 @@ namespace xpm
     }
 
 
-    static bool InletOutletConnectivity(const pore_network& pnm) {
-      std::vector<idx1d_t> parent(pnm.node_count_ + 2);
-      std::vector<std::uint16_t> rank(pnm.node_count_ + 2);
-
-      std::iota(parent.begin(), parent.end(), 0);
-
-      boost::disjoint_sets ds{rank.data(), parent.data()};
-
-      for (auto& [n0, n1] : pnm.throat_.range(attribs::adj))
-        ds.union_set(n0, n1);
-
-      return ds.find_set(pnm.inlet()) == ds.find_set(pnm.outlet());
-    }
+    
 
     void InitGUI() {
       qvtk_widget_ = new QVTKWidgetRef;
@@ -493,7 +468,7 @@ namespace xpm
       #endif
       
       render_window_->AddRenderer(renderer_);
-      interactor_ = render_window_->GetInteractor();
+      // interactor_ = render_window_->GetInteractor();
 
       renderer_->SetBackground(v3d{1});
 
@@ -508,11 +483,11 @@ namespace xpm
 
         edges.name = "Edges";
         edges.get = [this] {
-          return std::get<0>(img_mapper.faces_).GetActor()->GetProperty()->GetEdgeVisibility();
+          return std::get<0>(img_glyph_mapper_.faces_).GetActor()->GetProperty()->GetEdgeVisibility();
         };
         edges.set = [this](bool v) {
           dpl::sfor<6>([this, v](auto i) {
-            static_cast<GlyphMapperFace&>(std::get<i>(img_mapper.faces_)).GetActor()->GetProperty()->SetEdgeVisibility(v);
+            static_cast<GlyphMapperFace&>(std::get<i>(img_glyph_mapper_.faces_)).GetActor()->GetProperty()->SetEdgeVisibility(v);
             render_window_->Render();
           });
         };
@@ -535,86 +510,50 @@ namespace xpm
 
 
   public:
-    void LoadImage() {
-      auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
-      auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
-      constexpr parse::image_dict input_spec{
-        .solid = 1,       // dummy value, no '1' is in the image
-        .pore = 255,
-        .microporous = 0, // we read actual solid '0' as microporous
-      };
-      
-
-      // auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      // auto velems_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
-      //   .pore = 0,
-      //   .microporous = 2
-      // };
-
-
-      
-
-
-
-
-
-
-
-              // auto image_path = 
-              //   // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
-              //   
-              //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
-              //   // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
-              // ;
-              //
-              // auto velems_path = 
-              //   R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
-              //   // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
-              // ;
-
-
-      
-      // size_t image_size;
-      std::tie(img_.phase, img_.size) = parse::read_image(image_path, input_spec);
-
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nImage phases read and array created";
-      #endif
-
-      
-
-      img_.dim = std::round(std::cbrt(img_.size));
-      img_.velem = parse::read_icl_velems(velems_path, img_.dim);
-
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nVelems file read";
-      #endif
-
-      auto mapped_range = std::ranges::subrange{img_.velem.get(), img_.velem.get() + img_.size}
-        | std::views::transform([](voxel_tag::velem x) { return *x; });
-
-      // #ifdef XPM_DEBUG_OUTPUT
-      //   std::cout << "\n\nRANGES MINMAX VELEMS";
-      // #endif
-
-      InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range));
-
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nlut_velem_ created";
-      #endif
-
-      img_.eval_microporous_velem();
-    }
+    // void LoadImage() {
+    //   
+    //
+    //
+    //   // auto image_path = 
+    //   //   // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
+    //   //   
+    //   //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
+    //   //   // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
+    //   // ;
+    //   //
+    //   // auto velems_path = 
+    //   //   R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
+    //   //   // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
+    //   // ;
+    //
+    //   
+    //   // size_t image_size;
+    //   
+    // }
 
 
     
     
     void Init() {
-      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
+      // auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
+      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 1,       // dummy value, no '1' is in the image
+      //   .pore = 255,
+      //   .microporous = 0, // we read actual solid '0' as microporous
+      // };
+      
 
-      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      constexpr parse::image_dict input_spec{
+        .solid = 3,
+        .pore = 0,
+        .microporous = 2
+      };
+
+
+      //------------------------------
 
       v3i processors{1};
 
@@ -626,12 +565,12 @@ namespace xpm
 
 
 
-      static constexpr auto darcy_term = 9.869233e-13;
+      
       static constexpr auto millidarcy = 1;
-      static constexpr auto const_permeability = millidarcy*0.001*darcy_term;
+      static constexpr auto const_permeability = millidarcy*0.001*presets::darcy_to_m2;
 
       auto cache_path = std::format("cache/{}-pressure-{:.2f}mD.bin",
-        std::filesystem::path(pnm_path).parent_path().filename().string(), const_permeability/darcy_term*1e3);
+        std::filesystem::path(pnm_path).parent_path().filename().string(), const_permeability/presets::darcy_to_m2*1e3);
 
 
       InitGUI();
@@ -650,114 +589,48 @@ namespace xpm
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout << "\n\nNetwork loaded";
-        std::cout << (InletOutletConnectivity(pn) ? " [CONNECTED]" : " [DISCONNECTED]");
+        std::cout << (pn.eval_inlet_outlet_connectivity() ? " [CONNECTED]" : " [DISCONNECTED]");
       #endif
 
+                
+
+      pn.connectivity_flow_summary();
 
 
-        
 
       {
-        auto input = pn.generate_pressure_input();
+        img_.read_image(image_path, input_spec);
 
-        auto indices = std::make_unique<HYPRE_BigInt[]>(pn.node_count_);
-        for (auto i : dpl::range(pn.node_count_))
-          indices[i] = i;
-        auto pressure_part = std::make_unique<HYPRE_Complex[]>(pn.node_count_);
+        #ifdef XPM_DEBUG_OUTPUT
+          std::cout << "\n\nImage phases read and array created";
+        #endif
 
-        dpl::hypre::mpi_block::range = {0, pn.node_count_ - 1};
+        img_.dim = std::round(std::cbrt(img_.size));
+        img_.read_icl_velems(pnm_path);
 
-        dpl::hypre::solve(
-          input.get_ref(),
-          dpl::hypre::ls_unknown_ref{
-            pn.node_count_,
-            indices.get(),
-            pressure_part.get()
-          });
+        #ifdef XPM_DEBUG_OUTPUT
+          std::cout << "\n\nVelems file read";
+        #endif
 
+        auto mapped_range = std::ranges::subrange{img_.velem.get(), img_.velem.get() + img_.size}
+          | std::views::transform([](voxel_tag::velem x) { return *x; });
 
-        std::vector<idx1d_t> parent(pn.node_count_);
-        std::iota(parent.begin(), parent.end(), 0);
-        std::vector<std::uint16_t> rank(pn.node_count_);
-        boost::disjoint_sets ds{rank.data(), parent.data()};
-        std::vector<bool> inlet(pn.node_count_);
-        std::vector<bool> outlet(pn.node_count_);
+        InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range));
 
-        auto connected = [&](idx1d_t i) {
-          auto rep_set = ds.find_set(i);
-          return inlet[rep_set] && outlet[rep_set];
-        };
+        #ifdef XPM_DEBUG_OUTPUT
+          std::cout << "\n\nlut_velem_ created";
+        #endif
 
-        
+        img_.eval_microporous_velem();
 
-        {
-          for (auto& [l, r] : pn.throat_.range(attribs::adj))
-            if (pn.inner_node(r))
-              ds.union_set(l, r);
-
-
-          for (auto& [l, r] : pn.throat_.range(attribs::adj))
-            if (r == pn.inlet())
-              inlet[ds.find_set(l)] = true;
-            else if (r == pn.outlet())
-              outlet[ds.find_set(l)] = true;
-
-          idx1d_t disconnected_macro = 0;
-          for (auto i : dpl::range(pn.node_count_))
-            if (!connected(i))
-              ++disconnected_macro;
-
-          
-          double inlet_flow_sum = 0;
-          double outlet_flow_sum = 0;
-
-          std::cout << std::format("\n\n Disconnected {} macro EXCLUSIVE nodes", disconnected_macro);
-
-
-          
-
-          for (auto i : dpl::range(pn.throat_count_)) {
-            auto [l, r] = pn.throat_[attribs::adj][i];
-
-            if (r == pn.inlet())
-              if (connected(l))
-                inlet_flow_sum += pn.coef(i)*(1 - pressure_part[l]);
-
-            if (r == pn.outlet())
-              if (connected(l))
-                outlet_flow_sum += pn.coef(i)*(pressure_part[l]);
-          }
-
-
-
-
-        
-        
-          std::cout << std::format("\n\nMACRO EXCLUSIVE\nINLET_PERM={} mD\nOUTLET_PERM={} mD\n",
-            -inlet_flow_sum/pn.physical_size.x()/darcy_term*1000,
-            -outlet_flow_sum/pn.physical_size.x()/darcy_term*1000);
-        }
-
-
-
-
+        #ifdef XPM_DEBUG_OUTPUT
+          std::cout << "\n\nLoaded image";
+        #endif
       }
-      
 
-
-
-      LoadImage();
-
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nLoaded image";
-      #endif
+     
 
       pore_network_image pni{pn, img_};
-
-
-      // std::vector<bool> connected;
-      // std::vector<idx1d_t> net_map(pn.node_count_ + img_.size);
-      // idx1d_t connected_count = 0;
 
       #ifdef XPM_DEBUG_OUTPUT
       std::cout << "\n\nSTART_CONNECTIVITY ...";
@@ -765,172 +638,15 @@ namespace xpm
 
       pni.connectivity_inlet_outlet();
 
-      // for (auto i : dpl::range(pn.node_count_ + img_.size))
-      //   if (connected[i])
-      //     net_map[i] = connected_count++;
-
-
       #ifdef XPM_DEBUG_OUTPUT
       std::cout << "\n\nEND_CONNECTIVITY ///";
       #endif
 
 
 
-      
-
-
-
-
-
-
-
-
-
-
-      // auto cell_size = pn.physical_size/img_.dim;
-      // auto map_idx = idx_mapper(img_.dim);
-      //
-      auto macro_node_count = pn.node_count_;
-      // auto macro_throat_count = pn.throat_count_;
-      //
-      // auto coef_map = [&](size_t i) {
-      //   auto [l, r] = pn.throat_[attribs::adj][i];
-      //
-      //   //TODO macro-darcy
-      //
-      //   if (l >= macro_node_count) // darcy-darcy | darcy-inlet/outlet
-      //     return (pn.inner_node(r) ? -cell_size.x() : -2*cell_size.x())*const_permeability;
-      //
-      //   return pn.coef(i); // macro-macro | macro-inlet/outlet
-      // };
-
       using namespace presets;
 
       std::vector<double> pressure;
-
-      // img_.darcy.index = std::make_unique<idx1d_t[]>(img_.size);
-
-      // {
-      //   img_.eval_darcy_size();
-      //
-      //   #ifdef XPM_DEBUG_OUTPUT
-      //     std::cout << "\n\nPRE_RESIZE";
-      //   #endif
-      //     
-      //   pn.node_.resize(pn.node_count_ + img_.darcy.nodes);
-      //   pn.throat_.resize(pn.throat_count_ + img_.darcy.macro_throats + img_.darcy.darcy_throats + img_.darcy.inlet_outlet_throats);
-      //
-      //   for (auto& [_, r] : pn.throat_.range(attribs::adj))
-      //     if (!pn.inner_node(r))
-      //       r += img_.darcy.nodes;
-      //
-      //   #ifdef XPM_DEBUG_OUTPUT
-      //     std::cout << "\n\nPOST_RESIZE"; // NOLINT(clang-diagnostic-misleading-indentation)
-      //   #endif
-      //     
-      //   idx1d_t darcy_index_inc = 0;
-      //   auto new_throat_inc = pn.throat_count_;
-      //
-      //   {
-      //     idx3d_t ijk;
-      //     auto& [i, j, k] = ijk;
-      //     idx1d_t idx1d = 0;
-      //
-      //     for (k = 0; k < img_.dim.z(); ++k)
-      //       for (j = 0; j < img_.dim.y(); ++j)
-      //         for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-      //           if (img_.phase[idx1d] == microporous) { // darcy node
-      //             auto adj_macro_idx = *img_.velem[idx1d];
-      //             auto darcy_merged_idx = macro_node_count + (img_.darcy.index[idx1d] = darcy_index_inc++);
-      //                 
-      //             pn.node_[attribs::r_ins][darcy_merged_idx] = cell_size.x()/2;
-      //             pn.node_[attribs::pos][darcy_merged_idx] = cell_size*(ijk + 0.5);
-      //
-      //             if (adj_macro_idx >= 0) { // macro-darcy throat
-      //               auto new_throat_idx = new_throat_inc++;
-      //                 
-      //               pn.throat_[attribs::adj][new_throat_idx] = {adj_macro_idx, darcy_merged_idx};
-      //               pn.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;
-      //                 
-      //               pn.throat_[attribs::length0][new_throat_idx] = 0;
-      //               pn.throat_[attribs::length][new_throat_idx] =
-      //                 (pn.node_[attribs::pos][darcy_merged_idx] - pn.node_[attribs::pos][adj_macro_idx]).length();
-      //               pn.throat_[attribs::length1][new_throat_idx] = 0;
-      //             }
-      //           }
-      //   }
-      //
-      //   std::cout << "\n\nNODES_VALUES";
-      //
-      //
-      //   {
-      //     idx3d_t ijk;
-      //     auto& [i, j, k] = ijk;
-      //     idx1d_t idx1d = 0;
-      //
-      //     for (k = 0; k < img_.dim.z(); ++k)
-      //       for (j = 0; j < img_.dim.y(); ++j) {
-      //         if (auto inlet_idx1d = map_idx(0, j, k);
-      //           img_.phase[inlet_idx1d] == microporous) { // darcy-inlet throat
-      //           auto new_throat_idx = new_throat_inc++;
-      //
-      //           pn.throat_[attribs::adj][new_throat_idx] = {
-      //             macro_node_count + img_.darcy.index[inlet_idx1d],
-      //             pn.inlet() + img_.darcy.nodes
-      //           };
-      //           pn.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;
-      //             
-      //           pn.throat_[attribs::length0][new_throat_idx] = 0;
-      //           pn.throat_[attribs::length][new_throat_idx] = cell_size.x();
-      //           pn.throat_[attribs::length1][new_throat_idx] = 0;
-      //         }
-      //
-      //         if (auto outlet_idx1d = map_idx(img_.dim.x() - 1, j, k);
-      //           img_.phase[outlet_idx1d] == microporous) { // darcy-outlet throat
-      //           auto new_throat_idx = new_throat_inc++;
-      //
-      //           pn.throat_[attribs::adj][new_throat_idx] = {
-      //             macro_node_count + img_.darcy.index[outlet_idx1d],
-      //             pn.outlet() + img_.darcy.nodes
-      //           };
-      //           pn.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;
-      //             
-      //           pn.throat_[attribs::length0][new_throat_idx] = 0;
-      //           pn.throat_[attribs::length][new_throat_idx] = cell_size.x();
-      //           pn.throat_[attribs::length1][new_throat_idx] = 0;
-      //         }
-      //
-      //
-      //         for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-      //           if (img_.phase[idx1d] == microporous)
-      //             dpl::sfor<3>([&](auto d) {
-      //               if (ijk[d] < img_.dim[d] - 1) {
-      //                 auto adj_idx = idx1d + map_idx[d];
-      //
-      //                 if (img_.phase[adj_idx] == microporous) { // darcy-darcy throat
-      //                   auto new_throat_idx = new_throat_inc++;
-      //
-      //                   pn.throat_[attribs::adj][new_throat_idx] = {
-      //                     macro_node_count + img_.darcy.index[idx1d],
-      //                     macro_node_count + img_.darcy.index[adj_idx]
-      //                   };
-      //                   pn.throat_[attribs::r_ins][new_throat_idx] = cell_size.x()/4;
-      //
-      //                   pn.throat_[attribs::length0][new_throat_idx] = 0;
-      //                   pn.throat_[attribs::length][new_throat_idx] = cell_size.x();
-      //                   pn.throat_[attribs::length1][new_throat_idx] = 0;
-      //                 }
-      //               }
-      //             });
-      //       }
-      //   }
-      //
-      //   std::cout << "\n\nTHROAT_VALUES";
-      //
-      //   pn.node_count_ += img_.darcy.nodes;
-      //   pn.throat_count_ += img_.darcy.macro_throats + img_.darcy.darcy_throats + img_.darcy.inlet_outlet_throats;
-      // }
-
 
       if (use_cache && std::filesystem::exists(cache_path)) {
         std::cout << "\n\nUsing CACHED pressure";
@@ -943,12 +659,8 @@ namespace xpm
         is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(double));
       }
       else {
-        // for (pnm_idx i = 0; i < pnm.node_count_; ++i)
-        //   pressure[i] = (1.*i)/pnm.node_count_;
-
         std::cout << "\n\nparallel_partitioning_START";
 
-        // auto partitioning = pn.decompose_rows(processors);
         auto decomposition = pni.decompose_rows(processors);
 
         for (auto i = 0; i < processors.prod(); ++i)
@@ -963,93 +675,44 @@ namespace xpm
         std::cout << "\n\nGeneratePressureInput START...";
 
         auto input = pni.generate_pressure_input(decomposition, const_permeability);
-        // auto input = pn.generate_pressure_input(partitioning, coef_map);
 
         std::cout << "\n\nGeneratePressureInput END|||";
 
         std::cout << "\n\nSave hypre input START...";
 
-
+        using namespace boost::interprocess;
+        
         {
-          using namespace boost::interprocess;
-        
-          {
-            shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-            dpl::hypre::save(input.get_ref(), input.nvalues, decomposition.rows_per_block, smo);
-            // input.save(smo);
-          }
-        
-          std::cout << "\n\nSave hypre input END|||";
-
-          std::cout << "\n\nHypre solve MPI START...";
-        
-          auto start = std::chrono::high_resolution_clock::now();
-        
-
-
-          // {
-          //   dpl::hypre::ls_known_ref lk_ref;
-          //
-          //   shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
-          //   mapped_region region(smo, read_only);
-          //
-          //
-          //   std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
-          //
-          //   dpl::hypre::load(region, lk_ref, range_ptr);
-          //
-          //
-          //   auto jlower = 0;
-          //   HYPRE_BigInt count = pnm.node_count_;
-          //
-          //   auto indices = std::make_unique<HYPRE_BigInt[]>(count);
-          //   for (HYPRE_BigInt i = 0; i < count; ++i)
-          //     indices[i] = jlower + i;
-          //   auto pressure_part = std::make_unique<HYPRE_Complex[]>(count);
-          //
-          //   dpl::hypre::mpi_block::range = {0, pnm.node_count_ - 1};
-          //
-          //   dpl::hypre::mpi_block::range = *range_ptr;
-          //
-          //   dpl::hypre::solve(
-          //     lk_ref/*input.get_ref()*/,
-          //     dpl::hypre::ls_unknown_ref{
-          //       count,
-          //       indices.get(),
-          //       pressure_part.get()
-          //     });
-          // }
-
-
-
-          auto solve_result = std::system(
-            std::format("mpiexec -n {} \"{}\" -s",
-              processors.prod(),
-              "xpm_project.exe"
-            ).c_str());
-
-
-        
-          auto stop = std::chrono::high_resolution_clock::now();
-        
-          cout << "\n\nHypre solve MPI: " <<
-            duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||" << endl;
-        
-        
-          shared_memory_object smo{open_only, "xpm-hypre-output", read_only};
-          mapped_region mr{smo, read_only};
-        
-          auto opt_pressure = std::make_unique<double[]>(input.nrows);
-        
-          std::memcpy(opt_pressure.get(), mr.get_address(), input.nrows*sizeof(double));
-
-          pressure.resize(input.nrows);
-
-          for (HYPRE_BigInt i = 0; i < input.nrows; ++i)
-            pressure[decomposition.block_to_net[i]] = opt_pressure[i];
-
-          // auto val = std::accumulate(ptr, ptr + input.nrows, 0.0);
+          shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
+          dpl::hypre::save(input.get_ref(), input.nvalues, decomposition.rows_per_block, smo);
         }
+        
+        std::cout << "\n\nSave hypre input END|||";
+
+        std::cout << "\n\nHypre solve MPI START...";
+        
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        auto solve_result = std::system(
+          std::format("mpiexec -n {} \"{}\" -s",
+            processors.prod(), "xpm_project.exe"
+          ).c_str());
+        
+        auto stop = std::chrono::high_resolution_clock::now();
+        
+        cout << "\n\nHypre solve MPI: " <<
+          duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||" << endl;
+        
+        shared_memory_object smo{open_only, "xpm-hypre-output", read_only};
+        mapped_region mr{smo, read_only};
+        
+        auto opt_pressure = std::make_unique<double[]>(input.nrows);
+        
+        std::memcpy(opt_pressure.get(), mr.get_address(), input.nrows*sizeof(double));
+
+        pressure.resize(input.nrows);
+        for (auto i : dpl::range(input.nrows))
+          pressure[decomposition.block_to_net[i]] = opt_pressure[i];
 
         std::cout << "\n\nPressure solved";
 
@@ -1080,12 +743,12 @@ namespace xpm
       //
       //
       // {
-      //   for (auto& [l, r] : pn.throat_.range(attribs::adj))
+      //   for (auto [l, r] : pn.throat_.range(attribs::adj))
       //     if (pn.inner_node(r))
       //       _OLD_inner_ds.union_set(l, r);
       //
       //
-      //   for (auto& [l, r] : pn.throat_.range(attribs::adj))
+      //   for (auto [l, r] : pn.throat_.range(attribs::adj))
       //     if (r == pn.inlet())
       //       _OLD_inlet_connected[_OLD_inner_ds.find_set(l)] = true;
       //     else if (r == pn.outlet())
@@ -1115,28 +778,6 @@ namespace xpm
       //   std::cout << std::format("\n\n Disconnected {} macro, {} darcy nodes", disconnected_macro, disconnected_darcy);
       //   std::cout << std::format("\n\n Disconnected {} macro, {} darcy nodes ALTER", disconnected_macro_ALTER, disconnected_darcy_ALTER);
       // }
-
-      
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1193,7 +834,7 @@ namespace xpm
         //
         //
         //
-        // for (auto& [_, r] : pn.throat_.range(attribs::adj))
+        // for (auto [_, r] : pn.throat_.range(attribs::adj))
         //   if (!pn.inner_node(r))
         //     r -= pn.node_count_ - macro_node_count;
         //
@@ -1207,8 +848,7 @@ namespace xpm
       
       
       
-      
-        CHECK_RATES(pni, pressure, const_permeability, darcy_term);
+        pni.flow_summary(pressure, const_permeability);
       }
 
 
@@ -1247,9 +887,6 @@ namespace xpm
 
       auto assembly = vtkSmartPointer<vtkAssembly>::New();
 
-      
-      
-
       assembly->AddPart(CreateNodeActor(pn, lut_pressure_, 
         [&](idx1d_t i) {
           return pni.connected_macro(i) ? pressure[pni.net_macro(i)] : std::numeric_limits<double>::quiet_NaN();
@@ -1267,13 +904,6 @@ namespace xpm
       }));
 
       renderer_->AddActor(assembly);
-        
-        
-        
-      
-
-
-
       
       std::cout << "\n\nNetwork actor created";
 
@@ -1287,46 +917,30 @@ namespace xpm
         {
           auto scale_factor = /*1.0*/pn.physical_size.x()/img_.dim.x(); // needed for vtk 8.2 floating point arithmetics
             
-          img_mapper.Init(scale_factor);
+          img_glyph_mapper_.Init(scale_factor);
           {
             std::vector<bool> filter(img_.size);
             for (idx1d_t i = 0; i < img_.size; ++i) {
               // auto rep_set = inner_ds.find_set(macro_node_count + img_.darcy.index[i]);
-
-
-              
-
               filter[i] = img_.phase[i] == microporous
               // && !con_io[pn.node_count_ + i]
-
-
               // && (con_io[pn.node_count_ + i] != connected(macro_node_count + img_.darcy.index[i]))
-
-               // && inlet_connected[rep_set] && outlet_connected[rep_set]
-
-                // && total_ds.find_set(old_node_count + voxel_to_row_inc_map[i]) == outlet_set
+              // && inlet_connected[rep_set] && outlet_connected[rep_set]
+              // && total_ds.find_set(old_node_count + voxel_to_row_inc_map[i]) == outlet_set
               ;
             }
 
-
-            img_mapper.Populate(img_.dim, pn.physical_size/img_.dim, 
-              [&](idx1d_t idx1d) { return filter[idx1d]; }
-            );
+            img_glyph_mapper_.Populate(img_.dim, pn.physical_size/img_.dim, [&](idx1d_t idx1d) { return filter[idx1d]; });
               
             dpl::sfor<6>([&](auto face_idx) {
-              GlyphMapperFace& face = std::get<face_idx>(img_mapper.faces_);
+              GlyphMapperFace& face = std::get<face_idx>(img_glyph_mapper_.faces_);
 
               idx1d_t i = 0;
               for (auto idx1d : face.GetIndices()) {
                 face.GetColorArray()->SetTypedComponent(i++, 0, 
                   // img_darcy_adj_arr[idx1d]
                   // velem_arr[idx1d].value
-
                   // total_ds.find_set(old_node_count + voxel_to_row_inc_map[idx1d]) == total_ds.find_set(total_parent.size() - 1) ? 0.5 : 1
-                  // 1
-
-                  
-
 
                   img_.phase[idx1d] == microporous && pni.connected_darcy(idx1d)
                     ? pressure[pni.net_darcy(idx1d)]
@@ -1357,9 +971,6 @@ namespace xpm
               actor->GetProperty()->SetDiffuse(0.4);
               actor->GetProperty()->BackfaceCullingOn();
               
-              // face.POLY_mapper_->SetInputData(face.POLY_polydata__);
-              // face.POLY_actor__->SetMapper(face.POLY_mapper_);
-
               renderer_->AddActor(actor);
             });
           }
@@ -1370,7 +981,6 @@ namespace xpm
       renderer_->ResetCamera();
       
       tidy_axes_.Init(renderer_.Get());
-
 
 
 
@@ -1386,16 +996,12 @@ namespace xpm
       
       tidy_axes_.SetFormat(".2e");
 
-      
-
       double bounds[] = {
         0., pn.physical_size.x(),
         0., pn.physical_size.y(),
         0., pn.physical_size.z()};
       tidy_axes_.Build(bounds);
-
       // tidy_axes_.Build();
-      
       // renderer_->ResetCamera();
     }
   };

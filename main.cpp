@@ -28,7 +28,6 @@
 
 int main(int argc, char* argv[])
 {
-
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     using namespace boost::interprocess;
     
@@ -40,15 +39,6 @@ int main(int argc, char* argv[])
 
     static constexpr auto root = 0;
     
-    // char processor_name[MPI_MAX_PROCESSOR_NAME];
-    // int name_len;
-    // MPI_Get_processor_name(processor_name, &name_len);
-
-    // std::cout << std::format("Hello world from {}/{} (proc ID {})\n",
-    //   mpi_rank, mpi_size, GetCurrentProcessId()) << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-
     // using namespace std::chrono;
     // using tp = time_point<steady_clock>;
     // tp t0, t1, t2, t3;
@@ -66,8 +56,6 @@ int main(int argc, char* argv[])
     std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
 
     dpl::hypre::load(region, lk_ref, range_ptr);
-    
-
 
     // input.load(smo);
 
@@ -94,10 +82,7 @@ int main(int argc, char* argv[])
 
     auto count = jupper - jlower + 1;
     
-    auto indices = std::make_unique<HYPRE_BigInt[]>(count);
-    for (HYPRE_BigInt i = 0; i < count; ++i)
-      indices[i] = jlower + i;
-    auto pressure_part = std::make_unique<HYPRE_Complex[]>(count);
+    dpl::hypre::ls_unknown_storage lus(count, jlower);
 
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (mpi_rank == root)
@@ -106,38 +91,15 @@ int main(int argc, char* argv[])
 
     // try {
 
+    
+
     dpl::hypre::solve(
       lk_ref/*.get_ref()*/,
-      dpl::hypre::ls_unknown_ref{
-        count,
-        indices.get(),
-        pressure_part.get()
-      });
+      lus.get_ref());
 
-    // }
-    // catch (std::exception& e){
-    //   std::cout << std::format("exception in rank {}", mpi_rank) << std::flush;
-    // }
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == root) {
-    //   std::cout << "\n\nPOST_SOLVE" << std::flush;
-    // }
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-
-    // auto pressure_part = input.Solve();
-
-    // if (w_rank == root)
-    //   t2 = std::chrono::high_resolution_clock::now();
 
     std::unique_ptr<double[]> pressure_utpr;
-    // std::vector<double> pressure;
     double* recvbuf = nullptr; 
-
 
     std::unique_ptr<int[]> recvcounts_utpr;
     std::unique_ptr<int[]> displs_utpr;
@@ -160,134 +122,25 @@ int main(int argc, char* argv[])
       }
     }
 
-    
-    
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (mpi_rank == root)
-    //   std::cout << "\n\nPRE_GATHER" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    
-    
-
     MPI_Gatherv(
-      pressure_part.get(), count, MPI_DOUBLE,
+      lus.data[dpl::hypre::keys::value].get(), count, MPI_DOUBLE,
       recvbuf, recvcounts, displs, MPI_DOUBLE,
       root, MPI_COMM_WORLD);
 
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (mpi_rank == root)
-    //   std::cout << "\n\nPOST_GATHER" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    // if (w_rank == root)
-    //   t3 = std::chrono::high_resolution_clock::now();
-  
-    {
-      // auto from_pnm = pnm.GenerateInput();
-      
-      if (mpi_rank == root) {
-        // auto sum = std::accumulate(pressure.begin(), pressure.end(), 0.0);
-
-
-        shared_memory_object smo{open_or_create, "xpm-hypre-output", read_write};
-        smo.truncate(lk_ref.nrows*sizeof(double));
-        mapped_region region(smo, read_write);
-        std::memcpy(region.get_address(), recvbuf, lk_ref.nrows*sizeof(double));
-
-
-        // std::cout <<
-        //   std::format("\n\nLoad {}ms, Solve {}ms, MPI_Gather {}ms",
-        //     duration_cast<milliseconds>(t1 - t0).count(),
-        //     duration_cast<milliseconds>(t2 - t1).count(),
-        //     duration_cast<milliseconds>(t3 - t2).count()
-        //   );
-        
-        // shared_memory_object smo{open_or_create, "xpm-hypre-output", read_write};
-        // smo.truncate(input.nrows*sizeof(double));
-        // mapped_region region(smo, read_write);
-        // auto* ptr = region.get_address();
-        // std::memcpy()
-        // *(double*)ptr = sum;
-        
-        // std::cout << sum << '\n';
-      }
+    if (mpi_rank == root) {
+      shared_memory_object smo_output{open_or_create, "xpm-hypre-output", read_write};
+      smo_output.truncate(lk_ref.nrows*sizeof(double));
+      mapped_region region_output(smo_output, read_write);
+      std::memcpy(region_output.get_address(), recvbuf, lk_ref.nrows*sizeof(double));
     }
-    
+
     MPI_Finalize();
 
-    // if (w_rank == root) {
-    //   getchar();
-    // }
     return 0;
   }
   else {
     MPI_Init(&argc, &argv);
 
-    // {
-    //
-    //   xpm::pore_network_model pnm{
-    //     R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)",
-    //     // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)",
-    //     xpm::pore_network_model::file_format::statoil};
-    //   
-    //   auto input = pnm.GeneratePressureInput();
-    //
-    //
-    //   // dpl::hypre::solve()
-    //
-    //   auto indices = std::make_unique<HYPRE_BigInt[]>(input.nrows);
-    //   for (HYPRE_BigInt i = 0; i < input.nrows; ++i)
-    //     indices[i] = i;
-    //   std::vector<HYPRE_Real> vals(input.nrows);
-    //
-    //   dpl::hypre::solve(
-    //     input.get_ref(),
-    //     dpl::hypre::ls_unknown_ref{
-    //       input.nrows,
-    //       indices.get(),
-    //       vals.data()
-    //     });
-    //
-    //   // auto vals = input.Solve();
-    //
-    //   std::cout << std::format("\n\n {}", std::accumulate(vals.begin(), vals.end(), 0.0));
-    //
-    //   getchar();
-    //
-    // }
-
-
-    // {
-    //   shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-    //   input.Save(smo);
-    // }
-    //
-    //
-    // auto solve_result = std::system(
-    //   std::format("mpiexec -n 4 \"{}\" -s",
-    //     "xpm_project.exe"
-    //   ).c_str());
-    //
-    //
-    // shared_memory_object smo_output{open_only, "xpm-hypre-output", read_only};
-    // mapped_region mr_ouput{smo_output, read_only};
-    // auto* ptr = static_cast<double*>(mr_ouput.get_address());
-    //
-    // auto val = std::accumulate(ptr, ptr + input.nrows, 0.0);
-
-
-    
-    
-
-    // auto value = *(double*)mapped_region{
-    //   shared_memory_object{open_only, "xpm-hypre-output", read_only}, read_only
-    // }.get_address();
-
-    // auto* ptr = region.get_address();
-
-    
     
 
 
@@ -306,8 +159,8 @@ int main(int argc, char* argv[])
     #elif (VTK_MAJOR_VERSION == 9)
     #endif
     
-    
-    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
+
+    // QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
     
     QApplication app(argc, argv);
 
