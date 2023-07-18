@@ -1,19 +1,17 @@
 /*
- * This file is part of Rapid Reservoir Modelling Software.
- *   | https://rapidreservoir.org/
- *   | https://bitbucket.org/rapidreservoirmodelling/rrm/
+ * This file is part of Dmytro Petrovskyy Library (DPL).
  *
- * Copyright (c) 2022
+ * Copyright (c) 2023
  *   | Dmytro Petrovskyy, PhD
  *   | dmytro.petrovsky@gmail.com
  *   | https://www.linkedin.com/in/dmytro-petrovskyy/
  *
- * RRM is free software: you can redistribute it and/or modify              
+ * DPL is free software: you can redistribute it and/or modify              
  * it under the terms of the GNU General Public License as published by     
  * the Free Software Foundation, either version 3 of the License, or        
  * (at your option) any later version.                                      
  *                                                                         
- * RRM is distributed in the hope that it will be useful,                   
+ * DPL is distributed in the hope that it will be useful,                   
  * but WITHOUT ANY WARRANTY; without even the implied warranty of           
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the            
  * GNU General Public License for more details.                             
@@ -285,66 +283,70 @@ namespace dpl::hypre
 
 
   inline void solve(const ls_known_ref& in, const ls_unknown_ref& out) {                  
-      HYPRE_Solver solver;
-      
-      HYPRE_BoomerAMGCreate(&solver);      
+    int w_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
 
-      HYPRE_BoomerAMGSetTol(solver, 1.e-20);
-      // HYPRE_BoomerAMGSetCoarsenType(solver, 10);
-      // HYPRE_BoomerAMGSetRestriction(solver, 2);
-      // HYPRE_BoomerAMGSetTruncFactor(solver, 4);
-      // HYPRE_BoomerAMGSetInterpType(solver, 6);
-      // HYPRE_BoomerAMGSetStrongThreshold(solver, 0);
-      // HYPRE_BoomerAMGSetTruncFactor(solver, 0);
-
-      // ReSharper disable CppInconsistentNaming
-      ij_matrix ij_A{in.nrows, in.ncols, in.cols, in.values};
-      ij_vector ij_b{in.nrows, in.b};
-      ij_vector ij_x{in.nrows};
-      
-      auto* ref_A = ij_A.par_ref();
-      auto* ref_b = ij_b.par_ref();
-      auto* ref_x = ij_x.par_ref();
-      // ReSharper restore CppInconsistentNaming
-
-
-
-      // const auto t0 = std::chrono::system_clock::now();
-
-
-      // int w_rank;
-      // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-      //
-      // MPI_Barrier(MPI_COMM_WORLD);
-      // if (w_rank == 0)
-      //   std::cout << "\n\nPRE_HYPRE_BoomerAMGSetup" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-      HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
-
-      //   std::cout << "\n\n----LLULLL" << std::flush;
-      //
-      // MPI_Barrier(MPI_COMM_WORLD);
-      // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-      // if (w_rank == 0)
-      //   std::cout << "\n\nPRE_HYPRE_BoomerAMGSolve" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-      HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
-
-      // MPI_Barrier(MPI_COMM_WORLD);
-      // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-      // if (w_rank == 0)
-      //   std::cout << "\n\nPOST_HYPRE_BoomerAMGSolve" << std::flush;
-      // MPI_Barrier(MPI_COMM_WORLD);
-
-
-      // const auto t1 = std::chrono::system_clock::now();
-      // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
-      HYPRE_BoomerAMGDestroy(solver);                  
+    HYPRE_Solver solver;
     
-      ij_x.get_values(out.nvalues, out.indices, out.values);
+    HYPRE_BoomerAMGCreate(&solver);      
+
+    HYPRE_BoomerAMGSetTol(solver, 1.e-20);
+    // HYPRE_BoomerAMGSetMaxIter(solver, 20);
+    // HYPRE_BoomerAMGSetMaxLevels(solver, 50);
+    // HYPRE_BoomerAMGSetPMaxElmts(solver, 0);
+    // HYPRE_BoomerAMGSetMaxCoarseSize(solver, 18);
+
+    // HYPRE_BoomerAMGSetCoarsenType(solver, 0);
+    // HYPRE_BoomerAMGSetRestriction(solver, 2);
+    // HYPRE_BoomerAMGSetTruncFactor(solver, 4);
+    // HYPRE_BoomerAMGSetInterpType(solver, 6);
+    // HYPRE_BoomerAMGSetStrongThreshold(solver, 0);
+    // HYPRE_BoomerAMGSetTruncFactor(solver, 0);
+
+    // ReSharper disable CppInconsistentNaming
+    ij_matrix ij_A{in.nrows, in.ncols, in.cols, in.values};
+    ij_vector ij_b{in.nrows, in.b};
+    ij_vector ij_x{in.nrows};
+    
+    auto* ref_A = ij_A.par_ref();
+    auto* ref_b = ij_b.par_ref();
+    auto* ref_x = ij_x.par_ref();
+    // ReSharper restore CppInconsistentNaming
+
+
+    // if (w_rank == 0) {
+    //   HYPRE_BoomerAMGSetLogging(solver, 2);
+    // }
+
+    // const auto t0 = std::chrono::system_clock::now();
+
+    HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
+    HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
+
+    
+    if (w_rank == 0) {
+      // ij_vector ij_residual{in.nrows};
+      // HYPRE_ParVector residual_ref = ij_residual.par_ref();
+      // HYPRE_BoomerAMGGetResidual(solver, &residual_ref);
+      // std::vector<double> res_vals(out.nvalues);
+    
+      // ij_residual.get_values(out.nvalues, out.indices, res_vals.data());
+      // for (auto v : res_vals)
+      //   std::cout << v << std::endl << std::flush;
+    
+      HYPRE_Real final_res;
+    
+      HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &final_res);
+      std::cout << std::format("\n\nFINAL RESIDUAL: {}", final_res) << std::flush;
     }
+
+
+    // const auto t1 = std::chrono::system_clock::now();
+    // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
+    HYPRE_BoomerAMGDestroy(solver);                  
+  
+    ij_x.get_values(out.nvalues, out.indices, out.values);
+  }
 
 
 

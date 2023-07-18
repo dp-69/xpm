@@ -450,21 +450,19 @@ namespace xpm
     }
 
 
-    dpl::hypre::ls_known_storage generate_pressure_input_BASIC() {
-      using namespace attribs;
-
+    dpl::hypre::ls_known_storage generate_pressure_input() {
       dpl::hypre::ls_known_storage_builder builder;
 
       builder.allocate_rows(node_count_);
 
       for (auto i : dpl::range(throat_count_))
-        if (auto [l, r] = throat_[adj][i]; inner_node(r))
+        if (auto [l, r] = throat_[attribs::adj][i]; inner_node(r))
           builder.reserve_connection(l, r);
 
       builder.allocate_values();
 
       for (auto i : dpl::range(throat_count_)) {
-        auto [l, r] = throat_[adj][i];
+        auto [l, r] = throat_[attribs::adj][i];
 
         auto coef = this->coef(i);
 
@@ -589,12 +587,7 @@ namespace xpm
     void connectivity_inlet_outlet() {
       auto gross_total_size = pn_.node_count_ + img_.size;
 
-      std::vector<idx1d_t> parent(gross_total_size);
-      for (auto i : dpl::range(gross_total_size))
-        parent[i] = i;
-
-      std::vector<std::uint16_t> rank(gross_total_size);
-      boost::disjoint_sets ds{rank.data(), parent.data()};
+      disjoint_sets ds(gross_total_size);
 
       for (auto& [l, r] : pn_.throat_.range(attribs::adj))
         if (pn_.inner_node(r)) // macro-macro

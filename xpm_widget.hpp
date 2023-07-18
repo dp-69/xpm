@@ -658,17 +658,17 @@ namespace xpm
         
 
       {
-        auto input_BASIC = pn.generate_pressure_input_BASIC();
+        auto input = pn.generate_pressure_input();
 
         auto indices = std::make_unique<HYPRE_BigInt[]>(pn.node_count_);
-        std::iota(indices.get(), indices.get() + pn.node_count_, 0);
+        for (auto i : dpl::range(pn.node_count_))
+          indices[i] = i;
         auto pressure_part = std::make_unique<HYPRE_Complex[]>(pn.node_count_);
 
         dpl::hypre::mpi_block::range = {0, pn.node_count_ - 1};
 
-
         dpl::hypre::solve(
-          input_BASIC.get_ref(),
+          input.get_ref(),
           dpl::hypre::ls_unknown_ref{
             pn.node_count_,
             indices.get(),

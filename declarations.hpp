@@ -2,10 +2,13 @@
 
 #include <dpl/static_vector.hpp>
 
+#include <boost/pending/disjoint_sets.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 
 #include <iostream>
 #include <fstream>
+
+
 
 namespace xpm
 {
@@ -84,6 +87,11 @@ namespace xpm
    */
   using idx1d_t = int32_t;
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
+
+  using disjoint_sets = boost::disjoint_sets_with_storage<
+    boost::typed_identity_property_map<idx1d_t>,
+    boost::typed_identity_property_map<idx1d_t>
+  >;
 
 
 
