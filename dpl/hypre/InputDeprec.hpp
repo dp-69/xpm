@@ -283,7 +283,9 @@ namespace dpl::hypre
 
 
 
-  inline void solve(const ls_known_ref& in, const ls_unknown_ref& out) {                  
+  inline void solve(const ls_known_ref& in, const ls_unknown_ref& out,
+    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20) {
+
     int w_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
 
@@ -291,8 +293,8 @@ namespace dpl::hypre
     
     HYPRE_BoomerAMGCreate(&solver);      
 
-    HYPRE_BoomerAMGSetTol(solver, 1.e-20);
-    // HYPRE_BoomerAMGSetMaxIter(solver, 20); // this is the most impactful
+    HYPRE_BoomerAMGSetTol(solver, tolerance);
+    HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
     // HYPRE_BoomerAMGSetMaxLevels(solver, 50);
     // HYPRE_BoomerAMGSetPMaxElmts(solver, 0);
     // HYPRE_BoomerAMGSetMaxCoarseSize(solver, 18);
@@ -336,9 +338,18 @@ namespace dpl::hypre
       //   std::cout << v << std::endl << std::flush;
     
       HYPRE_Real final_res;
+      HYPRE_Int num_interations;
     
       HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &final_res);
-      std::cout << std::format("\n\nFINAL RESIDUAL: {}", final_res) << std::flush;
+      HYPRE_BoomerAMGGetNumIterations(solver, &num_interations);
+
+      std::cout << std::format("\n\nFINAL RESIDUAL: {}, NUMBER OF ITERATIONS: {}", final_res, num_interations) << std::flush;
+
+
+
+      
+
+      
     }
 
 

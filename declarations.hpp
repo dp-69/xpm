@@ -12,6 +12,64 @@
 
 namespace xpm
 {
+  template <typename Derived, typename T> requires std::integral<T>
+  struct strong_integer
+  {
+    using difference_type = std::ptrdiff_t;
+
+    T value;
+
+    constexpr strong_integer(T v = 0) : value(v) {}
+    constexpr explicit operator T() const { return value; }
+
+    constexpr Derived& operator++() {
+      ++value;
+      return *static_cast<Derived*>(this);
+    }
+
+    constexpr Derived operator++(int) {
+      Derived copy{value};
+      ++*this;
+      return copy;
+    }
+
+    // template <typename T1> requires std::integral<T1>
+    // constexpr Derived operator+(T1 d) const {
+    //   return Derived{value + d};
+    // }
+
+    constexpr auto& operator*() const {
+      return value;
+    }
+
+    auto& operator*() {
+      return value;
+    }
+
+    template<std::integral Integral>
+    constexpr bool operator<(Integral rhs) const {
+      return value < rhs;
+    }
+
+    //
+    // constexpr Derived operator-(const Derived& rhs) const {
+    //   return Derived{value - rhs.value};
+    // }
+
+    constexpr bool operator==(const Derived& rhs) const {
+      return value == rhs.value;
+    }
+
+    constexpr bool operator!=(const Derived& rhs) const {
+      return value != rhs.value;
+    }
+  };
+
+  
+
+
+
+
   using v3i = dpl::vector3i;
   using v3d = dpl::vector3d;
 
@@ -95,6 +153,9 @@ namespace xpm
     boost::typed_identity_property_map<idx1d_t>
   >;
 
+
+  struct voxel_idx : strong_integer<voxel_idx, idx1d_t> {};
+  struct macro_idx : strong_integer<macro_idx, idx1d_t> {};
 
 
   // struct idx1d_expl

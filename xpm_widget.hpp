@@ -393,7 +393,7 @@ namespace xpm
 
 
     bool use_cache = false;
-    bool save_cache = false;
+    bool save_cache = true;
 
     
 

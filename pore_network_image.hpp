@@ -827,10 +827,7 @@ namespace xpm
 
 
     row_decomposition decompose_rows(v3i blocks) const {
-      const auto& pn = pn_; // TODO
-      const auto& img = img_;
-
-      auto block_size = pn.physical_size/blocks;
+      auto block_size = pn_.physical_size/blocks;
 
       using pair = std::pair<idx1d_t, int>;
 
@@ -854,9 +851,9 @@ namespace xpm
       };
 
       {
-        for (auto i : dpl::range(pn.node_count_))
+        for (auto i : dpl::range(pn_.node_count_))
           if (connected_macro(i)) // macro node
-            add(pn.node_[attribs::pos][i]);
+            add(pn_.node_[attribs::pos][i]);
 
 
         idx3d_t ijk;
@@ -865,12 +862,12 @@ namespace xpm
 
         using namespace presets;
 
-        auto cell_size = pn.physical_size/img.dim;
+        auto cell_size = pn_.physical_size/img_.dim;
 
-        for (k = 0; k < img.dim.z(); ++k)
-          for (j = 0; j < img.dim.y(); ++j)
-            for (i = 0; i < img.dim.x(); ++i, ++idx1d)
-              if (img.phase[idx1d] == microporous && connected_darcy(idx1d)) // darcy node
+        for (k = 0; k < img_.dim.z(); ++k)
+          for (j = 0; j < img_.dim.y(); ++j)
+            for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
+              if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) // darcy node
                 add(cell_size*(ijk + 0.5));
       }
 
@@ -904,24 +901,11 @@ namespace xpm
     }
 
 
-    dpl::hypre::ls_known_storage generate_pressure_input(
-      const row_decomposition& mapping, double const_permeability) {
-
-      const auto& pn = pn_;
-      const auto& img = img_;
-
-      // auto net_map = std::make_unique<idx1d_t[]>(pn.node_count_ + img.size);
-      // idx1d_t net_idx = 0;
-      // for (auto i : dpl::range(pn.node_count_ + img.size))
-      //   if (connected[i])
-      //     net_map[i] = net_idx++;
-
-
-
+    dpl::hypre::ls_known_storage generate_pressure_input(const row_decomposition& mapping, double const_permeability) const {
       using namespace attribs;
       using namespace presets;
 
-      auto map_idx = img.idx1d_mapper();
+      auto map_idx = img_.idx1d_mapper();
 
       auto* block = mapping.net_to_block.get();
       
@@ -930,8 +914,8 @@ namespace xpm
       builder.allocate_rows(connected_count_);
       
 
-      for (auto [l, r] : pn.throat_.range(adj))
-        if (connected_macro(l) && pn.inner_node(r)) // macro-macro
+      for (auto [l, r] : pn_.throat_.range(adj))
+        if (connected_macro(l) && pn_.inner_node(r)) // macro-macro
           builder.reserve_connection(
             block[net_macro(l)],
             block[net_macro(r)]);
@@ -944,20 +928,20 @@ namespace xpm
 
         
 
-        for (k = 0; k < img.dim.z(); ++k)
-          for (j = 0; j < img.dim.y(); ++j)
-            for (i = 0; i < img.dim.x(); ++i, ++idx1d)
-              if (img.phase[idx1d] == microporous && connected_darcy(idx1d)) {
-                if (auto adj_macro_idx = *img.velem[idx1d];
+        for (k = 0; k < img_.dim.z(); ++k)
+          for (j = 0; j < img_.dim.y(); ++j)
+            for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
+              if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) {
+                if (auto adj_macro_idx = *img_.velem[idx1d];
                   adj_macro_idx >= 0) // macro-darcy
                   builder.reserve_connection(
                     block[net_macro(adj_macro_idx)],
                     block[net_darcy(idx1d)]);
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img.dim[d] - 1)
-                    if (auto adj_idx1d = idx1d + map_idx[d];
-                      img.phase[adj_idx1d] == microporous) { // darcy-darcy
+                  if (ijk[d] < img_.dim[d] - 1)
+                    if (idx1d_t adj_idx1d = idx1d + map_idx[d];
+                      img_.phase[adj_idx1d] == microporous) { // darcy-darcy
                       builder.reserve_connection(
                         block[net_darcy(idx1d)],
                         block[net_darcy(adj_idx1d)]);
@@ -970,18 +954,18 @@ namespace xpm
       builder.allocate_values();
 
 
-      for (auto i : dpl::range(pn.throat_count_)) {
-        auto [l, r] = pn.throat_[adj][i];
+      for (auto i : dpl::range(pn_.throat_count_)) {
+        auto [l, r] = pn_.throat_[adj][i];
 
-        auto coef = pn.coef(i);
+        auto coef = pn_.coef(i);
 
         if (connected_macro(l))
-          if (pn.inner_node(r)) // macro-macro
+          if (pn_.inner_node(r)) // macro-macro
             builder.set_connection(
               block[net_macro(l)],
               block[net_macro(r)],
               coef);
-          else if (r == pn.inlet()) { // macro-inlet                    // NOLINT(clang-diagnostic-dangling-else)
+          else if (r == pn_.inlet()) { // macro-inlet                    // NOLINT(clang-diagnostic-dangling-else)
             builder.add_b(block[net_macro(l)], coef/**1 Pa*/);
             builder.add_diag(block[net_macro(l)], coef);
           }
@@ -993,16 +977,16 @@ namespace xpm
 
 
       {
-        auto cell_size = pn.physical_size/img.dim;
+        auto cell_size = pn_.physical_size/img_.dim;
         
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
         idx1d_t idx1d = 0;
 
-        for (k = 0; k < img.dim.z(); ++k)
-          for (j = 0; j < img.dim.y(); ++j) {
+        for (k = 0; k < img_.dim.z(); ++k)
+          for (j = 0; j < img_.dim.y(); ++j) {
             if (auto inlet_idx1d = map_idx(0, j, k);
-              img.phase[inlet_idx1d] == microporous && connected_darcy(inlet_idx1d)) { // darcy-inlet
+              img_.phase[inlet_idx1d] == microporous && connected_darcy(inlet_idx1d)) { // darcy-inlet
 
               auto coef = -2*cell_size.x()*const_permeability;
 
@@ -1010,8 +994,8 @@ namespace xpm
               builder.add_diag(block[net_darcy(inlet_idx1d)], coef);
             }
 
-            if (auto outlet_idx1d = map_idx(img.dim.x() - 1, j, k);
-              img.phase[outlet_idx1d] == microporous && connected_darcy(outlet_idx1d)) { // darcy-outlet
+            if (auto outlet_idx1d = map_idx(img_.dim.x() - 1, j, k);
+              img_.phase[outlet_idx1d] == microporous && connected_darcy(outlet_idx1d)) { // darcy-outlet
 
               auto coef = -2*cell_size.x()*const_permeability;
 
@@ -1020,13 +1004,13 @@ namespace xpm
             }
 
 
-            for (i = 0; i < img.dim.x(); ++i, ++idx1d)
-              if (img.phase[idx1d] == microporous && connected_darcy(idx1d)) {
-                if (auto adj_macro_idx = *img.velem[idx1d]; adj_macro_idx >= 0) { // macro-darcy
+            for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
+              if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) {
+                if (auto adj_macro_idx = *img_.velem[idx1d]; adj_macro_idx >= 0) { // macro-darcy
                   using eq_tri = geometric_properties::equilateral_triangle_properties;
 
-                  auto length = (cell_size*(ijk + 0.5) - pn.node_[pos][adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
-                  auto r_ins = cell_size.x()/4;                                                  // NOLINT(clang-diagnostic-shadow)
+                  auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
+                  auto r_ins = cell_size.x()/4;                                                   // NOLINT(clang-diagnostic-shadow)
                   auto coef = -1.0/(length/eq_tri::conductance(eq_tri::area(r_ins)));
 
                   builder.set_connection(
@@ -1036,8 +1020,8 @@ namespace xpm
                 }
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img.dim[d] - 1)
-                    if (auto adj_idx1d = idx1d + map_idx[d]; img.phase[adj_idx1d] == microporous) { // darcy-darcy
+                  if (ijk[d] < img_.dim[d] - 1)
+                    if (idx1d_t adj_idx1d = idx1d + map_idx[d]; img_.phase[adj_idx1d] == microporous) { // darcy-darcy
                       auto coef = -cell_size.x()*const_permeability;
 
                       builder.set_connection(
@@ -1055,7 +1039,7 @@ namespace xpm
 
 
    
-    void flow_summary(const std::vector<double>& pressure, double const_permeability) {
+    void flow_summary(const std::vector<double>& pressure, double const_permeability) const {
       double inlet_flow_sum = 0;
       double outlet_flow_sum = 0;
 
