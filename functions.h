@@ -79,7 +79,7 @@ namespace xpm
     for (idx1d_t i = 0, count = pnm.node_count_; i < count; ++i) {
       points->InsertNextPoint(pnm.node_[pos][i]);
       scale_array->InsertNextTuple1(pnm.node_[r_ins][i]);
-      color_array->InsertNextTuple1(color_map(i));
+      color_array->InsertNextTuple1(color_map(macro_idx{i}));
     }
       
     polydata->SetPoints(points);
@@ -151,14 +151,14 @@ namespace xpm
     for (size_t i = 0, count = pnm.throat_count_; i < count; ++i)
       if (auto [n0, n1] = pnm.throat_[adj][i];
         pnm.inner_node(n0) && pnm.inner_node(n1)) {
-        auto& n0_pos = pnm.node_[pos][n0];
+        auto& n0_pos = pnm.node_[pos][*n0];
 
         points->InsertNextPoint(n0_pos);
-        orient_array->InsertNextTuple(angles_for_j_norm(pnm.node_[pos][n1] - n0_pos));
+        orient_array->InsertNextTuple(angles_for_j_norm(pnm.node_[pos][*n1] - n0_pos));
 
         scale_array->InsertNextTuple(v3d{
           pnm.throat_[r_ins][i],
-          (pnm.node_[pos][n1] - n0_pos).length(),
+          (pnm.node_[pos][*n1] - n0_pos).length(),
           pnm.throat_[r_ins][i]
         });
 

@@ -164,7 +164,7 @@ namespace xpm
      * right is an inner or outer (inlet/outlet) node
      */
     dpl::soa<
-      attribs::adj_t, std::pair<idx1d_t, idx1d_t>,     
+      attribs::adj_t, std::pair<macro_idx, macro_idx>,     
       attribs::r_ins_t, double,
       attribs::length_t, double,
       attribs::length0_t, double,
@@ -231,21 +231,25 @@ namespace xpm
       return i < node_count_;
     }
 
-    auto inlet() const {
-      return node_count_;
+    bool inner_node(macro_idx i) const {
+      return i < node_count_;
     }
 
-    auto outlet() const {
-      return node_count_ + 1;
+    macro_idx inlet() const {
+      return {node_count_};
+    }
+
+    macro_idx outlet() const {
+      return {node_count_ + 1};
     }
 
     bool eval_inlet_outlet_connectivity() const {
       disjoint_sets ds(node_count_ + 2);
 
       for (auto [l, r] : throat_.range(attribs::adj))
-        ds.union_set(l, r);
+        ds.union_set(*l, *r);
 
-      return ds.find_set(inlet()) == ds.find_set(outlet());
+      return ds.find_set(*inlet()) == ds.find_set(*outlet());
     }
 
     void connectivity_flow_summary() {
@@ -257,28 +261,30 @@ namespace xpm
       std::vector<bool> inlet(node_count_);
       std::vector<bool> outlet(node_count_);
 
-      auto connected = [&](idx1d_t i) {
-        auto rep = ds.find_set(i);
+      auto connected = [&](macro_idx i) {
+        auto rep = ds.find_set(*i);
         return inlet[rep] && outlet[rep];
       };
 
       {
         for (auto [l, r] : throat_.range(attribs::adj))
           if (inner_node(r))
-            ds.union_set(l, r);
+            ds.union_set(*l, *r);
+
+        auto inlsdf = this->inlet();
 
         for (auto [l, r] : throat_.range(attribs::adj))
-          if (r == this->inlet())
-            inlet[ds.find_set(l)] = true;
+          if (r == inlsdf)
+            inlet[ds.find_set(*l)] = true;
           else if (r == this->outlet())
-            outlet[ds.find_set(l)] = true;
+            outlet[ds.find_set(*l)] = true;
 
         idx1d_t disconnected_macro = 0;
-        for (auto i : dpl::range(node_count_))
+
+        for (macro_idx i{0}; i < node_count_; ++i)
           if (!connected(i))
             ++disconnected_macro;
 
-        
         double inlet_flow_sum = 0;
         double outlet_flow_sum = 0;
 
@@ -291,11 +297,11 @@ namespace xpm
 
           if (r == this->inlet())
             if (connected(l))
-              inlet_flow_sum += coef(i)*(1 - pressure[l]);
+              inlet_flow_sum += coef(i)*(1 - pressure[*l]);
 
           if (r == this->outlet())
             if (connected(l))
-              outlet_flow_sum += coef(i)*(pressure[l]);
+              outlet_flow_sum += coef(i)*(pressure[*l]);
         }
       
         std::cout << std::format("\n\nMACRO EXCLUSIVE\nINLET_PERM={} mD\nOUTLET_PERM={} mD\n",
@@ -325,7 +331,7 @@ namespace xpm
       for (idx1d_t i = 0; i < throat_count_; ++i) {
         dpl::vector2i pair;
         parse_bin(ptr, pair);
-        throat_[adj][i] = {pair.x(), pair.y()};
+        throat_[adj][i] = {{pair.x()}, {pair.y()}};
       }
 
       parse_bin(ptr, throat_.ptr(r_ins), throat_count_);
@@ -372,10 +378,10 @@ namespace xpm
           auto& [left, right] = throat_[adj][i];
 
           parse_text(throat1_ptr, value);
-          left = parse_statoil_text_idx(value); 
+          *left = parse_statoil_text_idx(value); 
 
           parse_text(throat1_ptr, value);
-          right = parse_statoil_text_idx(value);        
+          *right = parse_statoil_text_idx(value);        
           
           parse_text(throat1_ptr, throat_[r_ins][i]);
           // parse_text(throat1_ptr, shapeFactor[i]); //TODO
@@ -420,7 +426,7 @@ namespace xpm
 
       for (size_t i = 0; i < throat_count_; i++)
         if (auto& [l, r] = throat_[adj][i];
-          l > r) {
+          r < l) {
           std::swap(l, r);
           std::swap(throat_[length0][i], throat_[length1][i]);
         }
@@ -440,9 +446,9 @@ namespace xpm
       auto [left, right] = throat_[adj][i];
 
       return -1.0/(
-        throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][left])) +
+        throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][*left])) +
         throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])) +
-        (inner_node(right) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][right])) : 0.0));
+        (inner_node(right) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][*right])) : 0.0));
     }
 
 
@@ -511,7 +517,7 @@ namespace xpm
 
       for (auto i : dpl::range(throat_count_))
         if (auto [l, r] = throat_[attribs::adj][i]; inner_node(r))
-          builder.reserve_connection(l, r);
+          builder.reserve_connection(*l, *r);
 
       builder.allocate_values();
 
@@ -521,15 +527,15 @@ namespace xpm
         auto coef = this->coef(i);
 
         if (r == inlet()) {
-          builder.add_b(l, coef/**1 Pa*/);
-          builder.add_diag(l, coef);
+          builder.add_b(*l, coef/**1 Pa*/);
+          builder.add_diag(*l, coef);
         }
         else if (r == outlet()) {
           // builder.add_b(map[n0], coef/**0 Pa*/);
-          builder.add_diag(l, coef);
+          builder.add_diag(*l, coef);
         }
         else
-          builder.set_connection(l, r, coef);
+          builder.set_connection(*l, *r, coef);
       }
 
       return builder.acquire_storage();
@@ -547,7 +553,7 @@ namespace xpm
 
       for (size_t i = 0; i < throat_count_; ++i)
         if (auto [n0, n1] = throat_[adj][i]; inner_node(n0) && inner_node(n1))
-          builder.reserve_connection(map[n0], map[n1]);
+          builder.reserve_connection(map[*n0], map[*n1]);
 
       builder.allocate_values();
 
@@ -557,15 +563,15 @@ namespace xpm
         auto coef = coef_map(i);
 
         if (r == inlet()) {
-          builder.add_b(map[l], coef/**1 Pa*/);
-          builder.add_diag(map[l], coef);
+          builder.add_b(map[*l], coef/**1 Pa*/);
+          builder.add_diag(map[*l], coef);
         }
         else if (r == outlet()) {
           // builder.add_b(map[n0], coef/**0 Pa*/);
-          builder.add_diag(map[l], coef);
+          builder.add_diag(map[*l], coef);
         }
         else
-          builder.set_connection(map[l], map[r], coef);
+          builder.set_connection(map[*l], map[*r], coef);
       }
 
       return builder.acquire_storage();
@@ -707,12 +713,31 @@ namespace xpm
     const auto& img() const { return img_; }
 
 
-    /**
-     * \param i local size : [0, pn_.node_count_)
-     */
-    auto total_macro(idx1d_t i) const {
-      return i;
+
+    idx1d_t total(macro_idx i) const {
+      return *i;
     }
+
+    bool connected(macro_idx i) const {
+      return connected_[total(i)];
+    }
+
+    idx1d_t net(macro_idx i) const {
+      return net_map_[total(i)];
+    }
+
+
+
+
+
+
+
+    // /**
+    //  * \param i local size : [0, pn_.node_count_)
+    //  */
+    // auto total_macro(idx1d_t i) const {
+    //   return i;
+    // }
 
     /**
      * \param i local size : [0, img_.size)
@@ -721,12 +746,12 @@ namespace xpm
       return pn_.node_count_ + i;
     }
 
-    /**
-     * \param i local size : [0, pn_.node_count_)
-     */
-    bool connected_macro(idx1d_t i) const {
-      return connected_[total_macro(i)];
-    }
+    // /**
+    //  * \param i local size : [0, pn_.node_count_)
+    //  */
+    // bool connected_macro(idx1d_t i) const {
+    //   return connected_[total_macro(i)];
+    // }
 
     /**
      * \param i local size : [0, img_.size)
@@ -735,12 +760,12 @@ namespace xpm
       return connected_[total_darcy(i)];
     }
 
-    /**
-     * \param i local size : [0, pn_.node_count_)
-     */
-    auto net_macro(idx1d_t i) const {
-      return net_map_[total_macro(i)];
-    }
+    // /**
+    //  * \param i local size : [0, pn_.node_count_)
+    //  */
+    // auto net_macro(idx1d_t i) const {
+    //   return net_map_[total_macro(i)];
+    // }
 
     /**
      * \param i local size : [0, img_.size)
@@ -759,7 +784,7 @@ namespace xpm
 
       for (auto [l, r] : pn_.throat_.range(attribs::adj))
         if (pn_.inner_node(r)) // macro-macro
-          ds.union_set(l, r);
+          ds.union_set(*l, *r);
 
       using namespace presets;
       auto map_idx = img_.idx1d_mapper();
@@ -773,9 +798,9 @@ namespace xpm
           for (j = 0; j < img_.dim.y(); ++j)
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
               if (img_.phase[idx1d] == microporous) {
-                if (auto adj_macro_idx = *img_.velem[idx1d]; adj_macro_idx >= 0) // macro-darcy
+                if (macro_idx adj_macro_idx{*img_.velem[idx1d]}; adj_macro_idx >= 0) // macro-darcy
                   ds.union_set(
-                    total_macro(adj_macro_idx),
+                    total(adj_macro_idx),
                     total_darcy(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
@@ -793,9 +818,9 @@ namespace xpm
 
       for (auto [l, r] : pn_.throat_.range(attribs::adj))
         if (r == pn_.inlet()) // macro-inlet
-          inlet[ds.find_set(total_macro(l))] = true;
+          inlet[ds.find_set(total(l))] = true;
         else if (r == pn_.outlet()) // macro-outlet
-          outlet[ds.find_set(total_macro(l))] = true;
+          outlet[ds.find_set(total(l))] = true;
 
       {
         idx3d_t ijk;
@@ -851,9 +876,9 @@ namespace xpm
       };
 
       {
-        for (auto i : dpl::range(pn_.node_count_))
-          if (connected_macro(i)) // macro node
-            add(pn_.node_[attribs::pos][i]);
+        for (macro_idx i{0}; i < pn_.node_count_; ++i)
+          if (connected(i)) // macro node
+            add(pn_.node_[attribs::pos][*i]);
 
 
         idx3d_t ijk;
@@ -915,10 +940,10 @@ namespace xpm
       
 
       for (auto [l, r] : pn_.throat_.range(adj))
-        if (connected_macro(l) && pn_.inner_node(r)) // macro-macro
+        if (connected(l) && pn_.inner_node(r)) // macro-macro
           builder.reserve_connection(
-            block[net_macro(l)],
-            block[net_macro(r)]);
+            block[net(l)],
+            block[net(r)]);
 
 
       {
@@ -932,16 +957,14 @@ namespace xpm
           for (j = 0; j < img_.dim.y(); ++j)
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
               if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) {
-                if (auto adj_macro_idx = *img_.velem[idx1d];
-                  adj_macro_idx >= 0) // macro-darcy
+                if (macro_idx adj_macro_idx{*img_.velem[idx1d]}; adj_macro_idx >= 0) // macro-darcy
                   builder.reserve_connection(
-                    block[net_macro(adj_macro_idx)],
+                    block[net(adj_macro_idx)],
                     block[net_darcy(idx1d)]);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_.dim[d] - 1)
-                    if (idx1d_t adj_idx1d = idx1d + map_idx[d];
-                      img_.phase[adj_idx1d] == microporous) { // darcy-darcy
+                    if (idx1d_t adj_idx1d = idx1d + map_idx[d]; img_.phase[adj_idx1d] == microporous) { // darcy-darcy
                       builder.reserve_connection(
                         block[net_darcy(idx1d)],
                         block[net_darcy(adj_idx1d)]);
@@ -959,19 +982,19 @@ namespace xpm
 
         auto coef = pn_.coef(i);
 
-        if (connected_macro(l))
+        if (connected(l))
           if (pn_.inner_node(r)) // macro-macro
             builder.set_connection(
-              block[net_macro(l)],
-              block[net_macro(r)],
+              block[net(l)],
+              block[net(r)],
               coef);
           else if (r == pn_.inlet()) { // macro-inlet                    // NOLINT(clang-diagnostic-dangling-else)
-            builder.add_b(block[net_macro(l)], coef/**1 Pa*/);
-            builder.add_diag(block[net_macro(l)], coef);
+            builder.add_b(block[net(l)], coef/**1 Pa*/);
+            builder.add_diag(block[net(l)], coef);
           }
           else { // macro-outlet
-            // builder.add_b(block[net_macro(l)], coef/**0 Pa*/);
-            builder.add_diag(block[net_macro(l)], coef);
+            // builder.add_b(block[net(l)], coef/**0 Pa*/);
+            builder.add_diag(block[net(l)], coef);
           }
       }
 
@@ -1006,15 +1029,15 @@ namespace xpm
 
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
               if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) {
-                if (auto adj_macro_idx = *img_.velem[idx1d]; adj_macro_idx >= 0) { // macro-darcy
+                if (macro_idx adj_macro_idx{*img_.velem[idx1d]}; adj_macro_idx >= 0) { // macro-darcy
                   using eq_tri = geometric_properties::equilateral_triangle_properties;
 
-                  auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
+                  auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
                   auto r_ins = cell_size.x()/4;                                                   // NOLINT(clang-diagnostic-shadow)
                   auto coef = -1.0/(length/eq_tri::conductance(eq_tri::area(r_ins)));
 
                   builder.set_connection(
-                    block[net_macro(adj_macro_idx)],
+                    block[net(adj_macro_idx)],
                     block[net_darcy(idx1d)],
                     coef);
                 }
@@ -1067,12 +1090,12 @@ namespace xpm
       for (auto i : dpl::range(pn_.throat_count_))
         if (auto [l, r] = pn_.throat_[attribs::adj][i];
           r == pn_.inlet()) { // macro-inlet
-          if (connected_macro(l))
-            inlet_flow_sum += pn_.coef(i)*(1 - pressure[net_macro(l)]);
+          if (connected(l))
+            inlet_flow_sum += pn_.coef(i)*(1 - pressure[net(l)]);
         }
         else if (r == pn_.outlet()) { // macro-outlet
-          if (connected_macro(l))
-            outlet_flow_sum += pn_.coef(i)*(pressure[net_macro(l)]);
+          if (connected(l))
+            outlet_flow_sum += pn_.coef(i)*(pressure[net(l)]);
         }
 
       

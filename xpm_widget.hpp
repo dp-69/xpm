@@ -888,17 +888,17 @@ namespace xpm
       auto assembly = vtkSmartPointer<vtkAssembly>::New();
 
       assembly->AddPart(CreateNodeActor(pn, lut_pressure_, 
-        [&](idx1d_t i) {
-          return pni.connected_macro(i) ? pressure[pni.net_macro(i)] : std::numeric_limits<double>::quiet_NaN();
+        [&](macro_idx i) {
+          return pni.connected(i) ? pressure[pni.net(i)] : std::numeric_limits<double>::quiet_NaN();
         }));
 
       assembly->AddPart(CreateThroatActor(pn, lut_pressure_, [&](size_t i) {
         auto [l, r] = pn.throat_[attribs::adj][i];
 
         return
-          pni.connected_macro(l)
+          pni.connected(l)
             ? pn.inner_node(r)
-              ? pni.connected_macro(r) ? (pressure[pni.net_macro(l)] + pressure[pni.net_macro(r)])/2 : std::numeric_limits<double>::quiet_NaN()
+              ? pni.connected(r) ? (pressure[pni.net(l)] + pressure[pni.net(r)])/2 : std::numeric_limits<double>::quiet_NaN()
               : r == pn.inlet() ? 1.0 : 0.0
             : std::numeric_limits<double>::quiet_NaN();
       }));

@@ -51,21 +51,46 @@ namespace xpm
       return value < rhs;
     }
 
+    template<std::integral Integral>
+    constexpr bool operator>=(Integral rhs) const {
+      return value >= rhs;
+    }
+
+    constexpr bool operator<(const Derived& rhs) const {
+      return value < *rhs;
+    }
+
     //
     // constexpr Derived operator-(const Derived& rhs) const {
     //   return Derived{value - rhs.value};
     // }
 
-    constexpr bool operator==(const Derived& rhs) const {
-      return value == rhs.value;
+    friend constexpr bool operator==(const Derived& lhs, const Derived& rhs) {
+      return *lhs == *rhs;
     }
 
-    constexpr bool operator!=(const Derived& rhs) const {
-      return value != rhs.value;
+    // constexpr bool operator==(const Derived& rhs) const {
+    //   return value == rhs.value;
+    // }
+
+    // constexpr bool operator==(Derived rhs) const {
+    //   return value == rhs.value;
+    // }
+
+    // constexpr bool operator==(const Derived& lhs, /* this*/ Derived&) const {
+    //   return lhs.value == value;
+    // }
+
+    friend constexpr bool operator!=(const Derived& lhs, const Derived& rhs) {
+      return *lhs != *rhs;
     }
   };
 
   
+  // template <typename Derived, typename T>
+  // friend constexpr bool operator==(const strong_integer<Derived, T>& lhs, const strong_integer<Derived, T>& rhs) {
+	 //  return *lhs == *rhs;
+  // }
 
 
 

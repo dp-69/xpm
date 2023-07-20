@@ -29,68 +29,82 @@
 int main(int argc, char* argv[])
 {
 
-  std::vector<int> zomg;
-  auto luuuq = zomg.end() - zomg.begin();
+  // std::vector<int> zomg;
+  // auto luuuq = zomg.end() - zomg.begin();
+  //
+  //
+  // xpm::voxel_idx pew{30};
+  //
+  // constexpr xpm::voxel_idx pew2{40};
+  // constexpr xpm::voxel_idx pew3{39};
+  //
+  // if constexpr(true) {
+  //   std::cout << "LUL";
+  // }
+  // else {
+  //   std::cout << "LUQQL";
+  // }
+  // constexpr bool qqqqqqqq = pew2 == pew3;
+  //
+  // std::array<int, qqqqqqqq>;
+  //
+  //
+  // // auto qq = pew2 - pew;
+  //
+  // // xpm::voxel_idx omg = pew++;
+  //
+  // int k = 0;
+  //
+  // for (xpm::voxel_idx i{0}; *i < 10; ++i)
+  //     k += *i;
+  //
+  //
+  // auto qqq = std::addressof(pew);
+  // auto qqqqq = std::addressof(++pew);
+  //
+  //
+  // auto powepw = static_cast<xpm::voxel_idx>(-1);
+  //
+  //
+  // // typename _Ty::_Signed_type;
+  //                                          // typename _Ty::_Unsigned_type;
+  //
+  // // std::_Integer_class<int>::_Signed_type qqq;
+  //
+  // constexpr bool defint = std::default_initializable<xpm::voxel_idx>;
+  // constexpr bool copyable = std::copyable<xpm::voxel_idx>;
+  // constexpr bool movable = std::movable<xpm::voxel_idx>;
+  //
+  // constexpr bool check00 = std::_Integer_like<xpm::voxel_idx>;
+  //
+  // // constexpr bool lessthen = static_cast<xpm::voxel_idx>(-1) < static_cast<xpm::voxel_idx>(0);
+  //
+  // using iter_diff = std::iter_difference_t<int>;
+  // iter_diff lul;
+  //
+  // constexpr bool check1 = std::_Signed_integer_like<iter_diff>;
+  //
+  // constexpr bool check = std::weakly_incrementable<xpm::voxel_idx>;
+  //
+  // constexpr bool semireg = std::semiregular<xpm::voxel_idx>;
+  //
+  // // std::_Weakly_equality_comparable_with<
+  //
+  // // std::ranges::iota_view<int, int>{0, 20};
+  //
+  //
+  //
+  //
+  // for (auto rrrr : std::ranges::subrange(xpm::voxel_idx{0}, xpm::voxel_idx{20})) {
+  //   
+  // }
+  //
+  // std::ranges::iota_view<xpm::voxel_idx, xpm::voxel_idx>{xpm::voxel_idx{0}, xpm::voxel_idx{20}};
 
-  
-  xpm::voxel_idx pew{30};
-
-  constexpr xpm::voxel_idx pew2{40};
-
-  // constexpr bool qqqq = pew2 < pew;
 
 
-  // auto qq = pew2 - pew;
-
-  // xpm::voxel_idx omg = pew++;
-
-  int k = 0;
-
-  for (xpm::voxel_idx i{0}; *i < 10; ++i)
-      k += *i;
 
 
-  auto qqq = std::addressof(pew);
-  auto qqqqq = std::addressof(++pew);
-
-
-  auto powepw = static_cast<xpm::voxel_idx>(-1);
-
-
-  // typename _Ty::_Signed_type;
-                                           // typename _Ty::_Unsigned_type;
-
-  // std::_Integer_class<int>::_Signed_type qqq;
-
-  constexpr bool defint = std::default_initializable<xpm::voxel_idx>;
-  constexpr bool copyable = std::copyable<xpm::voxel_idx>;
-  constexpr bool movable = std::movable<xpm::voxel_idx>;
-
-  constexpr bool check00 = std::_Integer_like<xpm::voxel_idx>;
-
-  // constexpr bool lessthen = static_cast<xpm::voxel_idx>(-1) < static_cast<xpm::voxel_idx>(0);
-
-  using iter_diff = std::iter_difference_t<int>;
-  iter_diff lul;
-
-  constexpr bool check1 = std::_Signed_integer_like<iter_diff>;
-
-  constexpr bool check = std::weakly_incrementable<xpm::voxel_idx>;
-
-  constexpr bool semireg = std::semiregular<xpm::voxel_idx>;
-
-  // std::_Weakly_equality_comparable_with<
-
-  // std::ranges::iota_view<int, int>{0, 20};
-  
-
-  
-
-  for (auto rrrr : std::ranges::subrange(xpm::voxel_idx{0}, xpm::voxel_idx{20})) {
-    
-  }
-
-  std::ranges::iota_view<xpm::voxel_idx, xpm::voxel_idx>{xpm::voxel_idx{0}, xpm::voxel_idx{20}};
   // std::weakly_incrementable
 
   // constexpr xpm::image_idx qwe3{3};
