@@ -535,22 +535,22 @@ namespace xpm
     
     
     void Init() {
-      // auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
-      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 1,       // dummy value, no '1' is in the image
-      //   .pore = 255,
-      //   .microporous = 0, // we read actual solid '0' as microporous
-      // };
+      auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
+      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
+      constexpr parse::image_dict input_spec{
+        .solid = 1,       // dummy value, no '1' is in the image
+        .pore = 255,
+        .microporous = 0, // we read actual solid '0' as microporous
+      };
       
 
-      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
-      constexpr parse::image_dict input_spec{
-        .solid = 3,
-        .pore = 0,
-        .microporous = 2
-      };
+      // auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 3,
+      //   .pore = 0,
+      //   .microporous = 2
+      // };
 
 
       //------------------------------
@@ -937,13 +937,15 @@ namespace xpm
 
               idx1d_t i = 0;
               for (auto idx1d : face.GetIndices()) {
+                voxel_idx v_idx{idx1d};
+
                 face.GetColorArray()->SetTypedComponent(i++, 0, 
                   // img_darcy_adj_arr[idx1d]
                   // velem_arr[idx1d].value
                   // total_ds.find_set(old_node_count + voxel_to_row_inc_map[idx1d]) == total_ds.find_set(total_parent.size() - 1) ? 0.5 : 1
 
-                  img_.phase[idx1d] == microporous && pni.connected_darcy(idx1d)
-                    ? pressure[pni.net_darcy(idx1d)]
+                  img_.phase[idx1d] == microporous && pni.connected(v_idx)
+                    ? pressure[pni.net(v_idx)]
                     : std::numeric_limits<double>::quiet_NaN()
 
                   // phase_arr[idx1d].value

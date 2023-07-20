@@ -12,13 +12,16 @@
 
 namespace xpm
 {
-  template <typename Derived, typename T> requires std::integral<T>
+  template <typename Derived, std::integral T>
   struct strong_integer
   {
-    using difference_type = std::ptrdiff_t;
+    using value_type = T;
+
+    // using difference_type = std::ptrdiff_t;
 
     T value;
 
+    // ReSharper disable once CppNonExplicitConvertingConstructor
     constexpr strong_integer(T v = 0) : value(v) {}
     constexpr explicit operator T() const { return value; }
 
@@ -27,63 +30,40 @@ namespace xpm
       return *static_cast<Derived*>(this);
     }
 
-    constexpr Derived operator++(int) {
-      Derived copy{value};
-      ++*this;
-      return copy;
-    }
+    // constexpr Derived operator++(int) {
+    //   Derived copy{value};
+    //   ++*this;
+    //   return copy;
+    // }
 
     // template <typename T1> requires std::integral<T1>
     // constexpr Derived operator+(T1 d) const {
     //   return Derived{value + d};
     // }
 
-    constexpr auto& operator*() const {
-      return value;
-    }
+    constexpr auto& operator*() const { return value; }
 
-    auto& operator*() {
-      return value;
-    }
+    auto& operator*() { return value; }
 
     template<std::integral Integral>
-    constexpr bool operator<(Integral rhs) const {
-      return value < rhs;
-    }
+    constexpr bool operator<(Integral rhs) const { return value < rhs; }
 
     template<std::integral Integral>
-    constexpr bool operator>=(Integral rhs) const {
-      return value >= rhs;
-    }
+    constexpr bool operator>=(Integral rhs) const { return value >= rhs; }
 
-    constexpr bool operator<(const Derived& rhs) const {
-      return value < *rhs;
-    }
+    constexpr bool operator<(const Derived& rhs) const { return value < *rhs; }
+
+
+    template<std::integral Integral>
+    constexpr Derived operator+(Integral rhs) const { return Derived{value + rhs}; }
+
+    friend constexpr bool operator==(const Derived& lhs, const Derived& rhs) { return *lhs == *rhs; }
+    friend constexpr bool operator!=(const Derived& lhs, const Derived& rhs) { return *lhs != *rhs; }
 
     //
     // constexpr Derived operator-(const Derived& rhs) const {
     //   return Derived{value - rhs.value};
     // }
-
-    friend constexpr bool operator==(const Derived& lhs, const Derived& rhs) {
-      return *lhs == *rhs;
-    }
-
-    // constexpr bool operator==(const Derived& rhs) const {
-    //   return value == rhs.value;
-    // }
-
-    // constexpr bool operator==(Derived rhs) const {
-    //   return value == rhs.value;
-    // }
-
-    // constexpr bool operator==(const Derived& lhs, /* this*/ Derived&) const {
-    //   return lhs.value == value;
-    // }
-
-    friend constexpr bool operator!=(const Derived& lhs, const Derived& rhs) {
-      return *lhs != *rhs;
-    }
   };
 
   

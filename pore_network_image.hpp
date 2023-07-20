@@ -714,18 +714,14 @@ namespace xpm
 
 
 
-    idx1d_t total(macro_idx i) const {
-      return *i;
-    }
+    idx1d_t total(macro_idx i) const { return *i; }
+    idx1d_t total(voxel_idx i) const { return pn_.node_count_ + *i; }
 
-    bool connected(macro_idx i) const {
-      return connected_[total(i)];
-    }
+    bool connected(auto i) const { return connected_[this->total(i)]; }
+    idx1d_t net(auto i) const { return net_map_[this->total(i)]; }
 
-    idx1d_t net(macro_idx i) const {
-      return net_map_[total(i)];
-    }
 
+    
 
 
 
@@ -739,12 +735,12 @@ namespace xpm
     //   return i;
     // }
 
-    /**
-     * \param i local size : [0, img_.size)
-     */
-    auto total_darcy(idx1d_t i) const {
-      return pn_.node_count_ + i;
-    }
+    // /**
+    //  * \param i local size : [0, img_.size)
+    //  */
+    // auto total_darcy(idx1d_t i) const {
+    //   return pn_.node_count_ + i;
+    // }
 
     // /**
     //  * \param i local size : [0, pn_.node_count_)
@@ -753,12 +749,12 @@ namespace xpm
     //   return connected_[total_macro(i)];
     // }
 
-    /**
-     * \param i local size : [0, img_.size)
-     */
-    bool connected_darcy(idx1d_t i) const {
-      return connected_[total_darcy(i)];
-    }
+    // /**
+    //  * \param i local size : [0, img_.size)
+    //  */
+    // bool connected_darcy(idx1d_t i) const {
+    //   return connected_[total_darcy(i)];
+    // }
 
     // /**
     //  * \param i local size : [0, pn_.node_count_)
@@ -767,12 +763,12 @@ namespace xpm
     //   return net_map_[total_macro(i)];
     // }
 
-    /**
-     * \param i local size : [0, img_.size)
-     */
-    auto net_darcy(idx1d_t i) const {
-      return net_map_[total_darcy(i)];
-    }
+    // /**
+    //  * \param i local size : [0, img_.size)
+    //  */
+    // auto net_darcy(idx1d_t i) const {
+    //   return net_map_[total_darcy(i)];
+    // }
 
 
 
@@ -792,23 +788,23 @@ namespace xpm
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        idx1d_t idx1d = 0;
+        voxel_idx idx1d{0};
 
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j)
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-              if (img_.phase[idx1d] == microporous) {
-                if (macro_idx adj_macro_idx{*img_.velem[idx1d]}; adj_macro_idx >= 0) // macro-darcy
+              if (img_.phase[*idx1d] == microporous) {
+                if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) // macro-darcy
                   ds.union_set(
                     total(adj_macro_idx),
-                    total_darcy(idx1d));
+                    total(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_.dim[d] - 1)
-                    if (idx1d_t adj_idx1d = idx1d + map_idx[d]; img_.phase[adj_idx1d] == microporous) // darcy-darcy
+                    if (voxel_idx adj_idx1d = idx1d + map_idx[d]; img_.phase[*adj_idx1d] == microporous) // darcy-darcy
                       ds.union_set(
-                        total_darcy(idx1d),
-                        total_darcy(adj_idx1d));
+                        total(idx1d),
+                        total(adj_idx1d));
                 });
               }
       }
@@ -828,13 +824,13 @@ namespace xpm
 
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j) {
-            if (auto inlet_idx1d = map_idx(0, j, k);
-              img_.phase[inlet_idx1d] == microporous) // darcy-inlet
-              inlet[ds.find_set(total_darcy(inlet_idx1d))] = true;
+            if (voxel_idx inlet_idx1d{map_idx(0, j, k)};
+              img_.phase[*inlet_idx1d] == microporous) // darcy-inlet
+              inlet[ds.find_set(total(inlet_idx1d))] = true;
 
-            if (auto outlet_idx1d = map_idx(img_.dim.x() - 1, j, k);
-              img_.phase[outlet_idx1d] == microporous) // darcy-outlet
-              outlet[ds.find_set(total_darcy(outlet_idx1d))] = true;
+            if (voxel_idx outlet_idx1d{map_idx(img_.dim.x() - 1, j, k)};
+              img_.phase[*outlet_idx1d] == microporous) // darcy-outlet
+              outlet[ds.find_set(total(outlet_idx1d))] = true;
           }
       }
 
@@ -883,7 +879,7 @@ namespace xpm
 
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        idx1d_t idx1d = 0;
+        voxel_idx idx1d{0};
 
         using namespace presets;
 
@@ -892,7 +888,7 @@ namespace xpm
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j)
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-              if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) // darcy node
+              if (img_.phase[*idx1d] == microporous && connected(idx1d)) // darcy node
                 add(cell_size*(ijk + 0.5));
       }
 
@@ -949,25 +945,25 @@ namespace xpm
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        idx1d_t idx1d = 0;
+        voxel_idx idx1d{0};
 
         
 
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j)
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-              if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) {
-                if (macro_idx adj_macro_idx{*img_.velem[idx1d]}; adj_macro_idx >= 0) // macro-darcy
+              if (img_.phase[*idx1d] == microporous && connected(idx1d)) {
+                if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) // macro-darcy
                   builder.reserve_connection(
                     block[net(adj_macro_idx)],
-                    block[net_darcy(idx1d)]);
+                    block[net(idx1d)]);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_.dim[d] - 1)
-                    if (idx1d_t adj_idx1d = idx1d + map_idx[d]; img_.phase[adj_idx1d] == microporous) { // darcy-darcy
+                    if (voxel_idx adj_idx1d = idx1d + map_idx[d]; img_.phase[*adj_idx1d] == microporous) { // darcy-darcy
                       builder.reserve_connection(
-                        block[net_darcy(idx1d)],
-                        block[net_darcy(adj_idx1d)]);
+                        block[net(idx1d)],
+                        block[net(adj_idx1d)]);
                   }
                 });
               }
@@ -1004,32 +1000,32 @@ namespace xpm
         
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        idx1d_t idx1d = 0;
+        voxel_idx idx1d{0};
 
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j) {
-            if (auto inlet_idx1d = map_idx(0, j, k);
-              img_.phase[inlet_idx1d] == microporous && connected_darcy(inlet_idx1d)) { // darcy-inlet
+            if (voxel_idx inlet_idx1d{map_idx(0, j, k)};
+              img_.phase[*inlet_idx1d] == microporous && connected(inlet_idx1d)) { // darcy-inlet
 
               auto coef = -2*cell_size.x()*const_permeability;
 
-              builder.add_b(block[net_darcy(inlet_idx1d)], coef/**1 Pa*/);
-              builder.add_diag(block[net_darcy(inlet_idx1d)], coef);
+              builder.add_b(block[net(inlet_idx1d)], coef/**1 Pa*/);
+              builder.add_diag(block[net(inlet_idx1d)], coef);
             }
 
-            if (auto outlet_idx1d = map_idx(img_.dim.x() - 1, j, k);
-              img_.phase[outlet_idx1d] == microporous && connected_darcy(outlet_idx1d)) { // darcy-outlet
+            if (voxel_idx outlet_idx1d{map_idx(img_.dim.x() - 1, j, k)};
+              img_.phase[*outlet_idx1d] == microporous && connected(outlet_idx1d)) { // darcy-outlet
 
               auto coef = -2*cell_size.x()*const_permeability;
 
-              // builder.add_b(block[net_darcy(outlet_idx1d)], coef/**0 Pa*/);
-              builder.add_diag(block[net_darcy(outlet_idx1d)], coef);
+              // builder.add_b(block[net(outlet_idx1d)], coef/**0 Pa*/);
+              builder.add_diag(block[net(outlet_idx1d)], coef);
             }
 
 
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-              if (img_.phase[idx1d] == microporous && connected_darcy(idx1d)) {
-                if (macro_idx adj_macro_idx{*img_.velem[idx1d]}; adj_macro_idx >= 0) { // macro-darcy
+              if (img_.phase[*idx1d] == microporous && connected(idx1d)) {
+                if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) { // macro-darcy
                   using eq_tri = geometric_properties::equilateral_triangle_properties;
 
                   auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
@@ -1038,18 +1034,18 @@ namespace xpm
 
                   builder.set_connection(
                     block[net(adj_macro_idx)],
-                    block[net_darcy(idx1d)],
+                    block[net(idx1d)],
                     coef);
                 }
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_.dim[d] - 1)
-                    if (idx1d_t adj_idx1d = idx1d + map_idx[d]; img_.phase[adj_idx1d] == microporous) { // darcy-darcy
+                    if (voxel_idx adj_idx1d = idx1d + map_idx[d]; img_.phase[*adj_idx1d] == microporous) { // darcy-darcy
                       auto coef = -cell_size.x()*const_permeability;
 
                       builder.set_connection(
-                        block[net_darcy(idx1d)],
-                        block[net_darcy(adj_idx1d)],
+                        block[net(idx1d)],
+                        block[net(adj_idx1d)],
                         coef);
                   }
                 });
@@ -1077,13 +1073,13 @@ namespace xpm
 
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j) {
-            if (auto inlet_idx1d = map_idx(0, j, k);
-              img_.phase[inlet_idx1d] == microporous && connected_darcy(inlet_idx1d)) // darcy-inlet
-              inlet_flow_sum += -2*cell_size_x*const_permeability*(1 - pressure[net_darcy(inlet_idx1d)]);
+            if (voxel_idx inlet_idx1d{map_idx(0, j, k)};
+              img_.phase[*inlet_idx1d] == microporous && connected(inlet_idx1d)) // darcy-inlet
+              inlet_flow_sum += -2*cell_size_x*const_permeability*(1 - pressure[net(inlet_idx1d)]);
 
-            if (auto outlet_idx1d = map_idx(img_.dim.x() - 1, j, k);
-              img_.phase[outlet_idx1d] == microporous && connected_darcy(outlet_idx1d)) // darcy-outlet
-              outlet_flow_sum += -2*cell_size_x*const_permeability*(pressure[net_darcy(outlet_idx1d)]);
+            if (voxel_idx outlet_idx1d{map_idx(img_.dim.x() - 1, j, k)};
+              img_.phase[*outlet_idx1d] == microporous && connected(outlet_idx1d)) // darcy-outlet
+              outlet_flow_sum += -2*cell_size_x*const_permeability*(pressure[net(outlet_idx1d)]);
           }
       }
 

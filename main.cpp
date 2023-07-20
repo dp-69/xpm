@@ -28,6 +28,19 @@
 
 int main(int argc, char* argv[])
 {
+  // xpm::voxel_idx w(3);
+  // w = {2};
+
+  // auto base = xpm::strong_integer<xpm::macro_idx, xpm::idx1d_t>{20};
+  
+
+  
+  
+
+  
+
+  
+
 
   // std::vector<int> zomg;
   // auto luuuq = zomg.end() - zomg.begin();
