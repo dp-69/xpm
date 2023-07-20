@@ -535,22 +535,25 @@ namespace xpm
     
     
     void Init() {
-      auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
-      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
-      constexpr parse::image_dict input_spec{
-        .solid = 1,       // dummy value, no '1' is in the image
-        .pore = 255,
-        .microporous = 0, // we read actual solid '0' as microporous
-      };
+
+      auto begin_init_time = std::chrono::high_resolution_clock::now();
+
+      // auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
+      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 1,       // dummy value, no '1' is in the image
+      //   .pore = 255,
+      //   .microporous = 0, // we read actual solid '0' as microporous
+      // };
       
 
-      // auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
-      //   .pore = 0,
-      //   .microporous = 2
-      // };
+      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      constexpr parse::image_dict input_spec{
+        .solid = 3,
+        .pore = 0,
+        .microporous = 2
+      };
 
 
       //------------------------------
@@ -677,6 +680,11 @@ namespace xpm
         auto input = pni.generate_pressure_input(decomposition, const_permeability);
 
         std::cout << "\n\nGeneratePressureInput END|||";
+
+
+        cout << "\n\nPRE HYPRE SAVE & SOLVE TIME: " <<
+          duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||" << endl;
+
 
         std::cout << "\n\nSave hypre input START...";
 

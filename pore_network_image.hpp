@@ -714,6 +714,8 @@ namespace xpm
 
 
 
+    
+    // ReSharper disable once CppMemberFunctionMayBeStatic
     idx1d_t total(macro_idx i) const { return *i; }
     idx1d_t total(voxel_idx i) const { return pn_.node_count_ + *i; }
 
@@ -795,16 +797,12 @@ namespace xpm
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
               if (img_.phase[*idx1d] == microporous) {
                 if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) // macro-darcy
-                  ds.union_set(
-                    total(adj_macro_idx),
-                    total(idx1d));
+                  ds.union_set(total(adj_macro_idx), total(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_.dim[d] - 1)
                     if (voxel_idx adj_idx1d = idx1d + map_idx[d]; img_.phase[*adj_idx1d] == microporous) // darcy-darcy
-                      ds.union_set(
-                        total(idx1d),
-                        total(adj_idx1d));
+                      ds.union_set(total(idx1d), total(adj_idx1d));
                 });
               }
       }
@@ -934,20 +932,16 @@ namespace xpm
 
       builder.allocate_rows(connected_count_);
       
-
       for (auto [l, r] : pn_.throat_.range(adj))
         if (connected(l) && pn_.inner_node(r)) // macro-macro
           builder.reserve_connection(
             block[net(l)],
             block[net(r)]);
 
-
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
         voxel_idx idx1d{0};
-
-        
 
         for (k = 0; k < img_.dim.z(); ++k)
           for (j = 0; j < img_.dim.y(); ++j)
