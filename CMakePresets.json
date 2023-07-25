@@ -13,9 +13,7 @@
         "CMAKE_CXX_COMPILER": "cl",
         "CMAKE_BUILD_TYPE": "$env{BUILD_TYPE}",
         "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/$env{BUILD_TYPE}/bin",
-        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake",
-        "RRM_BUILD_TYPE": "$env{BUILD_TYPE}",
-        "RRM_EXTERNAL_SIMULATOR_ACCESS_MAINWINDOW": "False"
+        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
