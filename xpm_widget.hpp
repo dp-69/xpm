@@ -547,8 +547,8 @@ namespace xpm
       // };
       
 
-      auto image_path = R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)";
+      auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      auto pnm_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\networks\EstaNORM\)";
       constexpr parse::image_dict input_spec{
         .solid = 3,
         .pore = 0,
@@ -563,6 +563,8 @@ namespace xpm
       if (auto proc_count = std::thread::hardware_concurrency();
         proc_count == 12)
         processors = {2, 2, 3};
+      else if (proc_count == 24)
+        processors = {4, 3, 2};
       else if (proc_count == 32)
         processors = {4, 4, 2};
 

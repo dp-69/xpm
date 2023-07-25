@@ -1,0 +1,52 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "hidden": true,
+      "name": "win-default",
+      "generator": "Ninja",      
+      "architecture": { "value": "x64", "strategy": "external" },
+      "binaryDir": "${sourceDir}/build/$env{BUILD_TYPE}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_BUILD_TYPE": "$env{BUILD_TYPE}",
+        "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/$env{BUILD_TYPE}/bin",
+        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg-q6/scripts/buildsystems/vcpkg.cmake",
+        "RRM_BUILD_TYPE": "$env{BUILD_TYPE}",
+        "RRM_EXTERNAL_SIMULATOR_ACCESS_MAINWINDOW": "False"
+      }
+    },
+    {
+      "inherits": "win-default",
+      "name": "win-rel",
+      "displayName": "Release",
+      "description": "Windows host, release build, ninja generator.",
+      "environment": { "BUILD_TYPE" : "Release" }
+    },
+    {
+      "inherits": "win-default",
+      "name": "win-deb",
+      "displayName": "Debug",
+      "description": "Windows host, debug build, ninja generator.",
+      "environment": { "BUILD_TYPE" : "Debug" }
+    } 
+  ],
+  "buildPresets": [
+    {
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "configurePreset": "win-rel",
+      "name": "win-rel-xpm",
+      "displayName": "xpm",
+      "targets": ["xpm", "pnextract"]
+    },
+    {
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "configurePreset": "win-deb",
+      "name": "win-deb-xpm",
+      "displayName": "xpm",
+      "targets": ["xpm", "pnextract"]
+    }
+  ]
+}

@@ -10,6 +10,11 @@ set(CMAKE_AUTOMOC ON)
 
 
 
+if(WIN32)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /MANIFEST:NO")
+  #set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO")
+  #set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /MANIFEST:NO")
+endif(WIN32)
 
 
 
@@ -49,7 +54,7 @@ message("VTK_DIR: " ${VTK_DIR})
 message("VTK_VERSION: " ${VTK_VERSION})
 
 
-add_executable(xpm_project # WIN32
+add_executable(xpm # WIN32
   "xpm_widget.hpp"  
 
   "mywidg.ui"
@@ -63,44 +68,51 @@ add_executable(xpm_project # WIN32
  "dpl/qt/property_editor/QPropertyTreeView.hpp"
 )
 
-target_include_directories(xpm_project PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
-target_compile_features(xpm_project PUBLIC cxx_std_20)
+target_include_directories(xpm PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_compile_features(xpm PUBLIC cxx_std_20)
 
-target_compile_definitions(xpm_project PRIVATE XPM_DEBUG_OUTPUT)
+target_compile_definitions(xpm PRIVATE XPM_DEBUG_OUTPUT)
 
 
 add_subdirectory(dpl)
 target_compile_definitions(dpl INTERFACE DPL_HYPRE_BOOST_SHARED_MEMORY)
-target_link_libraries(xpm_project PRIVATE dpl)
+target_link_libraries(xpm PRIVATE dpl)
 
+
+
+add_subdirectory(pnextract)
+set_target_properties(pnextract
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/external"
+)
 
 
 
 if(Qt6_FOUND)
-  target_link_libraries(xpm_project PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets)
+  target_link_libraries(xpm PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets)
 
   if(WIN32)
     add_custom_command(
-      TARGET xpm_project POST_BUILD
+      TARGET xpm POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${Qt6_DIR}/../../$<$<CONFIG:Debug>:debug/>Qt6/plugins/platforms/
-        $<TARGET_FILE_DIR:xpm_project>/platforms/
+        $<TARGET_FILE_DIR:xpm>/platforms/
     )
 
     add_custom_command(
-      TARGET xpm_project POST_BUILD
+      TARGET xpm POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${Qt6_DIR}/../../$<$<CONFIG:Debug>:debug/>Qt6/plugins/styles/
-        $<TARGET_FILE_DIR:xpm_project>/styles/
+        $<TARGET_FILE_DIR:xpm>/styles/
     )
 
-    #add_custom_command(TARGET xpm_project POST_BUILD 
+    #add_custom_command(TARGET xpm POST_BUILD 
     #  COMMAND Qt6::windeployqt
-    #  ARGS $<TARGET_FILE:xpm_project>
+    #  ARGS $<TARGET_FILE:xpm>
     #)
   endif()
 else()
-  target_link_libraries(xpm_project PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets) # Qt5::Charts
+  target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets) # Qt5::Charts
 endif()
 
 
@@ -114,7 +126,7 @@ if(VTK_VERSION VERSION_LESS "8.90.0")
   message("VTK_USE_FILE: " ${VTK_USE_FILE})
   include(${VTK_USE_FILE})
 
-  target_link_libraries(xpm_project PRIVATE ${VTK_LIBRARIES}
+  target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES}
     vtkCommonColor
     vtkCommonCore
     vtkFiltersModeling
@@ -133,8 +145,8 @@ if(VTK_VERSION VERSION_LESS "8.90.0")
     vtkRenderingVolumeOpenGL2
     vtkGUISupportQt)
 else()
-  target_link_libraries(xpm_project PRIVATE ${VTK_LIBRARIES})
-  vtk_module_autoinit(TARGETS xpm_project MODULES ${VTK_LIBRARIES})
+  target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES})
+  vtk_module_autoinit(TARGETS xpm MODULES ${VTK_LIBRARIES})
 endif()
 
 
@@ -143,13 +155,13 @@ endif()
 
 
 find_package(Boost REQUIRED COMPONENTS iostreams)
-target_link_libraries(xpm_project PRIVATE Boost::iostreams)
+target_link_libraries(xpm PRIVATE Boost::iostreams)
 
 
 find_package(MPI)
 if(MPI_FOUND)
-  target_link_libraries(xpm_project PRIVATE MPI::MPI_CXX)
+  target_link_libraries(xpm PRIVATE MPI::MPI_CXX)
 endif()
 
 find_package(HYPRE REQUIRED)
-target_link_libraries(xpm_project PRIVATE HYPRE::HYPRE)
+target_link_libraries(xpm PRIVATE HYPRE::HYPRE)

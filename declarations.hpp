@@ -66,11 +66,7 @@ namespace xpm
     // }
   };
 
-  
-  // template <typename Derived, typename T>
-  // friend constexpr bool operator==(const strong_integer<Derived, T>& lhs, const strong_integer<Derived, T>& rhs) {
-	 //  return *lhs == *rhs;
-  // }
+
 
 
 

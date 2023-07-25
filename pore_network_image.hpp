@@ -128,18 +128,14 @@ namespace xpm
     
     idx1d_t parse_statoil_text_idx(std::integral auto idx) const {
       if (idx == -1)
-        return node_count_;
+        return node_count();
   
       if (idx == 0)
-        return node_count_ + 1;
+        return node_count() + 1;
     
       return idx - 1;
     }
 
-    
-  
-  public:
-    dpl::vector3d physical_size{1};
 
     /**
      * \brief
@@ -148,9 +144,11 @@ namespace xpm
      *    INLET_IDX = node_count_ \n
      *    OUTLET_IDX = node_count_ + 1
      */
-    idx1d_t node_count_ = 0;
-    size_t throat_count_ = 0;
+    // idx1d_t node_count_ = 0;
+    // size_t throat_count_ = 0;
 
+  public:
+    dpl::vector3d physical_size{1};
 
     dpl::soa<
       attribs::pos_t, dpl::vector3d,
@@ -198,117 +196,30 @@ namespace xpm
 
     
     
-    // auto node_count() const {
-    //   return node_count_;
-    // }
+    idx1d_t node_count() const {
+      return static_cast<idx1d_t>(node_.size());
+    }
 
-    // auto throat_count() const {
-    //   return throat_count_;
-    // }
-
-    // auto inner_count() const {
-    //   return inner_node_count() + throat_count();
-    // }
-
-
-    // void scale(double x) {
-    //   using namespace attribs;
-    //         
-    //   for (auto& p : node_.range(pos))
-    //     p = p*x;
-    //
-    //   for (auto& r : node_.range(r_ins))
-    //     r = r*x;
-    //
-    //   for (auto& r : throat_.range(r_ins))
-    //     r = r*x;
-    // }
-    
-    /**
-     * \brief inlet and outlet are outer nodes, other nodes are inner.
-     */
-    bool inner_node(idx1d_t i) const {
-      return i < node_count_;
+    size_t throat_count() const {
+      return throat_.size();
+      // return throat_count_;
     }
 
     bool inner_node(macro_idx i) const {
-      return i < node_count_;
+      return i < node_count();
     }
 
     macro_idx inlet() const {
-      return {node_count_};
+      return {node_count()};
     }
 
     macro_idx outlet() const {
-      return {node_count_ + 1};
+      return {node_count() + 1};
     }
 
-    bool eval_inlet_outlet_connectivity() const {
-      disjoint_sets ds(node_count_ + 2);
+    
 
-      for (auto [l, r] : throat_.range(attribs::adj))
-        ds.union_set(*l, *r);
-
-      return ds.find_set(*inlet()) == ds.find_set(*outlet());
-    }
-
-    void connectivity_flow_summary() {
-      dpl::hypre::ls_unknown_storage lus(node_count_);
-      dpl::hypre::mpi_block::range = {0, node_count_ - 1};
-      dpl::hypre::solve(generate_pressure_input().get_ref(), lus.get_ref()); // gross solve (with isolated)
-
-      disjoint_sets ds(node_count_);
-      std::vector<bool> inlet(node_count_);
-      std::vector<bool> outlet(node_count_);
-
-      auto connected = [&](macro_idx i) {
-        auto rep = ds.find_set(*i);
-        return inlet[rep] && outlet[rep];
-      };
-
-      {
-        for (auto [l, r] : throat_.range(attribs::adj))
-          if (inner_node(r))
-            ds.union_set(*l, *r);
-
-        auto inlsdf = this->inlet();
-
-        for (auto [l, r] : throat_.range(attribs::adj))
-          if (r == inlsdf)
-            inlet[ds.find_set(*l)] = true;
-          else if (r == this->outlet())
-            outlet[ds.find_set(*l)] = true;
-
-        idx1d_t disconnected_macro = 0;
-
-        for (macro_idx i{0}; i < node_count_; ++i)
-          if (!connected(i))
-            ++disconnected_macro;
-
-        double inlet_flow_sum = 0;
-        double outlet_flow_sum = 0;
-
-        std::cout << std::format("\n\n Disconnected {} macro EXCLUSIVE nodes", disconnected_macro);
-
-        auto* pressure = lus.data[dpl::hypre::keys::value].get();
-
-        for (auto i : dpl::range(throat_count_)) {
-          auto [l, r] = throat_[attribs::adj][i];
-
-          if (r == this->inlet())
-            if (connected(l))
-              inlet_flow_sum += coef(i)*(1 - pressure[*l]);
-
-          if (r == this->outlet())
-            if (connected(l))
-              outlet_flow_sum += coef(i)*(pressure[*l]);
-        }
-      
-        std::cout << std::format("\n\nMACRO EXCLUSIVE\nINLET_PERM={} mD\nOUTLET_PERM={} mD\n",
-          -inlet_flow_sum/physical_size.x()/presets::darcy_to_m2*1000,
-          -outlet_flow_sum/physical_size.x()/presets::darcy_to_m2*1000);
-      }
-    }
+    
 
 
     void read_from_binary_file(const std::filesystem::path& network_path) { // TODO
@@ -319,22 +230,25 @@ namespace xpm
       boost::iostreams::mapped_file_source file(network_path.string());
       auto* ptr = const_cast<char*>(file.data());
 
-      parse_bin(ptr, node_count_);
-      parse_bin(ptr, throat_count_); // TODO
+      idx1d_t node_count;
+      idx1d_t throat_count;
 
-      node_.resize(node_count_);
-      throat_.resize(throat_count_);
+      parse_bin(ptr, node_count);
+      parse_bin(ptr, throat_count);
 
-      parse_bin(ptr, node_.ptr(pos), node_count_);
-      parse_bin(ptr, node_.ptr(r_ins), node_count_);
+      node_.resize(node_count);
+      throat_.resize(throat_count);
+
+      parse_bin(ptr, node_.ptr(pos), node_count);
+      parse_bin(ptr, node_.ptr(r_ins), node_count);
       
-      for (idx1d_t i = 0; i < throat_count_; ++i) {
+      for (size_t i = 0; i < throat_count; ++i) {
         dpl::vector2i pair;
         parse_bin(ptr, pair);
         throat_[adj][i] = {{pair.x()}, {pair.y()}};
       }
 
-      parse_bin(ptr, throat_.ptr(r_ins), throat_count_);
+      parse_bin(ptr, throat_.ptr(r_ins), throat_count);
 
       for (auto& r : node_.range(r_ins))
         r = r/2;
@@ -348,15 +262,19 @@ namespace xpm
 
       auto network_path_str = network_path.string();
 
+      idx1d_t node_count{0};
+      size_t throat_count{0};
+
       {
         boost::iostreams::mapped_file_source node1_file(network_path_str + "_node1.dat");
         auto* node1_ptr = const_cast<char*>(node1_file.data());
-        parse_text(node1_ptr, node_count_);
+
+        parse_text(node1_ptr, node_count);
         parse_text(node1_ptr, physical_size);
 
-        node_.resize(node_count_);
+        node_.resize(node_count);
         
-        for (idx1d_t i = 0, count = node_count_; i < count; ++i) {
+        for (idx1d_t i = 0; i < node_count; ++i) {
           skip_word(node1_ptr);
           parse_text(node1_ptr, node_[pos][i]);
           skip_line(node1_ptr);
@@ -366,13 +284,13 @@ namespace xpm
       {
         boost::iostreams::mapped_file_source throat1_file(network_path_str + "_link1.dat");
         auto* throat1_ptr = const_cast<char*>(throat1_file.data());
-        parse_text(throat1_ptr, throat_count_);   
+        parse_text(throat1_ptr, throat_count);   
 
-        throat_.resize(throat_count_);
+        throat_.resize(throat_count);
         
         idx1d_t value;
         
-        for (size_t i = 0; i < throat_count_; ++i) {       
+        for (size_t i = 0; i < throat_count; ++i) {       
           skip_word(throat1_ptr);
 
           auto& [left, right] = throat_[adj][i];
@@ -394,7 +312,7 @@ namespace xpm
         boost::iostreams::mapped_file_source throat2_file(network_path_str + "_link2.dat");
         auto* throat2_ptr = const_cast<char*>(throat2_file.data());
 
-        for (size_t i = 0; i < throat_count_; ++i) {
+        for (size_t i = 0; i < throat_count; ++i) {
           dpl::sfor<3>([&throat2_ptr] {
             skip_word(throat2_ptr);  
           });
@@ -415,7 +333,7 @@ namespace xpm
         // auto volume_node = volume.begin() + throat_count_;
         // auto shape_factor_node = shapeFactor.begin() + throat_count_;
 
-        for (idx1d_t i = 0, count = node_count_; i < count; i++) {          
+        for (idx1d_t i = 0; i < node_count; ++i) {          
           skip_word(node2_ptr);
           skip_word(node2_ptr); // parse_text(node2_ptr, volume_node[i]); // TODO
           parse_text(node2_ptr, node_[r_ins][i]);
@@ -424,7 +342,7 @@ namespace xpm
         }        
       }
 
-      for (size_t i = 0; i < throat_count_; i++)
+      for (size_t i = 0; i < throat_count; ++i)
         if (auto& [l, r] = throat_[adj][i];
           r < l) {
           std::swap(l, r);
@@ -433,12 +351,6 @@ namespace xpm
     }
 
 
-
-
-    /**
-     * \brief coefficient of a throat
-     * \param i throat index
-     */
     double coef(size_t i) const {
       using eq_tri = geometric_properties::equilateral_triangle_properties;
       using namespace attribs;
@@ -451,77 +363,27 @@ namespace xpm
         (inner_node(right) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][*right])) : 0.0));
     }
 
+    bool eval_inlet_outlet_connectivity() const {
+      disjoint_sets ds(node_count() + 2);
 
-    
+      for (auto [l, r] : throat_.range(attribs::adj))
+        ds.union_set(*l, *r);
 
-
-
-
-
-    
-    
-    row_decomposition decompose_rows(v3i blocks) {
-      auto block_size = physical_size/blocks;
-
-      using idx_block = std::pair<idx1d_t, int>;
-
-      std::vector<idx_block> block_ordered_indices(node_count_);
-
-      auto map_idx = idx_mapper(blocks);
-
-      for (auto i : dpl::range(node_count_)) { 
-        v3i block_idx = node_[attribs::pos][i]/block_size;
-        
-        block_ordered_indices[i] = {i, // NOLINTBEGIN(clang-diagnostic-float-conversion)
-          map_idx(
-            std::clamp(block_idx.x(), 0, blocks.x() - 1),
-            std::clamp(block_idx.y(), 0, blocks.y() - 1),
-            std::clamp(block_idx.z(), 0, blocks.z() - 1))
-        };                             // NOLINTEND(clang-diagnostic-float-conversion)
-      } 
-
-      std::ranges::sort(block_ordered_indices, [](const idx_block& l, const idx_block& r) { return l.second < r.second; });
-
-      row_decomposition mapping;
-
-      mapping.net_to_block = std::make_unique<idx1d_t[]>(node_count_);
-      mapping.block_to_net = std::make_unique<idx1d_t[]>(node_count_);
-
-      auto block_count = blocks.prod();
-      auto row_count_per_block = std::make_unique<idx1d_t[]>(block_count);
-      mapping.rows_per_block.resize(block_count);
-
-      for (auto i : dpl::range(block_count))
-        row_count_per_block[i] = 0;
-      
-      for (auto i : dpl::range(node_count_)) {
-        mapping.net_to_block[block_ordered_indices[i].first] = i;
-        mapping.block_to_net[i] = block_ordered_indices[i].first;
-        ++row_count_per_block[block_ordered_indices[i].second];
-      }
-
-      int first_row = 0;
-      for (auto i : dpl::range(block_count)) {
-        mapping.rows_per_block[i] = {first_row, first_row + row_count_per_block[i] - 1};
-        first_row += row_count_per_block[i];
-      }
-
-      return mapping;
+      return ds.find_set(*inlet()) == ds.find_set(*outlet());
     }
 
-
-    dpl::hypre::ls_known_storage generate_pressure_input() {
+    dpl::hypre::ls_known_storage generate_pressure_input() const {
       dpl::hypre::ls_known_storage_builder builder;
 
-      builder.allocate_rows(node_count_);
+      builder.allocate_rows(node_count());
 
-      for (auto i : dpl::range(throat_count_))
+      for (auto i : dpl::range(throat_count()))
         if (auto [l, r] = throat_[attribs::adj][i]; inner_node(r))
           builder.reserve_connection(*l, *r);
 
       builder.allocate_values();
 
-      for (auto i : dpl::range(throat_count_)) {
+      for (auto i : dpl::range(throat_count())) {
         auto [l, r] = throat_[attribs::adj][i];
 
         auto coef = this->coef(i);
@@ -541,40 +403,60 @@ namespace xpm
       return builder.acquire_storage();
     }
 
+    void connectivity_flow_summary() const {
+      dpl::hypre::ls_unknown_storage lus(node_count());
+      dpl::hypre::mpi_block::range = {0, node_count() - 1};
+      dpl::hypre::solve(generate_pressure_input().get_ref(), lus.get_ref()); // gross solve (with isolated)
 
-    dpl::hypre::ls_known_storage generate_pressure_input(const row_decomposition& mapping, const auto& coef_map) {
-      using namespace attribs;
+      disjoint_sets ds(node_count());
+      std::vector<bool> connected_inlet(node_count());
+      std::vector<bool> connected_outlet(node_count());
 
-      auto* map = mapping.net_to_block.get();
+      auto connected = [&](macro_idx i) {
+        auto rep = ds.find_set(*i);
+        return connected_inlet[rep] && connected_outlet[rep];
+      };
+
+      {
+        for (auto [l, r] : throat_.range(attribs::adj))
+          if (inner_node(r))
+            ds.union_set(*l, *r);
+
+        for (auto [l, r] : throat_.range(attribs::adj))
+          if (r == inlet())
+            connected_inlet[ds.find_set(*l)] = true;
+          else if (r == outlet())
+            connected_outlet[ds.find_set(*l)] = true;
+
+        idx1d_t disconnected_macro = 0;
+        
+        for (macro_idx i{0}; i < node_count(); ++i)
+          if (!connected(i))
+            ++disconnected_macro;
+
+        double inlet_flow = 0;
+        double outlet_flow = 0;
+
+        std::cout << std::format("\n\n Disconnected {} macro EXCLUSIVE nodes", disconnected_macro);
+
+        auto* pressure = lus.data[dpl::hypre::keys::value].get();
+
+        for (auto i : dpl::range(throat_count())) {
+          auto [l, r] = throat_[attribs::adj][i];
+
+          if (r == inlet())
+            if (connected(l))
+              inlet_flow += coef(i)*(1 - pressure[*l]);
+
+          if (r == outlet())
+            if (connected(l))
+              outlet_flow += coef(i)*(pressure[*l]);
+        }
       
-      dpl::hypre::ls_known_storage_builder builder;
-
-      builder.allocate_rows(node_count_);
-
-      for (size_t i = 0; i < throat_count_; ++i)
-        if (auto [n0, n1] = throat_[adj][i]; inner_node(n0) && inner_node(n1))
-          builder.reserve_connection(map[*n0], map[*n1]);
-
-      builder.allocate_values();
-
-      for (size_t i = 0; i < throat_count_; ++i) {
-        auto [l, r] = throat_[adj][i];
-
-        auto coef = coef_map(i);
-
-        if (r == inlet()) {
-          builder.add_b(map[*l], coef/**1 Pa*/);
-          builder.add_diag(map[*l], coef);
-        }
-        else if (r == outlet()) {
-          // builder.add_b(map[n0], coef/**0 Pa*/);
-          builder.add_diag(map[*l], coef);
-        }
-        else
-          builder.set_connection(map[*l], map[*r], coef);
+        std::cout << std::format("\n\nMACRO EXCLUSIVE\nINLET_PERM={} mD\nOUTLET_PERM={} mD\n",
+          -inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
+          -outlet_flow/physical_size.x()/presets::darcy_to_m2*1000);
       }
-
-      return builder.acquire_storage();
     }
   };
 
@@ -635,7 +517,8 @@ namespace xpm
     void read_image(const auto& image_path, parse::image_dict input_config) {
       std::ifstream is(image_path);
       is.seekg(0, std::ios_base::end);
-      size = is.tellg(); // NOLINT(clang-diagnostic-shorten-64-to-32, bugprone-narrowing-conversions)
+      size = static_cast<idx1d_t>(is.tellg());
+      size = static_cast<idx1d_t>(is.tellg());
       is.seekg(0, std::ios_base::beg);
       phase = std::make_unique<voxel_tag::phase[]>(size);
       is.read(reinterpret_cast<char*>(phase.get()), size);
@@ -712,12 +595,10 @@ namespace xpm
     const auto& pn() const { return pn_; }
     const auto& img() const { return img_; }
 
-
-
     
     // ReSharper disable once CppMemberFunctionMayBeStatic
     idx1d_t total(macro_idx i) const { return *i; }
-    idx1d_t total(voxel_idx i) const { return pn_.node_count_ + *i; }
+    idx1d_t total(voxel_idx i) const { return pn_.node_count() + *i; }
 
     bool connected(auto i) const { return connected_[this->total(i)]; }
     idx1d_t net(auto i) const { return net_map_[this->total(i)]; }
@@ -727,56 +608,8 @@ namespace xpm
 
 
 
-
-
-
-    // /**
-    //  * \param i local size : [0, pn_.node_count_)
-    //  */
-    // auto total_macro(idx1d_t i) const {
-    //   return i;
-    // }
-
-    // /**
-    //  * \param i local size : [0, img_.size)
-    //  */
-    // auto total_darcy(idx1d_t i) const {
-    //   return pn_.node_count_ + i;
-    // }
-
-    // /**
-    //  * \param i local size : [0, pn_.node_count_)
-    //  */
-    // bool connected_macro(idx1d_t i) const {
-    //   return connected_[total_macro(i)];
-    // }
-
-    // /**
-    //  * \param i local size : [0, img_.size)
-    //  */
-    // bool connected_darcy(idx1d_t i) const {
-    //   return connected_[total_darcy(i)];
-    // }
-
-    // /**
-    //  * \param i local size : [0, pn_.node_count_)
-    //  */
-    // auto net_macro(idx1d_t i) const {
-    //   return net_map_[total_macro(i)];
-    // }
-
-    // /**
-    //  * \param i local size : [0, img_.size)
-    //  */
-    // auto net_darcy(idx1d_t i) const {
-    //   return net_map_[total_darcy(i)];
-    // }
-
-
-
-
     void connectivity_inlet_outlet() {
-      auto gross_total_size = pn_.node_count_ + img_.size;
+      auto gross_total_size = pn_.node_count() + img_.size;
 
       disjoint_sets ds(gross_total_size);
 
@@ -870,7 +703,7 @@ namespace xpm
       };
 
       {
-        for (macro_idx i{0}; i < pn_.node_count_; ++i)
+        for (macro_idx i{0}; i < pn_.node_count(); ++i)
           if (connected(i)) // macro node
             add(pn_.node_[attribs::pos][*i]);
 
@@ -967,18 +800,16 @@ namespace xpm
       builder.allocate_values();
 
 
-      for (auto i : dpl::range(pn_.throat_count_)) {
-        auto [l, r] = pn_.throat_[adj][i];
+      for (auto i : dpl::range(pn_.throat_count()))
+        if (auto [l, r] = pn_.throat_[adj][i]; connected(l)) {
+          auto coef = pn_.coef(i);
 
-        auto coef = pn_.coef(i);
-
-        if (connected(l))
           if (pn_.inner_node(r)) // macro-macro
             builder.set_connection(
               block[net(l)],
               block[net(r)],
               coef);
-          else if (r == pn_.inlet()) { // macro-inlet                    // NOLINT(clang-diagnostic-dangling-else)
+          else if (r == pn_.inlet()) { // macro-inlet
             builder.add_b(block[net(l)], coef/**1 Pa*/);
             builder.add_diag(block[net(l)], coef);
           }
@@ -986,7 +817,7 @@ namespace xpm
             // builder.add_b(block[net(l)], coef/**0 Pa*/);
             builder.add_diag(block[net(l)], coef);
           }
-      }
+        }
 
 
       {
@@ -1022,8 +853,24 @@ namespace xpm
                 if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) { // macro-darcy
                   using eq_tri = geometric_properties::equilateral_triangle_properties;
 
+                  // auto Li = cell_size.x()/2;
+                  // auto gi = const_permeability;
+                  //
+                  // auto Lj = pn_.node_[r_ins][*adj_macro_idx];
+                  // auto gj = eq_tri::conductance(eq_tri::area(Lj));
+                  //
+                  // auto Lt = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length() - Li - Lj;
+                  // auto gt = gj;
+                  //
+                  // if (Lt < 0)
+                  //   Lt = 0;
+                  //   // std::cout << "NEGATIVE Lt < 0";
+                  //
+                  // auto coef = -1.0/(Li/gi + Lt/gt + Lj/gj);
+
+
                   auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
-                  auto r_ins = cell_size.x()/4;                                                   // NOLINT(clang-diagnostic-shadow)
+                  auto r_ins = cell_size.x()/4;                                                    // NOLINT(clang-diagnostic-shadow)
                   auto coef = -1.0/(length/eq_tri::conductance(eq_tri::area(r_ins)));
 
                   builder.set_connection(
@@ -1077,9 +924,8 @@ namespace xpm
           }
       }
 
-      for (auto i : dpl::range(pn_.throat_count_))
-        if (auto [l, r] = pn_.throat_[attribs::adj][i];
-          r == pn_.inlet()) { // macro-inlet
+      for (auto i : dpl::range(pn_.throat_count()))
+        if (auto [l, r] = pn_.throat_[attribs::adj][i]; r == pn_.inlet()) { // macro-inlet
           if (connected(l))
             inlet_flow_sum += pn_.coef(i)*(1 - pressure[net(l)]);
         }

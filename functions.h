@@ -15,15 +15,6 @@
 
 namespace xpm
 {
-  
-
-  
-
-  
-
-
-
-
   // vtkSmartPointer<vtkActor> CreateNodeActor(const pore_network_model& pnm, vtkLookupTable* lut);
   // vtkSmartPointer<vtkActor> CreateThroatActor(const pore_network_model& pnm, vtkLookupTable* lut);
 
@@ -76,7 +67,7 @@ namespace xpm
       
     vtkNew<vtkPoints> points;
       
-    for (idx1d_t i = 0, count = pnm.node_count_; i < count; ++i) {
+    for (idx1d_t i = 0, count = pnm.node_count(); i < count; ++i) {
       points->InsertNextPoint(pnm.node_[pos][i]);
       scale_array->InsertNextTuple1(pnm.node_[r_ins][i]);
       color_array->InsertNextTuple1(color_map(macro_idx{i}));
@@ -148,7 +139,7 @@ namespace xpm
 
     vtkNew<vtkPoints> points;
 
-    for (size_t i = 0, count = pnm.throat_count_; i < count; ++i)
+    for (size_t i = 0, count = pnm.throat_count(); i < count; ++i)
       if (auto [n0, n1] = pnm.throat_[adj][i];
         pnm.inner_node(n0) && pnm.inner_node(n1)) {
         auto& n0_pos = pnm.node_[pos][*n0];
