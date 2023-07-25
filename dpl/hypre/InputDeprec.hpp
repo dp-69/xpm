@@ -443,7 +443,7 @@ namespace dpl::hypre
       *(HYPRE_BigInt*)ptr = input.nrows;
       ptr = (char*)ptr + sizeof(HYPRE_BigInt);
       
-      *(HYPRE_BigInt*)ptr = coefs_count;
+      *(HYPRE_BigInt*)ptr = static_cast<HYPRE_BigInt>(coefs_count);
       ptr = (char*)ptr + sizeof(HYPRE_BigInt);
       
       std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_BigInt));
@@ -479,7 +479,7 @@ namespace dpl::hypre
       *(HYPRE_BigInt*)ptr = input.nrows;
       ptr = (char*)ptr + sizeof(HYPRE_BigInt);
       
-      *(HYPRE_BigInt*)ptr = coefs_count;
+      *(HYPRE_BigInt*)ptr = static_cast<HYPRE_BigInt>(coefs_count);
       ptr = (char*)ptr + sizeof(HYPRE_BigInt);
       
       std::memcpy(ptr, input.ncols, input.nrows*sizeof(HYPRE_BigInt));

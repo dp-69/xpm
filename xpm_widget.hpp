@@ -705,7 +705,7 @@ namespace xpm
         
         auto solve_result = std::system(
           std::format("mpiexec -n {} \"{}\" -s",
-            processors.prod(), "xpm_project.exe"
+            processors.prod(), "xpm.exe"
           ).c_str());
         
         auto stop = std::chrono::high_resolution_clock::now();

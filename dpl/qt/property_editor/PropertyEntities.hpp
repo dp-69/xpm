@@ -57,13 +57,15 @@ namespace dpl::qt::property_editor
     friend class PropertyModel;
 
   protected:
-    auto* GetVisibleChildren(int i) {      
+    auto* GetVisibleChildren(int i) const {      
       for (auto* c : children)
         if (c->IsVisible() && i-- == 0)
           return c;
+
+      throw std::exception();
     }
 
-    int VisibleChildrenCount() {
+    int VisibleChildrenCount() const {
       int i = 0;
       for (auto* c : children)
         if (c->IsVisible())
@@ -76,7 +78,7 @@ namespace dpl::qt::property_editor
     PropertyCategory* parent;
     std::vector<PropertyBase*> children;
     
-    int VisibleIndex();
+    int VisibleIndex() const;
     
     virtual ~PropertyBase() = default;
 
@@ -136,7 +138,7 @@ namespace dpl::qt::property_editor
   };
 
 
-  inline int PropertyBase::VisibleIndex() {    
+  inline int PropertyBase::VisibleIndex() const {    
     int i = 0;
     for (auto* ptr : parent->children) {
       if (ptr == this)
@@ -145,6 +147,8 @@ namespace dpl::qt::property_editor
       if (ptr->IsVisible())
         ++i;
     }
+
+    throw std::exception();
   }
 
 

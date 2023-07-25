@@ -414,9 +414,10 @@ namespace dpl
       sfor<n>([&](auto i) { ptr_[i] = f(l[i], r); });
     }
 
+    // ReSharper disable once CppNonExplicitConvertingConstructor
     template <typename Derived, typename U>
     constexpr vector_n(const _vector_oper<Derived, U, n>& v) : ptr_{} {
-      sfor<n>([&](auto i) { ptr_[i] = v[i]; });
+      sfor<n>([&](auto i) { ptr_[i] = static_cast<T>(v[i]); });
     }
     
     

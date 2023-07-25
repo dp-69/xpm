@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 
 project(xpm_project)
 
@@ -6,17 +6,13 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(CMAKE_AUTOMOC ON)
 
-
-
-
-
-if(WIN32)
+if(MSVC)  
+  string(REPLACE "/W3" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /MANIFEST:NO")
   #set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO")
   #set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /MANIFEST:NO")
-endif(WIN32)
-
-
+endif()
 
 find_package(Qt6 COMPONENTS Core Gui Widgets OpenGLWidgets)
 
@@ -26,12 +22,9 @@ if(Qt6_FOUND)
   message("Qt6_VERSION: " ${Qt6_VERSION})
 else()
   find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED) #Charts
-
   message("Qt5_DIR: " ${Qt5_DIR})
   message("Qt5_VERSION: " ${Qt5_VERSION})
 endif()
-
-
 
 
 find_package(VTK REQUIRED)
@@ -81,11 +74,17 @@ target_link_libraries(xpm PRIVATE dpl)
 
 
 add_subdirectory(pnextract)
-set_target_properties(pnextract
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/external"
-)
 
+if(MSVC)  
+  target_compile_options(pnextract PRIVATE /w)
+  target_compile_options(xpm PRIVATE /W3)
+else()
+  #add_compile_options("-w")
+endif()
+
+set_target_properties(pnextract
+  PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/other")
 
 
 if(Qt6_FOUND)
@@ -114,9 +113,6 @@ if(Qt6_FOUND)
 else()
   target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets) # Qt5::Charts
 endif()
-
-
-
 
 
 
