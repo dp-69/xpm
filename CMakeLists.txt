@@ -29,7 +29,6 @@ endif()
 
 find_package(VTK REQUIRED)
 
-
 #find_package(VTK REQUIRED COMPONENTS 
 #  CommonColor
 #  CommonCore
@@ -82,9 +81,7 @@ else()
   #add_compile_options("-w")
 endif()
 
-set_target_properties(pnextract
-  PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/other")
+set_target_properties(pnextract PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pnextract")
 
 
 if(Qt6_FOUND)
@@ -150,8 +147,8 @@ endif()
 
 
 
-find_package(Boost REQUIRED COMPONENTS iostreams)
-target_link_libraries(xpm PRIVATE Boost::iostreams)
+find_package(Boost COMPONENTS iostreams graph REQUIRED)
+target_link_libraries(xpm PRIVATE Boost::iostreams Boost::graph)
 
 
 find_package(MPI)

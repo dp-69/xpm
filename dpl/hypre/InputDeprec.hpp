@@ -284,7 +284,9 @@ namespace dpl::hypre
 
 
   inline void solve(const ls_known_ref& in, const ls_unknown_ref& out,
-    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20) {
+    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20
+    // HYPRE_Real tolerance = 1.e-8, HYPRE_Int max_iterations = 1000
+  ) {
 
     int w_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
@@ -431,7 +433,7 @@ namespace dpl::hypre
       auto coefs_count = input.cols_of_coefs.size();
       
       auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(HYPRE_BigInt) +
-        input.nrows*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex))
+        input.nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex))
       + coefs_count*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
         blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
       
@@ -446,8 +448,8 @@ namespace dpl::hypre
       *(HYPRE_BigInt*)ptr = static_cast<HYPRE_BigInt>(coefs_count);
       ptr = (char*)ptr + sizeof(HYPRE_BigInt);
       
-      std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_BigInt));
-      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_BigInt);
+      std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_Int));
+      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Int);
 
       std::memcpy(ptr, input.constants.data(), input.nrows*sizeof(HYPRE_Complex));
       ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
@@ -461,13 +463,13 @@ namespace dpl::hypre
       std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
     }
 
-    inline void save(const ls_known_ref& input, auto nvalues, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
+    inline void save(const ls_known_ref& input, size_t nvalues, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
       using namespace boost::interprocess;
       
       auto coefs_count = nvalues;
       
       auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(HYPRE_BigInt) +
-        input.nrows*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex))
+        input.nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex))
       + coefs_count*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
         blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
       
@@ -482,8 +484,8 @@ namespace dpl::hypre
       *(HYPRE_BigInt*)ptr = static_cast<HYPRE_BigInt>(coefs_count);
       ptr = (char*)ptr + sizeof(HYPRE_BigInt);
       
-      std::memcpy(ptr, input.ncols, input.nrows*sizeof(HYPRE_BigInt));
-      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_BigInt);
+      std::memcpy(ptr, input.ncols, input.nrows*sizeof(HYPRE_Int));
+      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Int);
 
       std::memcpy(ptr, input.b, input.nrows*sizeof(HYPRE_Complex));
       ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);

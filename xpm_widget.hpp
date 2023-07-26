@@ -392,7 +392,7 @@ namespace xpm
     
 
 
-    bool use_cache = false;
+    bool use_cache = true;
     bool save_cache = true;
 
     
@@ -532,9 +532,69 @@ namespace xpm
     // }
 
 
-    
+
+    auto ProcessImage(const std::filesystem::path& p) const {
+      auto fn = p.filename();
+
+      std::filesystem::copy(p, "pnextract"/fn, std::filesystem::copy_options::update_existing);
+      
+      constexpr auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
+
+      auto prev = std::filesystem::current_path();
+      std::filesystem::current_path(prev/"pnextract");
+      auto network_dir = p.stem();
+
+      if (//std::filesystem::exists(network_dir) &&
+        std::ranges::all_of(files, [&](const auto& file) { return std::filesystem::exists(network_dir/file); })) {
+
+        std::cout << "using cached network\n";
+      }
+      else {
+        std::cout << "=========== pnextract's network extraction begin ===========\n";
+
+        /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
+          std::format("pnextract.exe {}", fn.string()).c_str());
+      
+        std::filesystem::create_directory(network_dir);
+        for (std::filesystem::path f : files)
+          rename(f, network_dir/f);
+
+        std::filesystem::remove("_VElems.mhd");
+
+        std::cout << "=========== pnextract's network extraction end ===========\n";
+      }
+
+
+      network_dir = std::filesystem::absolute(network_dir);
+
+      
+
+      std::filesystem::current_path(prev);
+      
+
+      return network_dir;
+    }
+
     
     void Init() {
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
+      // auto pnm_path = ProcessImage(image_path)/"";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 1,       // dummy value, no '1' is in the image
+      //   .pore = 0,
+      //   .microporous = 255, // we read actual solid '0' as microporous
+      // };
+
+      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      auto pnm_path = ProcessImage(image_path)/"";
+      constexpr parse::image_dict input_spec{
+        .solid = 3,
+        .pore = 0,
+        .microporous = 2
+      };
+
+
+
 
       auto begin_init_time = std::chrono::high_resolution_clock::now();
 
@@ -547,13 +607,13 @@ namespace xpm
       // };
       
 
-      auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      auto pnm_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\networks\EstaNORM\)";
-      constexpr parse::image_dict input_spec{
-        .solid = 3,
-        .pore = 0,
-        .microporous = 2
-      };
+      // auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
+      // auto pnm_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\networks\EstaNORM\)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 3,
+      //   .pore = 0,
+      //   .microporous = 2
+      // };
 
 
       //------------------------------
@@ -574,8 +634,9 @@ namespace xpm
       static constexpr auto millidarcy = 1;
       static constexpr auto const_permeability = millidarcy*0.001*presets::darcy_to_m2;
 
+      
       auto cache_path = std::format("cache/{}-pressure-{:.2f}mD.bin",
-        std::filesystem::path(pnm_path).parent_path().filename().string(), const_permeability/presets::darcy_to_m2*1e3);
+        image_path.stem().string(), const_permeability/presets::darcy_to_m2*1e3);
 
 
       InitGUI();
@@ -593,7 +654,7 @@ namespace xpm
       pore_network pn{pnm_path, pore_network::file_format::statoil};
 
       #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nNetwork loaded";
+        std::cout << "\nNetwork loaded";
         std::cout << (pn.eval_inlet_outlet_connectivity() ? " [CONNECTED]" : " [DISCONNECTED]");
       #endif
 

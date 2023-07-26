@@ -136,17 +136,6 @@ namespace xpm
       return idx - 1;
     }
 
-
-    /**
-     * \brief
-     *    inner node count \n
-     *    disregards inlet and outlet \n
-     *    INLET_IDX = node_count_ \n
-     *    OUTLET_IDX = node_count_ + 1
-     */
-    // idx1d_t node_count_ = 0;
-    // size_t throat_count_ = 0;
-
   public:
     dpl::vector3d physical_size{1};
 
