@@ -577,22 +577,26 @@ namespace xpm
 
     
     void Init() {
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      // auto pnm_path = ProcessImage(image_path)/"";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 1,       // dummy value, no '1' is in the image
-      //   .pore = 0,
-      //   .microporous = 255, // we read actual solid '0' as microporous
-      // };
-
-      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
-      auto pnm_path = ProcessImage(image_path)/"";
+      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
       constexpr parse::image_dict input_spec{
-        .solid = 3,
+        .solid = 1,       // dummy value, no '1' is in the image
         .pore = 0,
-        .microporous = 2
+        .microporous = 255, // we read actual solid '0' as microporous
       };
 
+
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 3,
+      //   .pore = 0,
+      //   .microporous = 2
+      // };
+
+
+
+
+
+      auto pnm_path = ProcessImage(image_path)/"";
 
 
 

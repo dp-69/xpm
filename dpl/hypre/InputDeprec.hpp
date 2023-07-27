@@ -35,13 +35,6 @@
 // #include <boost/format.hpp>
 
 #include <vector>
-#include <fstream>
-
-#include <forward_list>
-#include <iostream>
-
-
-
 
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
 #include <boost/interprocess/shared_memory_object.hpp>
@@ -114,8 +107,8 @@ namespace dpl::hypre
       lks_.nrows = nrows;
       lks_.ncols = std::make_unique<HYPRE_Int[]>(nrows);
       lks_.b = std::make_unique<HYPRE_Complex[]>(nrows);
-      
-      for (auto i : dpl::range(nrows)) {
+
+      for (HYPRE_BigInt i = 0; i < nrows; ++i) {
         lks_.ncols[i] = 1; // diag coef
         lks_.b[i] = 0;
       }
@@ -177,33 +170,61 @@ namespace dpl::hypre
   };
 
 
+  class parser
+  {
+    void* ptr_;
+
+  public:
+    explicit parser(void* ptr) : ptr_(ptr) {}
+
+    template <typename T>
+    void read(T& val) {
+      val = *static_cast<T*>(ptr_);
+      ptr_ = static_cast<char*>(ptr_) + sizeof(T); 
+    }
+    
+    template <typename T, typename S>
+    void read(T*& val, S size) {
+      val = static_cast<T*>(ptr_);
+      ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+    }
+
+    // std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_Int));
+    //   ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Int);
+
+    template <typename T>
+    void write(T val) {
+      *static_cast<T*>(ptr_) = val;
+      ptr_ = static_cast<char*>(ptr_) + sizeof(T);
+    }
+
+    template <typename T, typename S>
+    void write(T* val, S size) {
+      std::memcpy(ptr_, val, size*sizeof(T));
+      ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+    }
+
+    auto* ptr() const { return ptr_; }
+  };
+
+
+
+
 
 #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
   inline void load(const boost::interprocess::mapped_region& region, ls_known_ref& lkr, std::pair<HYPRE_BigInt, HYPRE_BigInt>*& rows) {
     using namespace boost::interprocess;
 
-    // mapped_region region(smo, read_only);
-
-    auto* ptr = region.get_address();
-
-    lkr.nrows = *(HYPRE_BigInt*)ptr;
-    ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-
-    auto coefs_count = *(HYPRE_BigInt*)ptr;
-    ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-
-
-    lkr.ncols = (HYPRE_BigInt*)ptr;
-    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_BigInt);
-
-    lkr.b = (HYPRE_Complex*)ptr;
-    ptr = (char*)ptr + lkr.nrows * sizeof(HYPRE_Complex);
-
-    lkr.cols = (HYPRE_BigInt*)ptr;
-    ptr = (char*)ptr + coefs_count * sizeof(HYPRE_BigInt);
-
-    lkr.values = (HYPRE_Complex*)ptr;
-    ptr = (char*)ptr + coefs_count * sizeof(HYPRE_Complex);
+    size_t nvalues;
+    
+    parser p{region.get_address()};
+    
+    p.read(lkr.nrows);
+    p.read(nvalues);
+    p.read(lkr.ncols, lkr.nrows);
+    p.read(lkr.b, lkr.nrows);
+    p.read(lkr.cols, nvalues);
+    p.read(lkr.values, nvalues);
 
 
     #ifdef HYPRE_SEQUENTIAL
@@ -212,10 +233,12 @@ namespace dpl::hypre
     #else
       int rank;
       MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-      rows = static_cast<std::pair<HYPRE_BigInt, HYPRE_BigInt>*>(ptr) + rank;
+      rows = static_cast<std::pair<HYPRE_BigInt, HYPRE_BigInt>*>(p.ptr()) + rank;
     #endif
   }
-#endif
+  #endif
+
+ 
 
 
 
@@ -283,13 +306,10 @@ namespace dpl::hypre
 
 
 
-  inline void solve(const ls_known_ref& in, const ls_unknown_ref& out,
+  inline std::pair<HYPRE_Real, HYPRE_Int> solve(const ls_known_ref& in, const ls_unknown_ref& out,
     HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20
     // HYPRE_Real tolerance = 1.e-8, HYPRE_Int max_iterations = 1000
   ) {
-
-    int w_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
 
     HYPRE_Solver solver;
     
@@ -328,38 +348,29 @@ namespace dpl::hypre
     HYPRE_BoomerAMGSetup(solver, ref_A, ref_b, ref_x);
     HYPRE_BoomerAMGSolve(solver, ref_A, ref_b, ref_x);
 
-    
-    if (w_rank == 0) {
-      // ij_vector ij_residual{in.nrows};
-      // HYPRE_ParVector residual_ref = ij_residual.par_ref();
-      // HYPRE_BoomerAMGGetResidual(solver, &residual_ref);
-      // std::vector<double> res_vals(out.nvalues);
-    
-      // ij_residual.get_values(out.nvalues, out.indices, res_vals.data());
-      // for (auto v : res_vals)
-      //   std::cout << v << std::endl << std::flush;
-    
-      HYPRE_Real final_res;
-      HYPRE_Int num_interations;
-    
-      HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &final_res);
-      HYPRE_BoomerAMGGetNumIterations(solver, &num_interations);
-
-      std::cout << std::format("\n\nFINAL RESIDUAL: {}, NUMBER OF ITERATIONS: {}", final_res, num_interations) << std::flush;
-
-
-
-      
-
-      
-    }
-
-
     // const auto t1 = std::chrono::system_clock::now();
     // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
+
+
+    HYPRE_Real final_res = 0;
+    HYPRE_Int num_interations = 0;
+
+    #ifndef HYPRE_SEQUENTIAL
+    int w_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
+    if (w_rank == 0)
+    #endif
+    {
+      HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &final_res);
+      HYPRE_BoomerAMGGetNumIterations(solver, &num_interations);
+    }
+    
+
     HYPRE_BoomerAMGDestroy(solver);                  
   
     ij_x.get_values(out.nvalues, out.indices, out.values);
+
+    return {final_res, num_interations};
   }
 
 
@@ -427,76 +438,51 @@ namespace dpl::hypre
     using smo_t = boost::interprocess::shared_memory_object;
 
     inline void save(const InputDeprec& input, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
-      // boost::interprocess::shared_memory_object shm (create_only, "MySharedMemory", read_write);
       using namespace boost::interprocess;
       
-      auto coefs_count = input.cols_of_coefs.size();
+      auto nvalues = input.cols_of_coefs.size();
       
-      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(HYPRE_BigInt) +
+      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(size_t) +
         input.nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex))
-      + coefs_count*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
+      + nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
         blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
       
       smo.truncate(buffer_size);
       
       mapped_region region(smo, read_write);
-      auto* ptr = region.get_address();
 
-      *(HYPRE_BigInt*)ptr = input.nrows;
-      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-      
-      *(HYPRE_BigInt*)ptr = static_cast<HYPRE_BigInt>(coefs_count);
-      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-      
-      std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_Int));
-      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Int);
+      parser p{region.get_address()};
+      p.write(input.nrows);
+      p.write(nvalues);
+      p.write(input.ncols_per_row.data(), input.nrows);
+      p.write(input.constants.data(), input.nrows);
+      p.write(input.cols_of_coefs.data(), nvalues);
+      p.write(input.coefs.data(), nvalues);
 
-      std::memcpy(ptr, input.constants.data(), input.nrows*sizeof(HYPRE_Complex));
-      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
-
-      std::memcpy(ptr, input.cols_of_coefs.data(), coefs_count*sizeof(HYPRE_BigInt));
-      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
-
-      std::memcpy(ptr, input.coefs.data(), coefs_count*sizeof(HYPRE_Complex));
-      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Complex);
-
-      std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
+      std::memcpy(p.ptr(), blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
     }
 
     inline void save(const ls_known_ref& input, size_t nvalues, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks, smo_t& smo) {
       using namespace boost::interprocess;
       
-      auto coefs_count = nvalues;
-      
-      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(HYPRE_BigInt) +
+      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(size_t) +
         input.nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex))
-      + coefs_count*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
+      + nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
         blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
       
       smo.truncate(buffer_size);
       
       mapped_region region(smo, read_write);
-      auto* ptr = region.get_address();
 
-      *(HYPRE_BigInt*)ptr = input.nrows;
-      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
+      parser p{region.get_address()};
+      p.write(input.nrows);
+      p.write(nvalues);
+      p.write(input.ncols, input.nrows);
+      p.write(input.b, input.nrows);
+      p.write(input.cols, nvalues);
+      p.write(input.values, nvalues);
       
-      *(HYPRE_BigInt*)ptr = static_cast<HYPRE_BigInt>(coefs_count);
-      ptr = (char*)ptr + sizeof(HYPRE_BigInt);
-      
-      std::memcpy(ptr, input.ncols, input.nrows*sizeof(HYPRE_Int));
-      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Int);
-
-      std::memcpy(ptr, input.b, input.nrows*sizeof(HYPRE_Complex));
-      ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Complex);
-
-      std::memcpy(ptr, input.cols, coefs_count*sizeof(HYPRE_BigInt));
-      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_BigInt);
-
-      std::memcpy(ptr, input.values, coefs_count*sizeof(HYPRE_Complex));
-      ptr = (char*)ptr + coefs_count*sizeof(HYPRE_Complex);
-
-      std::memcpy(ptr, blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
+      std::memcpy(p.ptr(), blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
     }
 #endif
 
