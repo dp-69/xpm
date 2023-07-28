@@ -26,91 +26,50 @@
 #include <HYPRE.h>
 #include <HYPRE_parcsr_ls.h>
 
-#include <tuple>
-
 namespace dpl::hypre
 {
-  #ifndef HYPRE_SEQUENTIAL
-  namespace mpi_block
+  namespace mpi
   {
+    inline constexpr MPI_Comm comm =
+      #ifdef MPI_COMM_WORLD 
+        MPI_COMM_WORLD
+      #else
+        0
+      #endif
+    ;
+
+    #ifndef HYPRE_SEQUENTIAL
     static std::pair<HYPRE_BigInt, HYPRE_BigInt> range; // TODO - needs to be reviwed
+    #endif
   }
-
-
-  // inline std::tuple<HYPRE_BigInt, HYPRE_BigInt> mpi_part(HYPRE_BigInt nrows) {
-  //   int w_size, w_rank;
-  //   MPI_Comm_size(MPI_COMM_WORLD, &w_size);
-  //   MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-  //   
-  //   auto count = nrows/w_size;
-  //   auto remainder = nrows%w_size;
-  //   HYPRE_BigInt start, stop;
-  //
-  //   if (w_rank < remainder) {
-  //     // The first 'remainder' ranks get 'count + 1' tasks each
-  //     start = w_rank*(count + 1);
-  //     stop = start + count;
-  //   }
-  //   else {
-  //     // The remaining 'size - remainder' ranks get 'count' task each
-  //     start = w_rank*count + remainder;
-  //     stop = start + (count - 1);
-  //   }
-  //
-  //   return {start, stop};
-  // }
-  #endif
-  
-
   
   class ij_vector
   {
     HYPRE_IJVector v_ = nullptr;
-
-    void allocate_only(HYPRE_BigInt nvalues) {
-    #ifdef HYPRE_SEQUENTIAL
-      static constexpr auto comm = 0;
-      static constexpr auto jlower = 0;
-      const auto jupper = nvalues - 1;
-    #else
-      static constexpr auto comm = MPI_COMM_WORLD;
-      auto [jlower, jupper] = dpl::hypre::mpi_block::range; // mpi_part(nvalues);
-    #endif
-
-      HYPRE_IJVectorCreate(comm, jlower, jupper, &v_);
+  
+  public:
+    ij_vector(HYPRE_BigInt jlower, HYPRE_BigInt jupper) {
+      HYPRE_IJVectorCreate(mpi::comm, jlower, jupper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);
       HYPRE_IJVectorAssemble(v_);
     }
 
-    void allocate_assign(HYPRE_BigInt nvalues, const HYPRE_Complex* values) {
-    #ifdef HYPRE_SEQUENTIAL
-      static constexpr auto comm = 0;
-      static constexpr auto jlower = 0;
-      const auto jupper = nvalues - 1;
-    #else
-      static constexpr auto comm = MPI_COMM_WORLD;
-      auto [jlower, jupper] = dpl::hypre::mpi_block::range; // mpi_part(nvalues);
-    #endif
-      
-      HYPRE_IJVectorCreate(comm, jlower, jupper, &v_);
+    ij_vector(HYPRE_BigInt jlower, HYPRE_BigInt jupper, const HYPRE_Complex* values) {
+      HYPRE_IJVectorCreate(mpi::comm, jlower, jupper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);
 
-      //      HYPRE_IJVectorSetValues(_v, nrows, rows, values);
+      // auto count = jupper - jlower + 1;
+      // auto indices = std::make_unique<HYPRE_BigInt[]>(count);
+      // std::iota(indices.get(), indices.get() + count, jlower);
+      // HYPRE_IJVectorSetValues(v_, count, indices.get(), values + jlower);
+      // HYPRE_IJVectorSetValues(v_, jupper - jlower + 1, indices, values + jlower);
+
       for (auto i = jlower; i <= jupper; ++i)
         HYPRE_IJVectorSetValues(v_, 1, &i, values + i);
 
       HYPRE_IJVectorAssemble(v_);
-    }
-  
-  public:
-    ij_vector(HYPRE_BigInt nvalues) {
-      allocate_only(nvalues);
-    }
-
-    ij_vector(HYPRE_BigInt nvalues, const HYPRE_Complex* values) {
-      allocate_assign(nvalues, values);
     }
 
     ~ij_vector() {
@@ -118,8 +77,13 @@ namespace dpl::hypre
         HYPRE_IJVectorDestroy(v_);
     }
 
+    ij_vector(const ij_vector& other) = delete;
+    ij_vector(ij_vector&& other) = delete;
+    ij_vector& operator=(const ij_vector& other) = delete;
+    ij_vector& operator=(ij_vector&& other) = delete;
+
     HYPRE_ParVector par_ref() const {
-      HYPRE_ParVector ref;
+      HYPRE_ParVector ref;  // NOLINT(cppcoreguidelines-init-variables)
       HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&ref));
       return ref;
     }
@@ -127,10 +91,5 @@ namespace dpl::hypre
     void get_values(HYPRE_Int nvalues, const HYPRE_BigInt* indices, HYPRE_Complex* values) const {
       HYPRE_IJVectorGetValues(v_, nvalues, indices, values);
     }
-
-    ij_vector(const ij_vector& other) = delete;
-    ij_vector(ij_vector&& other) = delete;
-    ij_vector& operator=(const ij_vector& other) = delete;
-    ij_vector& operator=(ij_vector&& other) = delete;
   };
 }

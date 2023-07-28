@@ -39,6 +39,8 @@
 
 namespace dpl
 {
+  constexpr std::size_t operator "" _uz (std::size_t x) { return x; }
+
   template <typename... T>
   constexpr bool always_false = false;
   

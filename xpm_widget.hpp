@@ -392,7 +392,7 @@ namespace xpm
     
 
 
-    bool use_cache = true;
+    bool use_cache = false;
     bool save_cache = true;
 
     
@@ -534,18 +534,19 @@ namespace xpm
 
 
     auto ProcessImage(const std::filesystem::path& p) const {
+      using namespace std::filesystem;
+
       auto fn = p.filename();
 
-      std::filesystem::copy(p, "pnextract"/fn, std::filesystem::copy_options::update_existing);
+      copy(p, "pnextract"/fn, copy_options::update_existing);
       
       constexpr auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
-      auto prev = std::filesystem::current_path();
-      std::filesystem::current_path(prev/"pnextract");
+      auto prev = current_path();
+      current_path(prev/"pnextract");
       auto network_dir = p.stem();
 
-      if (//std::filesystem::exists(network_dir) &&
-        std::ranges::all_of(files, [&](const auto& file) { return std::filesystem::exists(network_dir/file); })) {
+      if (std::ranges::all_of(files, [&](const auto& file) { return exists(network_dir/file); })) {
 
         std::cout << "using cached network\n";
       }
@@ -555,21 +556,21 @@ namespace xpm
         /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
           std::format("pnextract.exe {}", fn.string()).c_str());
       
-        std::filesystem::create_directory(network_dir);
-        for (std::filesystem::path f : files)
+        create_directory(network_dir);
+        for (path f : files)
           rename(f, network_dir/f);
 
-        std::filesystem::remove("_VElems.mhd");
+        remove("_VElems.mhd");
 
         std::cout << "=========== pnextract's network extraction end ===========\n";
       }
 
 
-      network_dir = std::filesystem::absolute(network_dir);
+      network_dir = absolute(network_dir);
 
       
 
-      std::filesystem::current_path(prev);
+      current_path(prev);
       
 
       return network_dir;
@@ -577,20 +578,20 @@ namespace xpm
 
     
     void Init() {
-      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      constexpr parse::image_dict input_spec{
-        .solid = 1,       // dummy value, no '1' is in the image
-        .pore = 0,
-        .microporous = 255, // we read actual solid '0' as microporous
-      };
-
-
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
       // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
+      //   .solid = 1,       // dummy value, no '1' is in the image
       //   .pore = 0,
-      //   .microporous = 2
+      //   .microporous = 255, // we read actual solid '0' as microporous
       // };
+
+
+      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      constexpr parse::image_dict input_spec{
+        .solid = 3,
+        .pore = 0,
+        .microporous = 2
+      };
 
 
 
@@ -634,7 +635,7 @@ namespace xpm
 
 
 
-      
+
       static constexpr auto millidarcy = 1;
       static constexpr auto const_permeability = millidarcy*0.001*presets::darcy_to_m2;
 
@@ -744,11 +745,12 @@ namespace xpm
 
         std::cout << "\n\nGeneratePressureInput START...";
 
-        auto input = pni.generate_pressure_input(decomposition, const_permeability);
+
+        auto [nrows, nvalues, input] = pni.generate_pressure_input(decomposition, const_permeability);
 
         std::cout << "\n\nGeneratePressureInput END|||";
 
-
+        
         cout << "\n\nPRE HYPRE SAVE & SOLVE TIME: " <<
           duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||" << endl;
 
@@ -756,10 +758,10 @@ namespace xpm
         std::cout << "\n\nSave hypre input START...";
 
         using namespace boost::interprocess;
-        
+
         {
           shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-          dpl::hypre::save(input.get_ref(), input.nvalues, decomposition.rows_per_block, smo);
+          dpl::hypre::save(input.get_ref(), nrows, nvalues, decomposition.rows_per_block, smo);
         }
         
         std::cout << "\n\nSave hypre input END|||";
@@ -768,7 +770,7 @@ namespace xpm
         
         auto start = std::chrono::high_resolution_clock::now();
         
-        auto solve_result = std::system(
+        /*auto solve_result = */std::system(
           std::format("mpiexec -n {} \"{}\" -s",
             processors.prod(), "xpm.exe"
           ).c_str());
@@ -781,13 +783,13 @@ namespace xpm
         shared_memory_object smo{open_only, "xpm-hypre-output", read_only};
         mapped_region mr{smo, read_only};
         
-        auto opt_pressure = std::make_unique<double[]>(input.nrows);
+        auto block_pressure = std::make_unique<double[]>(nrows);
         
-        std::memcpy(opt_pressure.get(), mr.get_address(), input.nrows*sizeof(double));
+        std::memcpy(block_pressure.get(), mr.get_address(), nrows*sizeof(double));
 
-        pressure.resize(input.nrows);
-        for (auto i : dpl::range(input.nrows))
-          pressure[decomposition.block_to_net[i]] = opt_pressure[i];
+        pressure.resize(nrows);
+        for (auto i : dpl::range(nrows))
+          pressure[decomposition.block_to_net[i]] = block_pressure[i];
 
         std::cout << "\n\nPressure solved";
 

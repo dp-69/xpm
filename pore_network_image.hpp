@@ -393,9 +393,10 @@ namespace xpm
     }
 
     void connectivity_flow_summary() const {
-      dpl::hypre::ls_unknown_storage lus(node_count());
-      dpl::hypre::mpi_block::range = {0, node_count() - 1};
-      dpl::hypre::solve(generate_pressure_input().get_ref(), lus.get_ref()); // gross solve (with isolated)
+      auto pressure = std::make_unique<double[]>(node_count());
+      // dpl::hypre::ls_unknown_storage lus(node_count());
+      // dpl::hypre::mpi::range = {0, node_count() - 1};
+      dpl::hypre::solve(0, node_count() - 1, generate_pressure_input().get_ref(), pressure.get()); // gross solve (with isolated)
 
       disjoint_sets ds(node_count());
       std::vector<bool> connected_inlet(node_count());
@@ -428,7 +429,7 @@ namespace xpm
 
         std::cout << std::format("\n\n Disconnected {} macro EXCLUSIVE nodes", disconnected_macro);
 
-        auto* pressure = lus.data[dpl::hypre::keys::value].get();
+        // auto* pressure = PRESSURE_UPTR.get();
 
         for (auto i : dpl::range(throat_count())) {
           auto [l, r] = throat_[attribs::adj][i];
@@ -742,7 +743,7 @@ namespace xpm
     }
 
 
-    dpl::hypre::ls_known_storage generate_pressure_input(const row_decomposition& mapping, double const_permeability) const {
+    std::tuple<HYPRE_BigInt, size_t, dpl::hypre::ls_known_storage> generate_pressure_input(const row_decomposition& mapping, double const_permeability) const {
       using namespace attribs;
       using namespace presets;
 
@@ -842,25 +843,26 @@ namespace xpm
                 if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) { // macro-darcy
                   using eq_tri = geometric_properties::equilateral_triangle_properties;
 
-                  // auto Li = cell_size.x()/2;
-                  // auto gi = const_permeability;
-                  //
-                  // auto Lj = pn_.node_[r_ins][*adj_macro_idx];
-                  // auto gj = eq_tri::conductance(eq_tri::area(Lj));
-                  //
-                  // auto Lt = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length() - Li - Lj;
-                  // auto gt = gj;
-                  //
-                  // if (Lt < 0)
-                  //   Lt = 0;
-                  //   // std::cout << "NEGATIVE Lt < 0";
-                  //
-                  // auto coef = -1.0/(Li/gi + Lt/gt + Lj/gj);
+                  // ReSharper disable CppInconsistentNaming
+                  auto Li = cell_size.x()/2;
+                  auto gi = const_permeability;
+                  
+                  auto Lj = pn_.node_[r_ins][*adj_macro_idx];
+                  auto gj = eq_tri::conductance(eq_tri::area(Lj));
+                  
+                  auto Lt = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length() - Li - Lj;
+                  auto gt = gj;
+                  // ReSharper restore CppInconsistentNaming
+                  
+                  if (Lt < 0)
+                    Lt = 0;
+                    // std::cout << "NEGATIVE Lt < 0";
+                  
+                  auto coef = -1.0/(Li/gi + Lt/gt + Lj/gj);
 
-
-                  auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
-                  auto r_ins = cell_size.x()/4;                                                    // NOLINT(clang-diagnostic-shadow)
-                  auto coef = -1.0/(length/eq_tri::conductance(eq_tri::area(r_ins)));
+                  // auto length = (cell_size*(ijk + 0.5) - pn_.node_[pos][*adj_macro_idx]).length(); // NOLINT(clang-diagnostic-shadow)
+                  // auto r_ins = cell_size.x()/4;                                                    // NOLINT(clang-diagnostic-shadow)
+                  // auto coef = -1.0/(length/eq_tri::conductance(eq_tri::area(r_ins)));
 
                   builder.set_connection(
                     block[net(adj_macro_idx)],
@@ -883,7 +885,7 @@ namespace xpm
           }
       }
 
-      return builder.acquire_storage();
+      return {connected_count_, builder.nvalues(), builder.acquire_storage()};
     }
 
 

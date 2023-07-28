@@ -39,11 +39,10 @@ namespace dpl::qt::property_editor
     
   public:
     QTreeView* tree_view;
-    
-    PropertyDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
 
-    QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option,
-                          const QModelIndex &index) const override {
+    PropertyDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const override {
       auto* editor = try_ptr<PropertyItem>(index)->CreateEditor(parent, index);
       // editor->installEventFilter(const_cast<PropertyDelegate*>(this));
       return editor;
@@ -55,7 +54,7 @@ namespace dpl::qt::property_editor
     //   item->SetEditorData(widget, index);
     // }
   
-    void setModelData(QWidget *widget, QAbstractItemModel *model, const QModelIndex &index) const override {
+    void setModelData(QWidget* widget, QAbstractItemModel*, const QModelIndex& index) const override {
       try_ptr<PropertyItem>(index)->SetModelData(widget, index);
     }
 
@@ -131,7 +130,7 @@ public:
         QStyledItemDelegate::paint(painter, option, index);
     }
   
-    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const override {
       editor->setGeometry(option.rect);
     }
   };
@@ -146,7 +145,7 @@ public:
     PropertyModel model_;
 
     void setModel(PropertyModel*) {}
-    void setModel(QAbstractItemModel* model) override {}
+    void setModel(QAbstractItemModel*) override {}
     
   public:
     

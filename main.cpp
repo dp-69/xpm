@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
 
     std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
 
-    dpl::hypre::load(region, lk_ref, range_ptr);
+    auto nrows = dpl::hypre::load(region, lk_ref, range_ptr);
 
     // input.load(smo);
 
@@ -168,10 +168,11 @@ int main(int argc, char* argv[])
       static constexpr auto jlower = 0;
       const auto jupper = lk_ref.nrows - 1;
     #else
-      dpl::hypre::mpi_block::range = *range_ptr;
-      auto [jlower, jupper] = dpl::hypre::mpi_block::range; //dpl::hypre::mpi_part(lk_ref.nrows);
+      dpl::hypre::mpi::range = *range_ptr;
+      auto [jlower, jupper] = dpl::hypre::mpi::range; //dpl::hypre::mpi_part(lk_ref.nrows);
     #endif
 
+    auto local_nrows = jupper - jlower + 1;
 
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (mpi_rank == root) {
@@ -181,9 +182,12 @@ int main(int argc, char* argv[])
     // MPI_Barrier(MPI_COMM_WORLD);
 
 
-    auto count = jupper - jlower + 1;
     
-    dpl::hypre::ls_unknown_storage lus(count, jlower);
+
+
+    // dpl::hypre::ls_unknown_storage lus(count, jlower);
+
+    auto values = std::make_unique<double[]>(local_nrows);
 
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (mpi_rank == root)
@@ -195,8 +199,10 @@ int main(int argc, char* argv[])
     
 
     dpl::hypre::solve(
+      jlower,
+      jupper,
       lk_ref/*.get_ref()*/,
-      lus.get_ref());
+      values.get());
 
 
     std::unique_ptr<double[]> pressure_utpr;
@@ -208,7 +214,7 @@ int main(int argc, char* argv[])
     int* displs = nullptr;
     
     if (mpi_rank == root) {
-      recvbuf = new double[lk_ref.nrows];
+      recvbuf = new double[nrows];
       recvcounts = new int[mpi_size];
       displs = new int[mpi_size];
 
@@ -224,15 +230,15 @@ int main(int argc, char* argv[])
     }
 
     MPI_Gatherv(
-      lus.data[dpl::hypre::keys::value].get(), count, MPI_DOUBLE,
+      values.get(), local_nrows, MPI_DOUBLE,
       recvbuf, recvcounts, displs, MPI_DOUBLE,
       root, MPI_COMM_WORLD);
 
     if (mpi_rank == root) {
       shared_memory_object smo_output{open_or_create, "xpm-hypre-output", read_write};
-      smo_output.truncate(lk_ref.nrows*sizeof(double));
+      smo_output.truncate(nrows*sizeof(double));
       mapped_region region_output(smo_output, read_write);
-      std::memcpy(region_output.get_address(), recvbuf, lk_ref.nrows*sizeof(double));
+      std::memcpy(region_output.get_address(), recvbuf, nrows*sizeof(double));
     }
 
     MPI_Finalize();

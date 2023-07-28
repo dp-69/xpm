@@ -24,6 +24,7 @@
 #pragma once
 
 #include <dpl/hypre/ij_vector.hpp>
+#include <dpl/general.hpp>
 
 namespace dpl::hypre
 {
@@ -32,48 +33,42 @@ namespace dpl::hypre
     HYPRE_IJMatrix m_ = nullptr;
 
   public:
-    void allocate_assign(HYPRE_BigInt nrows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* coefs) {
-      #ifdef HYPRE_SEQUENTIAL
-        static constexpr auto comm = 0;
-        static constexpr auto ilower = 0;
-        const auto iupper = nrows - 1;
-      #else
-        static constexpr auto comm = MPI_COMM_WORLD;
-        auto [ilower, iupper] = dpl::hypre::mpi_block::range; // mpi_part(nrows);
-      #endif
-      
-      HYPRE_IJMatrixCreate(comm, ilower, iupper, ilower, iupper, &m_);
-      
+    ij_matrix(HYPRE_BigInt ilower, HYPRE_BigInt iupper, const HYPRE_BigInt* rows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
+      HYPRE_IJMatrixCreate(mpi::comm, ilower, iupper, ilower, iupper, &m_);
       HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
-      // HYPRE_IJMatrixSetRowSizes(A, ncols.data());    
 
-      // std::vector<HYPRE_Int> zeroArray(nrows, 0);
-      // HYPRE_IJMatrixSetDiagOffdSizes(m_, ncols_per_row, zeroArray.data());
+      auto count = iupper - ilower + 1;
 
-      HYPRE_IJMatrixInitialize(m_);
-      // HYPRE_IJMatrixSetValues(_m, nrows, ncols, rows, cols, values);
+      auto shift = std::accumulate(ncols, ncols + ilower, 0_uz);
 
-      size_t shift = 0;
+      {
+        auto diag_sizes = std::make_unique<HYPRE_Int[]>(count);
+        auto off_diag_sizes = std::make_unique<HYPRE_Int[]>(count);
       
-      for (HYPRE_BigInt i = 0; i < ilower; ++i)
-        shift += ncols[i];
-      
-      for (HYPRE_BigInt i = ilower; i <= iupper; ++i) {
-        HYPRE_IJMatrixSetValues(m_, 1, ncols + i, &i, cols + shift, coefs + shift);
-        shift += ncols[i];
+        std::fill_n(diag_sizes.get(), count, 0);
+        std::fill_n(off_diag_sizes.get(), count, 0);
+
+        const auto* cols_ptr = cols + shift;
+        for (auto i = ilower; i <= iupper; ++i)
+          for (HYPRE_Int col_idx = 0; col_idx < ncols[i]; ++col_idx)
+            if (auto col = *cols_ptr++; ilower <= col && col <= iupper)
+              ++diag_sizes[i - ilower];
+            else
+              ++off_diag_sizes[i - ilower];
+
+        HYPRE_IJMatrixSetRowSizes(m_, ncols + ilower);
+        HYPRE_IJMatrixSetDiagOffdSizes(m_, diag_sizes.get(), off_diag_sizes.get());
+        HYPRE_IJMatrixSetMaxOffProcElmts(m_, 0);
       }
 
+      HYPRE_IJMatrixInitialize(m_);
+
+      // auto indices = std::make_unique<HYPRE_BigInt[]>(count);
+      // std::iota(indices.get(), indices.get() + count, ilower);
+
+      HYPRE_IJMatrixSetValues(m_, count, ncols + ilower, rows, cols + shift, values + shift);
+
       HYPRE_IJMatrixAssemble(m_);
-    }
-
-    auto par_ref() const {
-      HYPRE_ParCSRMatrix ref;
-      HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&ref));
-      return ref;
-    }
-
-    ij_matrix(HYPRE_BigInt nrows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* coefs) {
-      allocate_assign(nrows, ncols, cols, coefs);
     }
 
     ~ij_matrix() {
@@ -85,5 +80,11 @@ namespace dpl::hypre
     ij_matrix& operator=(const ij_matrix& other) = delete;
     ij_matrix(ij_matrix&& other) = delete;
     ij_matrix& operator=(ij_matrix&& other) = delete;
+
+    auto par_ref() const {
+      HYPRE_ParCSRMatrix ref;  // NOLINT(cppcoreguidelines-init-variables)
+      HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&ref));
+      return ref;
+    }
   };
 }

@@ -46,6 +46,16 @@
 
 namespace dpl::qt::property_editor
 {
+  template<typename T>
+  QVariant ItemToQVariant(T* ptr) {
+    return QVariant::fromValue(reinterpret_cast<size_t>(ptr));
+  }
+
+  template<typename T>
+  auto ItemFromQVariant(const QVariant& v) {
+    return reinterpret_cast<T*>(v.value<size_t>());
+  }
+
   const inline std::string NumberRegEx = "([-+.eE\\d]+)";
   const inline std::string SeparatorRegEx = "[,;\\s]+";
 
@@ -75,7 +85,7 @@ namespace dpl::qt::property_editor
     }
     
   public:
-    PropertyCategory* parent;
+    PropertyCategory* parent_;
     std::vector<PropertyBase*> children;
     
     int VisibleIndex() const;
@@ -140,7 +150,7 @@ namespace dpl::qt::property_editor
 
   inline int PropertyBase::VisibleIndex() const {    
     int i = 0;
-    for (auto* ptr : parent->children) {
+    for (auto* ptr : parent_->children) {
       if (ptr == this)
         return i;
       
@@ -152,8 +162,7 @@ namespace dpl::qt::property_editor
   }
 
 
-
-  static QWidget* CreateLineEditor(QWidget *parent, const QString& text) {
+  inline QWidget* CreateLineEditor(QWidget *parent, const QString& text) {
     auto* widget = new QWidget{parent};
     auto* layout = new QHBoxLayout;
     layout->setContentsMargins(1, 0, 0, 0);
@@ -234,14 +243,14 @@ namespace dpl::qt::property_editor
   template<> struct PropertyItemTraits<bool>
   {
     template<typename Inter>
-    static QWidget* CreateEditor(QWidget *parent, const QModelIndex& index, Inter& inter) {         
+    static QWidget* CreateEditor(QWidget* /*parent*/, const QModelIndex& index, Inter& inter) {         
       inter.Set(!inter.Get());          
       emit const_cast<QAbstractItemModel*>(index.model())->dataChanged(index, index);
       return nullptr;
     }
 
     template<typename Inter>
-    static void SetModelData(QWidget *widget, const QModelIndex &index, Inter& inter) { }
+    static void SetModelData(QWidget* /*widget*/, const QModelIndex &, Inter&) { }
 
     template<typename Inter>
     static QVariant GetModelValue(Inter& inter, Qt::ItemDataRole role) {
@@ -391,8 +400,8 @@ namespace dpl::qt::property_editor
       return Traits::GetModelValue(functor_, role);
     }
     
-    QWidget* CreateEditor(QWidget *parent, const QModelIndex& index) override {
-      return Traits::CreateEditor(parent, index, functor_);
+    QWidget* CreateEditor(QWidget *p, const QModelIndex& index) override {
+      return Traits::CreateEditor(p, index, functor_);
     }
 
     void SetModelData(QWidget* widget, const QModelIndex& index) override {
@@ -517,7 +526,7 @@ namespace dpl::qt::property_editor
     template <typename Functor>
     PropertyItem* AddItem(PropertyCategory* category, Functor functor) {
       PropertyItem* ptr = new property_item_t<Functor>{functor};
-      ptr->parent = category;
+      ptr->parent_ = category;
       category->children.push_back(ptr);
       all_items_.emplace_back(ptr);
       return ptr;
@@ -530,7 +539,7 @@ namespace dpl::qt::property_editor
 
     auto* AddCategory(PropertyCategory* category, std::string_view name, std::string_view tooltip = {}) {      
       auto* ptr = new PropertyCategory{name, tooltip};
-      ptr->parent = category;
+      ptr->parent_ = category;
       category->children.push_back(ptr);
       all_items_.emplace_back(ptr);
       return ptr;
@@ -547,7 +556,7 @@ namespace dpl::qt::property_editor
 
     QModelIndex parent(const QModelIndex& index) const override {
       auto* base = get_ptr(index);
-      return !base || base->parent == root_ ? QModelIndex{} : createIndex(base->VisibleIndex(), 0, base->parent);
+      return !base || base->parent_ == root_ ? QModelIndex{} : createIndex(base->VisibleIndex(), 0, base->parent_);
       // [base] is sometimes [nullptr] in Julio's test cases.
     }
 
@@ -555,7 +564,7 @@ namespace dpl::qt::property_editor
       return (parent == QModelIndex{} ? root_ : get_ptr(parent))->VisibleChildrenCount();            
     }
 
-    int columnCount(const QModelIndex& parent) const override {
+    int columnCount(const QModelIndex&) const override {
       return 2;
     }
 
@@ -610,7 +619,7 @@ namespace dpl::qt::property_editor
       return ::Qt::ItemIsEnabled;
     }
 
-    QVariant headerData(int section, ::Qt::Orientation orientation, int role) const override {
+    QVariant headerData(int section, ::Qt::Orientation, int role) const override {
       if (role == ::Qt::DisplayRole)
         return section == 0 ? "Property" : "Value";
 
