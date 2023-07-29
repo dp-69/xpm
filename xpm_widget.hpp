@@ -578,20 +578,20 @@ namespace xpm
 
     
     void Init() {
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 1,       // dummy value, no '1' is in the image
-      //   .pore = 0,
-      //   .microporous = 255, // we read actual solid '0' as microporous
-      // };
-
-
-      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
       constexpr parse::image_dict input_spec{
-        .solid = 3,
+        .solid = 1,       // dummy value, no '1' is in the image
         .pore = 0,
-        .microporous = 2
+        .microporous = 255, // we read actual solid '0' as microporous
       };
+
+
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 3,
+      //   .pore = 0,
+      //   .microporous = 2
+      // };
 
 
 
@@ -734,12 +734,12 @@ namespace xpm
 
         auto decomposition = pni.decompose_rows(processors);
 
-        for (auto i = 0; i < processors.prod(); ++i)
-          std::cout << std::format("\nblock {}, rows {}--{}, size {}",
-            i,
-            decomposition.rows_per_block[i].first,
-            decomposition.rows_per_block[i].second,
-            decomposition.rows_per_block[i].second - decomposition.rows_per_block[i].first + 1);
+        // for (auto i = 0; i < processors.prod(); ++i)
+        //   std::cout << std::format("\nblock {}, rows {}--{}, size {}",
+        //     i,
+        //     decomposition.rows_per_block[i].first,
+        //     decomposition.rows_per_block[i].second,
+        //     decomposition.rows_per_block[i].second - decomposition.rows_per_block[i].first + 1);
 
         std::cout << "\n\nparallel_partitioning_END";
 
@@ -752,7 +752,7 @@ namespace xpm
 
         
         cout << "\n\nPRE HYPRE SAVE & SOLVE TIME: " <<
-          duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||" << endl;
+          duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||";
 
 
         std::cout << "\n\nSave hypre input START...";
@@ -760,8 +760,8 @@ namespace xpm
         using namespace boost::interprocess;
 
         {
-          shared_memory_object smo{open_or_create, "xpm-hypre-input", read_write};
-          dpl::hypre::save(input.get_ref(), nrows, nvalues, decomposition.rows_per_block, smo);
+          
+          dpl::hypre::mpi::save(input, nrows, nvalues, decomposition.rows_per_block);
         }
         
         std::cout << "\n\nSave hypre input END|||";

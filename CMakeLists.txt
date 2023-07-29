@@ -67,7 +67,6 @@ target_compile_definitions(xpm PRIVATE XPM_DEBUG_OUTPUT)
 
 
 add_subdirectory(dpl)
-target_compile_definitions(dpl INTERFACE DPL_HYPRE_BOOST_SHARED_MEMORY)
 target_link_libraries(xpm PRIVATE dpl)
 
 

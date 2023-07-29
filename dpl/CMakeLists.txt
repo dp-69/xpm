@@ -24,3 +24,9 @@
 add_library(dpl INTERFACE)
 
 target_include_directories(dpl INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
+option(DPL_HYPRE_MPI "<help_text>")
+
+if(DPL_HYPRE_MPI)
+  target_compile_definitions(dpl INTERFACE DPL_HYPRE_BOOST_SHARED_MEMORY)
+endif()

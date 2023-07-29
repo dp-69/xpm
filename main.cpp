@@ -28,107 +28,6 @@
 
 int main(int argc, char* argv[])
 {
-  // xpm::voxel_idx w(3);
-  // w = {2};
-
-  // auto base = xpm::strong_integer<xpm::macro_idx, xpm::idx1d_t>{20};
-  
-
-  
-  
-
-  
-
-  
-
-
-  // std::vector<int> zomg;
-  // auto luuuq = zomg.end() - zomg.begin();
-  //
-  //
-  // xpm::voxel_idx pew{30};
-  //
-  // constexpr xpm::voxel_idx pew2{40};
-  // constexpr xpm::voxel_idx pew3{39};
-  //
-  // if constexpr(true) {
-  //   std::cout << "LUL";
-  // }
-  // else {
-  //   std::cout << "LUQQL";
-  // }
-  // constexpr bool qqqqqqqq = pew2 == pew3;
-  //
-  // std::array<int, qqqqqqqq>;
-  //
-  //
-  // // auto qq = pew2 - pew;
-  //
-  // // xpm::voxel_idx omg = pew++;
-  //
-  // int k = 0;
-  //
-  // for (xpm::voxel_idx i{0}; *i < 10; ++i)
-  //     k += *i;
-  //
-  //
-  // auto qqq = std::addressof(pew);
-  // auto qqqqq = std::addressof(++pew);
-  //
-  //
-  // auto powepw = static_cast<xpm::voxel_idx>(-1);
-  //
-  //
-  // // typename _Ty::_Signed_type;
-  //                                          // typename _Ty::_Unsigned_type;
-  //
-  // // std::_Integer_class<int>::_Signed_type qqq;
-  //
-  // constexpr bool defint = std::default_initializable<xpm::voxel_idx>;
-  // constexpr bool copyable = std::copyable<xpm::voxel_idx>;
-  // constexpr bool movable = std::movable<xpm::voxel_idx>;
-  //
-  // constexpr bool check00 = std::_Integer_like<xpm::voxel_idx>;
-  //
-  // // constexpr bool lessthen = static_cast<xpm::voxel_idx>(-1) < static_cast<xpm::voxel_idx>(0);
-  //
-  // using iter_diff = std::iter_difference_t<int>;
-  // iter_diff lul;
-  //
-  // constexpr bool check1 = std::_Signed_integer_like<iter_diff>;
-  //
-  // constexpr bool check = std::weakly_incrementable<xpm::voxel_idx>;
-  //
-  // constexpr bool semireg = std::semiregular<xpm::voxel_idx>;
-  //
-  // // std::_Weakly_equality_comparable_with<
-  //
-  // // std::ranges::iota_view<int, int>{0, 20};
-  //
-  //
-  //
-  //
-  // for (auto rrrr : std::ranges::subrange(xpm::voxel_idx{0}, xpm::voxel_idx{20})) {
-  //   
-  // }
-  //
-  // std::ranges::iota_view<xpm::voxel_idx, xpm::voxel_idx>{xpm::voxel_idx{0}, xpm::voxel_idx{20}};
-
-
-
-
-
-  // std::weakly_incrementable
-
-  // constexpr xpm::image_idx qwe3{3};
-  //
-  //
-  //
-  // constexpr auto qwewww = qwe + 5;
-  //
-  // constexpr auto omsodfsf = *qwewww;
-
-
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     using namespace boost::interprocess;
     
@@ -140,69 +39,32 @@ int main(int argc, char* argv[])
 
     static constexpr auto root = 0;
     
-    // using namespace std::chrono;
-    // using tp = time_point<steady_clock>;
-    // tp t0, t1, t2, t3;
-
-    // if (w_rank == root)
-    //   t0 = std::chrono::high_resolution_clock::now();
-    
-    // dpl::hypre::InputDeprec input;
-    dpl::hypre::ls_known_ref lk_ref;
-
-    shared_memory_object smo{open_only, "xpm-hypre-input", read_only};
-    mapped_region region(smo, read_only);
 
 
-    std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
-
-    auto nrows = dpl::hypre::load(region, lk_ref, range_ptr);
-
-    // input.load(smo);
-
-    // if (w_rank == root)
-    //   t1 = std::chrono::high_resolution_clock::now();
+    auto input = dpl::hypre::mpi::load(mpi_rank);
 
 
-    #ifdef HYPRE_SEQUENTIAL
-      static constexpr auto jlower = 0;
-      const auto jupper = lk_ref.nrows - 1;
-    #else
-      dpl::hypre::mpi::range = *range_ptr;
-      auto [jlower, jupper] = dpl::hypre::mpi::range; //dpl::hypre::mpi_part(lk_ref.nrows);
-    #endif
+    // dpl::hypre::ls_known_ref lk_ref;
+    // mapped_region region{shared_memory_object{open_only, dpl::hypre::mpi::smo_name, read_only}, read_only};
+    // std::pair<HYPRE_BigInt, HYPRE_BigInt>* range_ptr;
+
+    // auto nrows = dpl::hypre::load(region, lk_ref, range_ptr);
+
+    // #ifdef HYPRE_SEQUENTIAL
+    //   static constexpr auto jlower = 0;
+    //   const auto jupper = lk_ref.nrows - 1;
+    // #else
+    //   dpl::hypre::mpi::range = *range_ptr;
+    //   auto [jlower, jupper] = dpl::hypre::mpi::range; //dpl::hypre::mpi_part(lk_ref.nrows);
+    // #endif
+
+    auto [jlower, jupper] = *input.local_rows;
 
     auto local_nrows = jupper - jlower + 1;
 
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (mpi_rank == root) {
-      // std::cout << std::format("rank {}, range {}--{}", mpi_rank, dpl::hypre::mpi_block::range.first, dpl::hypre::mpi_block::range.second) << std::flush;
-      // std::cout << "\n\nPRE_GATHER" << std::flush;
-    // }
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-
-    
-
-
-    // dpl::hypre::ls_unknown_storage lus(count, jlower);
 
     auto values = std::make_unique<double[]>(local_nrows);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (mpi_rank == root)
-    //   std::cout << "\n\nPRE_SOLVE" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    // try {
-
-    
-
-    dpl::hypre::solve(
-      jlower,
-      jupper,
-      lk_ref/*.get_ref()*/,
-      values.get());
+    dpl::hypre::solve(jlower, jupper, input, values.get());
 
 
     std::unique_ptr<double[]> pressure_utpr;
@@ -214,7 +76,7 @@ int main(int argc, char* argv[])
     int* displs = nullptr;
     
     if (mpi_rank == root) {
-      recvbuf = new double[nrows];
+      recvbuf = new double[input.global_nrows];
       recvcounts = new int[mpi_size];
       displs = new int[mpi_size];
 
@@ -224,8 +86,8 @@ int main(int argc, char* argv[])
 
 
       for (int i = 0; i < mpi_size; ++i) {
-        recvcounts[i] = range_ptr[i].second - range_ptr[i].first + 1;
-        displs[i] = range_ptr[i].first;
+        recvcounts[i] = input.local_rows[i].second - input.local_rows[i].first + 1;
+        displs[i] = input.local_rows[i].first;
       }
     }
 
@@ -236,9 +98,9 @@ int main(int argc, char* argv[])
 
     if (mpi_rank == root) {
       shared_memory_object smo_output{open_or_create, "xpm-hypre-output", read_write};
-      smo_output.truncate(nrows*sizeof(double));
+      smo_output.truncate(input.global_nrows*sizeof(double));
       mapped_region region_output(smo_output, read_write);
-      std::memcpy(region_output.get_address(), recvbuf, nrows*sizeof(double));
+      std::memcpy(region_output.get_address(), recvbuf, input.global_nrows*sizeof(double));
     }
 
     MPI_Finalize();

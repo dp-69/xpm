@@ -28,6 +28,12 @@
 
 namespace dpl::hypre
 {
+  // struct idx_range
+  // {
+  //   HYPRE_BigInt lower;
+  //   HYPRE_BigInt upper;
+  // };
+
   namespace mpi
   {
     inline constexpr MPI_Comm comm =
@@ -37,10 +43,6 @@ namespace dpl::hypre
         0
       #endif
     ;
-
-    #ifndef HYPRE_SEQUENTIAL
-    static std::pair<HYPRE_BigInt, HYPRE_BigInt> range; // TODO - needs to be reviwed
-    #endif
   }
   
   class ij_vector
@@ -82,7 +84,7 @@ namespace dpl::hypre
     ij_vector& operator=(const ij_vector& other) = delete;
     ij_vector& operator=(ij_vector&& other) = delete;
 
-    HYPRE_ParVector par_ref() const {
+    operator HYPRE_ParVector() const {
       HYPRE_ParVector ref;  // NOLINT(cppcoreguidelines-init-variables)
       HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&ref));
       return ref;

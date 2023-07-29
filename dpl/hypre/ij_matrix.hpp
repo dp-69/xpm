@@ -81,7 +81,7 @@ namespace dpl::hypre
     ij_matrix(ij_matrix&& other) = delete;
     ij_matrix& operator=(ij_matrix&& other) = delete;
 
-    auto par_ref() const {
+    operator HYPRE_ParCSRMatrix() const {
       HYPRE_ParCSRMatrix ref;  // NOLINT(cppcoreguidelines-init-variables)
       HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&ref));
       return ref;

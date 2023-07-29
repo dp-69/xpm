@@ -13,7 +13,8 @@
         "CMAKE_CXX_COMPILER": "cl",
         "CMAKE_BUILD_TYPE": "$env{BUILD_TYPE}",
         "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/$env{BUILD_TYPE}/bin",
-        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "DPL_HYPRE_MPI": "TRUE"
       }
     },
     {

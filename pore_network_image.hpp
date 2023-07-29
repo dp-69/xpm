@@ -394,9 +394,7 @@ namespace xpm
 
     void connectivity_flow_summary() const {
       auto pressure = std::make_unique<double[]>(node_count());
-      // dpl::hypre::ls_unknown_storage lus(node_count());
-      // dpl::hypre::mpi::range = {0, node_count() - 1};
-      dpl::hypre::solve(0, node_count() - 1, generate_pressure_input().get_ref(), pressure.get()); // gross solve (with isolated)
+      dpl::hypre::solve(0, node_count() - 1, generate_pressure_input(), pressure.get()); // gross solve (with isolated)
 
       disjoint_sets ds(node_count());
       std::vector<bool> connected_inlet(node_count());
@@ -428,8 +426,6 @@ namespace xpm
         double outlet_flow = 0;
 
         std::cout << std::format("\n\n Disconnected {} macro EXCLUSIVE nodes", disconnected_macro);
-
-        // auto* pressure = PRESSURE_UPTR.get();
 
         for (auto i : dpl::range(throat_count())) {
           auto [l, r] = throat_[attribs::adj][i];
