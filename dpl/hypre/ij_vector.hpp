@@ -28,11 +28,16 @@
 
 namespace dpl::hypre
 {
-  // struct idx_range
-  // {
-  //   HYPRE_BigInt lower;
-  //   HYPRE_BigInt upper;
-  // };
+  struct index_range
+  {
+    HYPRE_BigInt lower;
+    HYPRE_BigInt upper;
+
+    /**
+     * \brief inclusive [lower, upper]
+     */
+    constexpr auto width() const { return upper - lower + 1; }
+  };
 
   namespace mpi
   {
@@ -47,17 +52,19 @@ namespace dpl::hypre
   
   class ij_vector
   {
-    HYPRE_IJVector v_ = nullptr;
+    HYPRE_IJVector v_;
   
   public:
-    ij_vector(HYPRE_BigInt jlower, HYPRE_BigInt jupper) {
-      HYPRE_IJVectorCreate(mpi::comm, jlower, jupper, &v_);
+    explicit ij_vector(const index_range& range) {
+      HYPRE_IJVectorCreate(mpi::comm, range.lower, range.upper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);
       HYPRE_IJVectorAssemble(v_);
     }
 
-    ij_vector(HYPRE_BigInt jlower, HYPRE_BigInt jupper, const HYPRE_Complex* values) {
+    explicit ij_vector(const index_range& range, const HYPRE_Complex* values) {
+      const auto [jlower, jupper] = range;
+
       HYPRE_IJVectorCreate(mpi::comm, jlower, jupper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);

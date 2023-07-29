@@ -4,6 +4,7 @@
 #include "xpm/functions.h"
 
 #include <dpl/units.hpp>
+#include <dpl/hypre/mpi_module.hpp>
 #include <dpl/hypre/InputDeprec.hpp>
 #include <dpl/qt/property_editor/PropertyItemsBase.hpp>
 #include <dpl/qt/property_editor/QPropertyTreeView.hpp>
@@ -51,8 +52,6 @@
 
 #include <algorithm>
 #include <future>
-
-
 
 
 
@@ -446,7 +445,7 @@ namespace xpm
       
       for (int32_t i = 0; i < count; ++i) {
         auto coef = static_cast<double>(i*45%count)/count;
-        auto color = QColor::fromHsl(coef*255, 175, 122);
+        auto color = QColor::fromHsl(coef*255, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
         lut->SetTableValue(i, color.redF(), color.greenF(), color.blueF());  // NOLINT(clang-diagnostic-double-promotion)
       }
 
@@ -534,20 +533,19 @@ namespace xpm
 
 
     auto ProcessImage(const std::filesystem::path& p) const {
-      using namespace std::filesystem;
+      namespace fs = std::filesystem;
 
       auto fn = p.filename();
 
-      copy(p, "pnextract"/fn, copy_options::update_existing);
+      copy(p, "pnextract"/fn, fs::copy_options::update_existing);
       
       constexpr auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
-      auto prev = current_path();
-      current_path(prev/"pnextract");
+      auto prev = fs::current_path();
+      fs::current_path(prev/"pnextract");
       auto network_dir = p.stem();
 
-      if (std::ranges::all_of(files, [&](const auto& file) { return exists(network_dir/file); })) {
-
+      if (std::ranges::all_of(files, [&](const auto& file) { return fs::exists(network_dir/file); })) {
         std::cout << "using cached network\n";
       }
       else {
@@ -556,45 +554,43 @@ namespace xpm
         /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
           std::format("pnextract.exe {}", fn.string()).c_str());
       
-        create_directory(network_dir);
-        for (path f : files)
-          rename(f, network_dir/f);
+        fs::create_directory(network_dir);
+        for (fs::path f : files)
+          fs::rename(f, network_dir/f);
 
-        remove("_VElems.mhd");
+        fs::remove("_VElems.mhd");
 
         std::cout << "=========== pnextract's network extraction end ===========\n";
       }
 
+      network_dir = fs::absolute(network_dir);
 
-      network_dir = absolute(network_dir);
-
-      
-
-      current_path(prev);
-      
+      fs::current_path(prev);
 
       return network_dir;
     }
 
     
     void Init() {
-      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      constexpr parse::image_dict input_spec{
-        .solid = 1,       // dummy value, no '1' is in the image
-        .pore = 0,
-        .microporous = 255, // we read actual solid '0' as microporous
-      };
-
-
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
       // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
+      //   .solid = 1,       // dummy value, no '1' is in the image
       //   .pore = 0,
-      //   .microporous = 2
+      //   .microporous = 255, // we read actual solid '0' as microporous
       // };
 
 
+      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      constexpr parse::image_dict input_spec{
+        .solid = 3,
+        .pore = 0,
+        .microporous = 2
+      };
 
+
+
+      // HYPRE_Real tolerance = 1.e-20; HYPRE_Int max_iterations = 20;
+      HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
 
 
       auto pnm_path = ProcessImage(image_path)/"";
@@ -602,23 +598,6 @@ namespace xpm
 
 
       auto begin_init_time = std::chrono::high_resolution_clock::now();
-
-      // auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps252_6um.raw)";
-      // auto pnm_path = R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 1,       // dummy value, no '1' is in the image
-      //   .pore = 255,
-      //   .microporous = 0, // we read actual solid '0' as microporous
-      // };
-      
-
-      // auto image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)";
-      // auto pnm_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\pnm_petronas\networks\EstaNORM\)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
-      //   .pore = 0,
-      //   .microporous = 2
-      // };
 
 
       //------------------------------
@@ -665,7 +644,7 @@ namespace xpm
 
                 
 
-      pn.connectivity_flow_summary();
+      pn.connectivity_flow_summary(tolerance, max_iterations);
 
 
 
@@ -717,20 +696,20 @@ namespace xpm
 
       using namespace presets;
 
-      std::vector<double> pressure;
+      std::vector<HYPRE_Complex> pressure;
 
       if (use_cache && std::filesystem::exists(cache_path)) {
         std::cout << "\n\nUsing CACHED pressure";
 
         std::ifstream is(cache_path, std::ifstream::binary);
         is.seekg(0, std::ios_base::end);
-        auto nrows = is.tellg()/sizeof(double);
+        auto nrows = is.tellg()/sizeof(HYPRE_Complex);
         is.seekg(0, std::ios_base::beg);
         pressure.resize(nrows);
-        is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(double));
+        is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));
       }
       else {
-        std::cout << "\n\nparallel_partitioning_START";
+        std::cout << "\n\ndecomposition START...";
 
         auto decomposition = pni.decompose_rows(processors);
 
@@ -741,62 +720,48 @@ namespace xpm
         //     decomposition.rows_per_block[i].second,
         //     decomposition.rows_per_block[i].second - decomposition.rows_per_block[i].first + 1);
 
-        std::cout << "\n\nparallel_partitioning_END";
+        std::cout << "\n\ndecomposition END|||";
 
-        std::cout << "\n\nGeneratePressureInput START...";
+        std::cout << "\n\ngenerate input START...";
 
 
         auto [nrows, nvalues, input] = pni.generate_pressure_input(decomposition, const_permeability);
 
-        std::cout << "\n\nGeneratePressureInput END|||";
-
+        std::cout << "\n\ngenerate input END|||";
         
         cout << "\n\nPRE HYPRE SAVE & SOLVE TIME: " <<
           duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||";
 
-
         std::cout << "\n\nSave hypre input START...";
 
-        using namespace boost::interprocess;
+        dpl::hypre::mpi::save(input, nrows, nvalues, decomposition.blocks, tolerance, max_iterations);
 
-        {
-          
-          dpl::hypre::mpi::save(input, nrows, nvalues, decomposition.rows_per_block);
-        }
-        
         std::cout << "\n\nSave hypre input END|||";
 
         std::cout << "\n\nHypre solve MPI START...";
         
         auto start = std::chrono::high_resolution_clock::now();
         
-        /*auto solve_result = */std::system(
-          std::format("mpiexec -n {} \"{}\" -s",
-            processors.prod(), "xpm.exe"
-          ).c_str());
+        /*auto solve_result = */ std::system(  // NOLINT(concurrency-mt-unsafe)
+          std::format("mpiexec -n {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec.string()).c_str()); 
         
         auto stop = std::chrono::high_resolution_clock::now();
         
         cout << "\n\nHypre solve MPI: " <<
-          duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||" << endl;
-        
-        shared_memory_object smo{open_only, "xpm-hypre-output", read_only};
-        mapped_region mr{smo, read_only};
-        
-        auto block_pressure = std::make_unique<double[]>(nrows);
-        
-        std::memcpy(block_pressure.get(), mr.get_address(), nrows*sizeof(double));
+          duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||";
+
+        auto decomposed_pressure = dpl::hypre::mpi::load_values(nrows);
 
         pressure.resize(nrows);
         for (auto i : dpl::range(nrows))
-          pressure[decomposition.block_to_net[i]] = block_pressure[i];
+          pressure[decomposition.decomposed_to_net[i]] = decomposed_pressure[i];
 
         std::cout << "\n\nPressure solved";
 
 
         std::filesystem::create_directory("cache");
         std::ofstream cache_stream(cache_path, std::ofstream::binary);
-        cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(double)*pressure.size());
+        cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*pressure.size());
         std::cout << "\n\nPressure cached";
       }
 
@@ -966,7 +931,7 @@ namespace xpm
 
       assembly->AddPart(CreateNodeActor(pn, lut_pressure_, 
         [&](macro_idx i) {
-          return pni.connected(i) ? pressure[pni.net(i)] : std::numeric_limits<double>::quiet_NaN();
+          return pni.connected(i) ? pressure[pni.net(i)] : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
         }));
 
       assembly->AddPart(CreateThroatActor(pn, lut_pressure_, [&](size_t i) {
@@ -975,9 +940,9 @@ namespace xpm
         return
           pni.connected(l)
             ? pn.inner_node(r)
-              ? pni.connected(r) ? (pressure[pni.net(l)] + pressure[pni.net(r)])/2 : std::numeric_limits<double>::quiet_NaN()
+              ? pni.connected(r) ? (pressure[pni.net(l)] + pressure[pni.net(r)])/2 : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
               : r == pn.inlet() ? 1.0 : 0.0
-            : std::numeric_limits<double>::quiet_NaN();
+            : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
       }));
 
       renderer_->AddActor(assembly);
@@ -1023,7 +988,7 @@ namespace xpm
 
                   img_.phase[idx1d] == microporous && pni.connected(v_idx)
                     ? pressure[pni.net(v_idx)]
-                    : std::numeric_limits<double>::quiet_NaN()
+                    : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
 
                   // phase_arr[idx1d].value
                 );

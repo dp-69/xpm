@@ -13,8 +13,7 @@
         "CMAKE_CXX_COMPILER": "cl",
         "CMAKE_BUILD_TYPE": "$env{BUILD_TYPE}",
         "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/$env{BUILD_TYPE}/bin",
-        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "DPL_HYPRE_MPI": "TRUE"
+        "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
@@ -36,14 +35,14 @@
     {
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "configurePreset": "win-rel",
-      "name": "win-rel-xpm",
+      "name": "win-rel",
       "displayName": "xpm",
       "targets": ["xpm", "pnextract"]
     },
     {
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "configurePreset": "win-deb",
-      "name": "win-deb-xpm",
+      "name": "win-deb",
       "displayName": "xpm",
       "targets": ["xpm", "pnextract"]
     }

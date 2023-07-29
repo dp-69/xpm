@@ -23,248 +23,57 @@
 
 #pragma once
 
-
-#include <dpl/general.hpp>
-#include <dpl/hypre/ij_matrix.hpp>
-#include <dpl/hypre/sparse_matrix_builder.hpp>
-#include <dpl/soa.hpp>
+#include <dpl/hypre/core.hpp>
 
 #include <vector>
 
 namespace dpl::hypre
 {
-  /**
-   * \brief
-   *    nrows = length(ncols) = length(b), number of rows
-   *    nvalues = sum(ncols) = length(cols) = length(values), number of non-zero coefficients
-   */
-  struct ls_known_ref
-  {
-    HYPRE_Int* ncols;       // number of non-zero columns
-    HYPRE_BigInt* cols;     // non-zero columns
-    HYPRE_Complex* values;  // non-zero coefs
-
-    HYPRE_Complex* b;       // constant terms
-  };
-
-  struct ls_known_storage
-  {
-    std::unique_ptr<HYPRE_Int[]> ncols;       
-    std::unique_ptr<HYPRE_BigInt[]> cols;     
-    std::unique_ptr<HYPRE_Complex[]> values;  
-
-    std::unique_ptr<HYPRE_Complex[]> b;       
-
-    operator ls_known_ref() const {
-      return { ncols.get(), cols.get(), values.get(), b.get() };
-    }
-  };
-
-  class ls_known_storage_builder
-  {
-    HYPRE_BigInt nrows_;
-    size_t nvalues_;
-    ls_known_storage lks_;
-
-    std::unique_ptr<size_t[]> diag_shift_;
-    std::unique_ptr<HYPRE_Int[]> off_relative_;
-  public:
-    auto nvalues() const { return nvalues_; }
-
-    void allocate_rows(HYPRE_BigInt nrows) {
-      nrows_ = nrows;
-      lks_.ncols = std::make_unique<HYPRE_Int[]>(nrows);
-      lks_.b = std::make_unique<HYPRE_Complex[]>(nrows);
-
-      for (HYPRE_BigInt i = 0; i < nrows; ++i) {
-        lks_.ncols[i] = 1; // diag coef
-        lks_.b[i] = 0;
-      }
-
-      nvalues_ = nrows;
-    }
-
-    void reserve_connection(HYPRE_BigInt i0, HYPRE_BigInt i1) {
-      ++lks_.ncols[i0];
-      ++lks_.ncols[i1];
-      nvalues_ += 2;
-    }
-
-    void allocate_values() {
-      lks_.cols = std::make_unique<HYPRE_BigInt[]>(nvalues_);
-      lks_.values = std::make_unique<HYPRE_Complex[]>(nvalues_);
-
-      diag_shift_ = std::make_unique<size_t[]>(nrows_);
-      off_relative_ = std::make_unique<HYPRE_Int[]>(nrows_);
-
-      diag_shift_[0] = 0;
-      off_relative_[0] = 0; // pre increment will be required
-      lks_.cols[0] = 0;
-      lks_.values[0] = 0; // diag
-      
-      for (HYPRE_BigInt i = 1; i < nrows_; ++i) {
-        auto s = diag_shift_[i - 1] + lks_.ncols[i - 1];
-        diag_shift_[i] = s;
-        off_relative_[i] = 0; // pre increment will be required
-        lks_.cols[s] = i;
-        lks_.values[s] = 0; // diag
-      }
-    }
-
-    void add_b(HYPRE_BigInt i, double value) {
-      lks_.b[i] += value;
-    }
-
-    void add_diag(HYPRE_BigInt i, double value) {
-      lks_.values[diag_shift_[i]] += value;
-    }
-
-    void set_connection(HYPRE_BigInt i0, HYPRE_BigInt i1, double value) {
-      auto shift0 = diag_shift_[i0];
-      lks_.values[shift0] += value; // diag
-      shift0 += ++off_relative_[i0];
-      lks_.cols[shift0] = i1;
-      lks_.values[shift0] = -value;
-
-      auto shift1 = diag_shift_[i1];
-      lks_.values[shift1] += value; // diag
-      shift1 += ++off_relative_[i1];
-      lks_.cols[shift1] = i0;
-      lks_.values[shift1] = -value;
-    }
-
-    auto acquire_storage() {
-      return std::move(lks_);
-    }
-  };
-
-
-  class parser
-  {
-    void* ptr_;
+  class sparse_matrix_builder
+  {                    
+    HYPRE_BigInt off_diag_count_;    
+    
+    friend struct InputDeprec;
 
   public:
-    explicit parser(void* ptr) : ptr_(ptr) {}
-
-    template <typename T>
-    void read(T& val) {
-      val = *static_cast<T*>(ptr_);
-      ptr_ = static_cast<char*>(ptr_) + sizeof(T); 
-    }
+    HYPRE_BigInt nrows;
     
-    template <typename T, typename S>
-    void read(T*& val, S size) {
-      val = static_cast<T*>(ptr_);
-      ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+    std::vector<HYPRE_Complex> diag;
+    std::vector<std::forward_list<std::tuple<HYPRE_BigInt, HYPRE_Complex>>> off_diag;
+    
+    sparse_matrix_builder() = default;
+    
+    explicit sparse_matrix_builder(HYPRE_BigInt n) {
+      nrows = n;
+      diag.assign(n, 0);            
+      // constants_.assign(n, 0);
+
+      off_diag.resize(n);
+      off_diag_count_ = 0;
     }
 
-    // std::memcpy(ptr, input.ncols_per_row.data(), input.nrows*sizeof(HYPRE_Int));
-    //   ptr = (char*)ptr + input.nrows*sizeof(HYPRE_Int);
+    void set_off_diag(HYPRE_BigInt i, HYPRE_BigInt j, HYPRE_Complex coef) {                    
+      off_diag[i].emplace_front(j, coef);      
+      ++off_diag_count_;
+    }                  
 
-    template <typename T>
-    void write(T val) {
-      *static_cast<T*>(ptr_) = val;
-      ptr_ = static_cast<char*>(ptr_) + sizeof(T);
+    void add_diag(HYPRE_BigInt i, HYPRE_Complex value) {
+      diag[i] += value;
     }
 
-    template <typename T, typename S>
-    void write(T* val, S size) {
-      std::memcpy(ptr_, val, size*sizeof(T));
-      ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+    auto& get_off_diag(HYPRE_BigInt i) {
+      return off_diag[i];
     }
 
-    auto* ptr() const { return ptr_; }
+    void add_paired_diff_coef(HYPRE_BigInt i0, HYPRE_BigInt i1, HYPRE_Complex coef) {
+      add_diag(i0, -coef);
+      set_off_diag(i0, i1, coef);
+
+      add_diag(i1, -coef);
+      set_off_diag(i1, i0, coef);
+    }       
   };
 
-
-
-  inline std::pair<HYPRE_Real, HYPRE_Int> solve(
-    HYPRE_BigInt ilower, HYPRE_BigInt iupper, const ls_known_ref& in, HYPRE_Complex* values,
-    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20
-    // HYPRE_Real tolerance = 1.e-9, HYPRE_Int max_iterations = 1000
-  ) {
-
-    HYPRE_Solver solver;
-    
-    HYPRE_BoomerAMGCreate(&solver);      
-
-    HYPRE_BoomerAMGSetTol(solver, tolerance);
-    HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
-
-    // HYPRE_BoomerAMGSetMaxLevels(solver, 50);
-    // HYPRE_BoomerAMGSetPMaxElmts(solver, 0);
-    // HYPRE_BoomerAMGSetMaxCoarseSize(solver, 18);
-
-    // HYPRE_BoomerAMGSetCoarsenType(solver, 0);
-    // HYPRE_BoomerAMGSetRestriction(solver, 2);
-    // HYPRE_BoomerAMGSetTruncFactor(solver, 4);
-    // HYPRE_BoomerAMGSetInterpType(solver, 6);
-    // HYPRE_BoomerAMGSetStrongThreshold(solver, 0);
-    // HYPRE_BoomerAMGSetTruncFactor(solver, 0);
-
-    auto nrows = iupper - ilower + 1;
-    auto indices = std::make_unique<HYPRE_BigInt[]>(nrows);
-    std::iota(indices.get(), indices.get() + nrows, ilower);
-
-    ij_matrix A{ilower, iupper, indices.get(), in.ncols, in.cols, in.values};
-    ij_vector b{ilower, iupper, in.b};
-    ij_vector x{ilower, iupper};
-
-
-
-    // const auto t0 = std::chrono::system_clock::now();
-
-    // int w_rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-    //
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == 0)
-    //   std::cout << "\nPOS_0\n" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    HYPRE_BoomerAMGSetup(solver, A, b, x);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == 0)
-    //   std::cout << "\nPOS_1\n" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-    
-    HYPRE_BoomerAMGSolve(solver, A, b, x);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == 0)
-    //   std::cout << "\nPOS_2\n" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-
-    // const auto t1 = std::chrono::system_clock::now();
-    // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
-
-
-    HYPRE_Real final_residual = 0;
-    HYPRE_Int num_interations = 0;
-
-    #ifndef HYPRE_SEQUENTIAL
-    int w_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-    if (w_rank == 0)
-    #endif
-    {
-      HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &final_residual);
-      HYPRE_BoomerAMGGetNumIterations(solver, &num_interations);
-    }
-
-    HYPRE_BoomerAMGDestroy(solver);                  
-  
-    x.get_values(nrows, indices.get(), values);
-
-    return {final_residual, num_interations};
-  }
-
-
-
-
-  
   struct InputDeprec
   {
     HYPRE_BigInt nrows;    
@@ -291,7 +100,7 @@ namespace dpl::hypre
     InputDeprec& operator=(InputDeprec&& other) noexcept = default;
     
 
-    InputDeprec(sparse_matrix_builder& m, std::vector<double>&& b) {             
+    InputDeprec(sparse_matrix_builder& m, std::vector<HYPRE_Complex>&& b) {             
       nrows = m.nrows;
       ncols_per_row.assign(m.nrows, 1);
       constants = std::move(b);            
@@ -320,74 +129,126 @@ namespace dpl::hypre
 }
 
 
-#ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
-#include <boost/interprocess/shared_memory_object.hpp>
-#include <boost/interprocess/mapped_region.hpp>
-
-namespace dpl::hypre
-{
-  namespace mpi
-  {
-    inline constexpr auto smo_name = "xpm-hypre-input";
-    namespace bi = boost::interprocess;
-
-    class block_info
-    {
-      bi::mapped_region region_;
-      ls_known_ref lkr_;
-
-    public:
-      explicit block_info(int rank)
-        : region_{bi::shared_memory_object{bi::open_only, smo_name, bi::read_only}, bi::read_only} {
-
-        size_t nvalues;  
-        
-        parser p{region_.get_address()};
-        
-        p.read(global_nrows);
-        p.read(nvalues);
-        p.read(lkr_.ncols, global_nrows);
-        p.read(lkr_.b, global_nrows);
-        p.read(lkr_.cols, nvalues);
-        p.read(lkr_.values, nvalues);
-
-        local_rows = static_cast<std::pair<HYPRE_BigInt, HYPRE_BigInt>*>(p.ptr()) + rank;
-      }
-
-      HYPRE_BigInt global_nrows;
-      std::pair<HYPRE_BigInt, HYPRE_BigInt>* local_rows;
-
-      operator ls_known_ref() const { return lkr_; }
-    };
-
-    inline auto load(int rank) {
-      return block_info{rank};
-    }
-
-    inline void save(
-      const ls_known_ref& input, HYPRE_BigInt nrows, size_t nvalues, const std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>>& blocks) {
-
-      bi::shared_memory_object smo{bi::open_or_create, smo_name, bi::read_write};
-
-      auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(size_t) +
-        nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
-        nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
-        blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>);
-      
-      smo.truncate(buffer_size);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-      
-      bi::mapped_region region(smo, bi::read_write);
-
-      parser p{region.get_address()};
-      p.write(nrows);
-      p.write(nvalues);
-      p.write(input.ncols, nrows);
-      p.write(input.b, nrows);
-      p.write(input.cols, nvalues);
-      p.write(input.values, nvalues);
-      
-      std::memcpy(p.ptr(), blocks.data(), blocks.size()*sizeof(std::pair<HYPRE_BigInt, HYPRE_BigInt>));
-    }
-  }
-}
-#endif
+// #ifdef DPL_HYPRE_BOOST_SHARED_MEMORY
+// #include <boost/interprocess/shared_memory_object.hpp>
+// #include <boost/interprocess/mapped_region.hpp>
+//
+// namespace dpl::hypre
+// {
+//   namespace mpi
+//   {
+//     class parser
+//     {
+//       void* ptr_;
+//
+//     public:
+//       explicit parser(void* ptr) : ptr_(ptr) {}
+//
+//       template <typename T>
+//       void read(T& val) {
+//         val = *static_cast<T*>(ptr_);
+//         ptr_ = static_cast<char*>(ptr_) + sizeof(T); 
+//       }
+//       
+//       template <typename T, typename S>
+//       void read(T*& val, S size) {
+//         val = static_cast<T*>(ptr_);
+//         ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+//       }
+//
+//       template <typename T>
+//       void write(T val) {
+//         *static_cast<T*>(ptr_) = val;
+//         ptr_ = static_cast<char*>(ptr_) + sizeof(T);
+//       }
+//
+//       template <typename T, typename S>
+//       void write(T* val, S size) {
+//         std::memcpy(ptr_, val, size*sizeof(T));
+//         ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+//       }
+//
+//       auto* ptr() const { return ptr_; }
+//     };
+//
+//     inline constexpr auto smo_hypre_input = "hypre-input";
+//     inline constexpr auto smo_hypre_output = "hypre-output";
+//
+//     namespace bi = boost::interprocess;
+//
+//     class block_info
+//     {
+//       bi::mapped_region region_;
+//       ls_known_ref lkr_;
+//
+//     public:
+//       explicit block_info(int rank)
+//         : region_{bi::shared_memory_object{bi::open_only, smo_hypre_input, bi::read_only}, bi::read_only} {
+//
+//         size_t nvalues;  
+//         
+//         parser p{region_.get_address()};
+//         
+//         p.read(global_nrows);
+//         p.read(nvalues);
+//         p.read(lkr_.ncols, global_nrows);
+//         p.read(lkr_.b, global_nrows);
+//         p.read(lkr_.cols, nvalues);
+//         p.read(lkr_.values, nvalues);
+//
+//         range = static_cast<index_range*>(p.ptr()) + rank;
+//       }
+//
+//       HYPRE_BigInt global_nrows;
+//       index_range* range;
+//
+//       operator ls_known_ref() const { return lkr_; }
+//     };
+//
+//     inline auto load_values(HYPRE_BigInt nrows) {
+//       auto values = std::make_unique<HYPRE_Complex[]>(nrows);
+//       std::memcpy(
+//         values.get(),
+//         bi::mapped_region{
+//           bi::shared_memory_object{bi::open_only, smo_hypre_output, bi::read_only},
+//           bi::read_only}.get_address(),
+//         nrows*sizeof(HYPRE_Complex));
+//       return values;
+//     }
+//
+//     inline void save_values(const HYPRE_Complex* values, HYPRE_BigInt nrows) {
+//       bi::shared_memory_object smo_output{bi::open_or_create, smo_hypre_output, bi::read_write};
+//       smo_output.truncate(nrows*sizeof(HYPRE_Complex));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+//       bi::mapped_region region_output(smo_output, bi::read_write);
+//       std::memcpy(region_output.get_address(), values, nrows*sizeof(HYPRE_Complex));
+//     }
+//
+//     inline auto load_block(int rank) { return block_info{rank}; }
+//
+//     inline void save(
+//       const ls_known_ref& input, HYPRE_BigInt nrows, size_t nvalues, const std::vector<index_range>& blocks) {
+//
+//       bi::shared_memory_object smo{bi::open_or_create, smo_hypre_input, bi::read_write};
+//
+//       auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(size_t) +
+//         nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
+//         nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
+//         blocks.size()*sizeof(index_range);
+//       
+//       smo.truncate(buffer_size);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+//       
+//       bi::mapped_region region(smo, bi::read_write);
+//
+//       parser p{region.get_address()};
+//       p.write(nrows);
+//       p.write(nvalues);
+//       p.write(input.ncols, nrows);
+//       p.write(input.b, nrows);
+//       p.write(input.cols, nvalues);
+//       p.write(input.values, nvalues);
+//       
+//       std::memcpy(p.ptr(), blocks.data(), blocks.size()*sizeof(index_range));
+//     }
+//   }
+// }
+// #endif

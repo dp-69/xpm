@@ -44,7 +44,7 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 > git clone https://github.com/dp-69/xpm.git
 > cd xpm
 > cmake --preset=win-rel
-> cmake --build --preset=win-rel-xpm
+> cmake --build --preset=win-rel
 ```
 
 - Step 4 - Executing xpm

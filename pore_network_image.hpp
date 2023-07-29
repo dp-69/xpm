@@ -12,9 +12,9 @@ namespace xpm
 {
   struct row_decomposition
   {
-    std::unique_ptr<idx1d_t[]> net_to_block;
-    std::unique_ptr<idx1d_t[]> block_to_net;
-    std::vector<std::pair<HYPRE_BigInt, HYPRE_BigInt>> rows_per_block; // [from, to] inclusive in both sides
+    std::unique_ptr<idx1d_t[]> net_to_decomposed;
+    std::unique_ptr<idx1d_t[]> decomposed_to_net;
+    std::vector<dpl::hypre::index_range> blocks;
   };
 
   class pore_network
@@ -162,7 +162,7 @@ namespace xpm
     enum class file_format
     {
       statoil,
-      binary_dp69
+      // binary_dp69
     };
 
     pore_network() = default;
@@ -176,8 +176,8 @@ namespace xpm
     pore_network(const std::filesystem::path& p, file_format ff) {
       if (ff == file_format::statoil)
         read_from_text_file(p);
-      else if (ff == file_format::binary_dp69)
-        read_from_binary_file(p);
+      // else if (ff == file_format::binary_dp69)
+      //   read_from_binary_file(p);
     }
 
     
@@ -211,40 +211,38 @@ namespace xpm
     
 
 
-    void read_from_binary_file(const std::filesystem::path& network_path) { // TODO
-      throw std::exception("[read_from_binary_file] not implemented correctly");
-
-      using namespace attribs;
-
-      boost::iostreams::mapped_file_source file(network_path.string());
-      auto* ptr = const_cast<char*>(file.data());
-
-      idx1d_t node_count;
-      idx1d_t throat_count;
-
-      parse_bin(ptr, node_count);
-      parse_bin(ptr, throat_count);
-
-      node_.resize(node_count);
-      throat_.resize(throat_count);
-
-      parse_bin(ptr, node_.ptr(pos), node_count);
-      parse_bin(ptr, node_.ptr(r_ins), node_count);
-      
-      for (size_t i = 0; i < throat_count; ++i) {
-        dpl::vector2i pair;
-        parse_bin(ptr, pair);
-        throat_[adj][i] = {{pair.x()}, {pair.y()}};
-      }
-
-      parse_bin(ptr, throat_.ptr(r_ins), throat_count);
-
-      for (auto& r : node_.range(r_ins))
-        r = r/2;
-
-      for (auto& r : throat_.range(r_ins))
-        r = r/2;
-    }
+    // void read_from_binary_file(const std::filesystem::path& network_path) {
+    //   using namespace attribs;
+    //
+    //   boost::iostreams::mapped_file_source file(network_path.string());
+    //   auto* ptr = const_cast<char*>(file.data());
+    //
+    //   idx1d_t node_count;
+    //   idx1d_t throat_count;
+    //
+    //   parse_bin(ptr, node_count);
+    //   parse_bin(ptr, throat_count);
+    //
+    //   node_.resize(node_count);
+    //   throat_.resize(throat_count);
+    //
+    //   parse_bin(ptr, node_.ptr(pos), node_count);
+    //   parse_bin(ptr, node_.ptr(r_ins), node_count);
+    //   
+    //   for (size_t i = 0; i < throat_count; ++i) {
+    //     dpl::vector2i pair;
+    //     parse_bin(ptr, pair);
+    //     throat_[adj][i] = {{pair.x()}, {pair.y()}};
+    //   }
+    //
+    //   parse_bin(ptr, throat_.ptr(r_ins), throat_count);
+    //
+    //   for (auto& r : node_.range(r_ins))
+    //     r = r/2;
+    //
+    //   for (auto& r : throat_.range(r_ins))
+    //     r = r/2;
+    // }
     
     void read_from_text_file(const std::filesystem::path& network_path) {
       using namespace attribs;
@@ -392,9 +390,9 @@ namespace xpm
       return builder.acquire_storage();
     }
 
-    void connectivity_flow_summary() const {
+    void connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
       auto pressure = std::make_unique<double[]>(node_count());
-      dpl::hypre::solve(0, node_count() - 1, generate_pressure_input(), pressure.get()); // gross solve (with isolated)
+      dpl::hypre::solve({0, node_count() - 1}, generate_pressure_input(), pressure.get(), tolerace, max_iterations); // gross solve (with isolated)
 
       disjoint_sets ds(node_count());
       std::vector<bool> connected_inlet(node_count());
@@ -713,25 +711,25 @@ namespace xpm
 
       row_decomposition mapping;
 
-      mapping.net_to_block = std::make_unique<idx1d_t[]>(connected_count_);
-      mapping.block_to_net = std::make_unique<idx1d_t[]>(connected_count_);
+      mapping.net_to_decomposed = std::make_unique<idx1d_t[]>(connected_count_);
+      mapping.decomposed_to_net = std::make_unique<idx1d_t[]>(connected_count_);
 
       auto block_count = blocks.prod();
       auto row_count_per_block = std::make_unique<idx1d_t[]>(block_count);
-      mapping.rows_per_block.resize(block_count);
+      mapping.blocks.resize(block_count);
 
       for (auto i : dpl::range(block_count))
         row_count_per_block[i] = 0;
       
       for (auto i : dpl::range(connected_count_)) {
-        mapping.net_to_block[net_idx_block[i].first] = i;
-        mapping.block_to_net[i] = net_idx_block[i].first;
+        mapping.net_to_decomposed[net_idx_block[i].first] = i;
+        mapping.decomposed_to_net[i] = net_idx_block[i].first;
         ++row_count_per_block[net_idx_block[i].second];
       }
 
       HYPRE_BigInt first_row = 0;
       for (auto i : dpl::range(block_count)) {
-        mapping.rows_per_block[i] = {first_row, first_row + row_count_per_block[i] - 1};
+        mapping.blocks[i] = {first_row, first_row + row_count_per_block[i] - 1};
         first_row += row_count_per_block[i];
       }
 
@@ -745,7 +743,7 @@ namespace xpm
 
       auto map_idx = img_.idx1d_mapper();
 
-      auto* block = mapping.net_to_block.get();
+      auto* block = mapping.net_to_decomposed.get();
       
       dpl::hypre::ls_known_storage_builder builder;
 

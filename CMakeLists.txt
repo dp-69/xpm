@@ -52,12 +52,11 @@ add_executable(xpm # WIN32
   "mywidg.ui"
   "main.cpp"
   
+  "functions.cpp"
   
- "functions.cpp"
-
- "dpl/qt/property_editor/Editors.hpp"
- "dpl/qt/property_editor/PropertyEntities.hpp"
- "dpl/qt/property_editor/QPropertyTreeView.hpp"
+  "dpl/qt/property_editor/Editors.hpp"
+  "dpl/qt/property_editor/PropertyEntities.hpp"
+  "dpl/qt/property_editor/QPropertyTreeView.hpp"
 )
 
 target_include_directories(xpm PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -69,8 +68,6 @@ target_compile_definitions(xpm PRIVATE XPM_DEBUG_OUTPUT)
 add_subdirectory(dpl)
 target_link_libraries(xpm PRIVATE dpl)
 
-
-
 add_subdirectory(pnextract)
 
 if(MSVC)  
@@ -81,7 +78,6 @@ else()
 endif()
 
 set_target_properties(pnextract PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pnextract")
-
 
 if(Qt6_FOUND)
   target_link_libraries(xpm PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets)
@@ -112,8 +108,6 @@ endif()
 
 
 
-
-
 if(VTK_VERSION VERSION_LESS "8.90.0")
   message("VTK_USE_FILE: " ${VTK_USE_FILE})
   include(${VTK_USE_FILE})
@@ -140,9 +134,6 @@ else()
   target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES})
   vtk_module_autoinit(TARGETS xpm MODULES ${VTK_LIBRARIES})
 endif()
-
-
-
 
 
 

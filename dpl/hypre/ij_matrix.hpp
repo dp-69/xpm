@@ -26,27 +26,30 @@
 #include <dpl/hypre/ij_vector.hpp>
 #include <dpl/general.hpp>
 
+#include <numeric>
+
 namespace dpl::hypre
 {
   class ij_matrix
   {
-    HYPRE_IJMatrix m_ = nullptr;
+    HYPRE_IJMatrix m_;
 
   public:
-    ij_matrix(HYPRE_BigInt ilower, HYPRE_BigInt iupper, const HYPRE_BigInt* rows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
+    ij_matrix(const index_range& range, const HYPRE_BigInt* rows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
+      const auto [ilower, iupper] = range;
+      const auto nrows = range.width();
+
       HYPRE_IJMatrixCreate(mpi::comm, ilower, iupper, ilower, iupper, &m_);
       HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
-
-      auto count = iupper - ilower + 1;
 
       auto shift = std::accumulate(ncols, ncols + ilower, 0_uz);
 
       {
-        auto diag_sizes = std::make_unique<HYPRE_Int[]>(count);
-        auto off_diag_sizes = std::make_unique<HYPRE_Int[]>(count);
+        auto diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
+        auto off_diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
       
-        std::fill_n(diag_sizes.get(), count, 0);
-        std::fill_n(off_diag_sizes.get(), count, 0);
+        std::fill_n(diag_sizes.get(), nrows, 0);
+        std::fill_n(off_diag_sizes.get(), nrows, 0);
 
         const auto* cols_ptr = cols + shift;
         for (auto i = ilower; i <= iupper; ++i)
@@ -62,12 +65,7 @@ namespace dpl::hypre
       }
 
       HYPRE_IJMatrixInitialize(m_);
-
-      // auto indices = std::make_unique<HYPRE_BigInt[]>(count);
-      // std::iota(indices.get(), indices.get() + count, ilower);
-
-      HYPRE_IJMatrixSetValues(m_, count, ncols + ilower, rows, cols + shift, values + shift);
-
+      HYPRE_IJMatrixSetValues(m_, nrows, ncols + ilower, rows, cols + shift, values + shift);
       HYPRE_IJMatrixAssemble(m_);
     }
 
