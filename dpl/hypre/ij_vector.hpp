@@ -41,7 +41,7 @@ namespace dpl::hypre
 
   namespace mpi
   {
-    inline constexpr MPI_Comm comm =
+    inline MPI_Comm comm =
       #ifdef MPI_COMM_WORLD 
         MPI_COMM_WORLD
       #else

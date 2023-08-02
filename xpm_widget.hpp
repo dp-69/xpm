@@ -53,6 +53,7 @@
 #include <algorithm>
 #include <future>
 
+#include <nlohmann/json.hpp>
 
 
 
@@ -392,7 +393,7 @@ namespace xpm
 
 
     bool use_cache = false;
-    bool save_cache = true;
+    bool save_cache = false;
 
     
 
@@ -539,7 +540,7 @@ namespace xpm
 
       copy(p, "pnextract"/fn, fs::copy_options::update_existing);
       
-      constexpr auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
+      auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
       auto prev = fs::current_path();
       fs::current_path(prev/"pnextract");
@@ -552,7 +553,7 @@ namespace xpm
         std::cout << "=========== pnextract's network extraction begin ===========\n";
 
         /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
-          std::format("pnextract.exe {}", fn.string()).c_str());
+          fmt::format("pnextract.exe {}", fn.string()).c_str());
       
         fs::create_directory(network_dir);
         for (fs::path f : files)
@@ -572,25 +573,58 @@ namespace xpm
 
     
     void Init() {
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
+      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
+      parse::image_dict input_spec{
+        .solid = 1,       // dummy value, no '1' is in the image
+        .pore = 0,
+        .microporous = 255, // we read actual solid '0' as microporous
+      };
+
+      HYPRE_Real tolerance = 1.e-20;
+      HYPRE_Int max_iterations = 20;
+
+      auto millidarcy = 1.0;
+
+
+      if (std::filesystem::exists("config.json")) {
+        using json = nlohmann::json;
+
+        std::ifstream file("config.json");
+        json data = json::parse(file, nullptr, true, true);
+
+        image_path = static_cast<std::string>(data["image"]);
+
+        input_spec = {
+          .solid = data["phase"]["solid"],       
+          .pore = data["phase"]["void"],
+          .microporous = data["phase"]["microporous"],
+        };
+
+        tolerance = data["solver"]["tolerance"];
+        max_iterations = data["solver"]["max_iterations"];
+        millidarcy = data["microporosity"]["permeability"];
+      }
+
+      
+
+
+      std::cout << fmt::format("image path: {}\n\n", image_path.string());
+
+
+      
+
+
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
       // constexpr parse::image_dict input_spec{
-      //   .solid = 1,       // dummy value, no '1' is in the image
+      //   .solid = 3,
       //   .pore = 0,
-      //   .microporous = 255, // we read actual solid '0' as microporous
+      //   .microporous = 2
       // };
 
 
-      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
-      constexpr parse::image_dict input_spec{
-        .solid = 3,
-        .pore = 0,
-        .microporous = 2
-      };
 
-
-
-      // HYPRE_Real tolerance = 1.e-20; HYPRE_Int max_iterations = 20;
-      HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
+     
+      // HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
 
 
       auto pnm_path = ProcessImage(image_path)/"";
@@ -615,11 +649,11 @@ namespace xpm
 
 
 
-      static constexpr auto millidarcy = 1;
-      static constexpr auto const_permeability = millidarcy*0.001*presets::darcy_to_m2;
+      
+      auto const_permeability = millidarcy*0.001*presets::darcy_to_m2;
 
       
-      auto cache_path = std::format("cache/{}-pressure-{:.2f}mD.bin",
+      auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
         image_path.stem().string(), const_permeability/presets::darcy_to_m2*1e3);
 
 
@@ -642,10 +676,12 @@ namespace xpm
         std::cout << (pn.eval_inlet_outlet_connectivity() ? " [CONNECTED]" : " [DISCONNECTED]");
       #endif
 
-                
 
-      pn.connectivity_flow_summary(tolerance, max_iterations);
-
+      #ifdef _WIN32
+        pn.connectivity_flow_summary(tolerance, max_iterations);
+      #elif
+        pn.connectivity_flow_summary_MPI(tolerance, max_iterations);
+      #endif
 
 
       {
@@ -683,13 +719,13 @@ namespace xpm
       pore_network_image pni{pn, img_};
 
       #ifdef XPM_DEBUG_OUTPUT
-      std::cout << "\n\nSTART_CONNECTIVITY ...";
+        std::cout << "\n\nSTART_CONNECTIVITY ...";
       #endif
 
       pni.connectivity_inlet_outlet();
 
       #ifdef XPM_DEBUG_OUTPUT
-      std::cout << "\n\nEND_CONNECTIVITY ///";
+        std::cout << "\n\nEND_CONNECTIVITY ///";
       #endif
 
 
@@ -697,6 +733,9 @@ namespace xpm
       using namespace presets;
 
       std::vector<HYPRE_Complex> pressure;
+      HYPRE_Real residual;
+      HYPRE_Int iters;
+
 
       if (use_cache && std::filesystem::exists(cache_path)) {
         std::cout << "\n\nUsing CACHED pressure";
@@ -743,14 +782,16 @@ namespace xpm
         auto start = std::chrono::high_resolution_clock::now();
         
         /*auto solve_result = */ std::system(  // NOLINT(concurrency-mt-unsafe)
-          std::format("mpiexec -n {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec.string()).c_str()); 
+          fmt::format("mpiexec -np {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec.string()).c_str()); 
         
         auto stop = std::chrono::high_resolution_clock::now();
         
         cout << "\n\nHypre solve MPI: " <<
           duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||";
 
-        auto decomposed_pressure = dpl::hypre::mpi::load_values(nrows);
+        auto [decomposed_pressure, out_residual, out_iters] = dpl::hypre::mpi::load_values(nrows);
+        residual = out_residual;
+        iters = out_iters;
 
         pressure.resize(nrows);
         for (auto i : dpl::range(nrows))
@@ -758,11 +799,12 @@ namespace xpm
 
         std::cout << "\n\nPressure solved";
 
-
-        std::filesystem::create_directory("cache");
-        std::ofstream cache_stream(cache_path, std::ofstream::binary);
-        cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*pressure.size());
-        std::cout << "\n\nPressure cached";
+        if (save_cache) {
+          std::filesystem::create_directory("cache");
+          std::ofstream cache_stream(cache_path, std::ofstream::binary);
+          cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*pressure.size());
+          std::cout << "\n\nPressure cached";
+        }
       }
 
 
@@ -890,7 +932,7 @@ namespace xpm
       
       
       
-        pni.flow_summary(pressure, const_permeability);
+        pni.flow_summary(pressure, const_permeability, residual, iters);
       }
 
 

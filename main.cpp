@@ -5,11 +5,17 @@
 
 int main(int argc, char* argv[])
 {
-  MPI_Init(&argc, &argv);
-
-  if (argc == 2 && !std::strcmp(argv[1], "-s"))
+  if (argc == 2 && !std::strcmp(argv[1], "-s")) {
+    MPI_Init(&argc, &argv);
     dpl::hypre::mpi::process();
+    MPI_Finalize();
+    return 0;
+  }
   else {
+    #ifdef _WIN32
+      MPI_Init(&argc, &argv);
+    #endif
+
     dpl::hypre::mpi::mpi_exec = argv[0];
 
     auto format = xpm::QVTKWidgetRef::defaultFormat();
@@ -45,7 +51,11 @@ int main(int argc, char* argv[])
     widget.show();
 
     /*auto result = */QApplication::exec();
+
+    #ifdef _WIN32
+      MPI_Finalize();
+    #endif
   }
 
-  return MPI_Finalize();
+  return 0;
 }

@@ -41,6 +41,10 @@
 #include <vtkTextProperty.h>
 #include <vtkViewport.h>
 
+#ifndef __cpp_lib_format
+  #include <boost/format.hpp>
+#endif
+
 namespace dpl::vtk
 {
   template <int face_idx>

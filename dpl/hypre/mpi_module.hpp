@@ -44,8 +44,14 @@ namespace dpl::hypre::mpi
     }
     
     template <typename T, typename S>
-    void read(T*& val, S size) {
+    void read_ref(T*& val, S size) {
       val = static_cast<T*>(ptr_);
+      ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+    }
+
+    template <typename T, typename S>
+    void read_copy(T* val, S size) {
+      std::memcpy(val, ptr_, size*sizeof(T));
       ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
     }
 
@@ -66,8 +72,8 @@ namespace dpl::hypre::mpi
 
   inline static std::filesystem::path mpi_exec;
 
-  inline constexpr auto smo_hypre_input = "hypre-input";
-  inline constexpr auto smo_hypre_output = "hypre-output";
+  inline constexpr auto smo_hypre_input = "dpl-hypre-input";
+  inline constexpr auto smo_hypre_output = "dpl-hypre-output";
 
   namespace bi = boost::interprocess;
 
@@ -80,16 +86,16 @@ namespace dpl::hypre::mpi
     explicit block_info(int rank)
       : region_{bi::shared_memory_object{bi::open_only, smo_hypre_input, bi::read_only}, bi::read_only} {
 
-      size_t nvalues;  
+      size_t nvalues;
       
       parser p{region_.get_address()};
       
       p.read(global_nrows);
       p.read(nvalues);
-      p.read(lkr_.ncols, global_nrows);
-      p.read(lkr_.b, global_nrows);
-      p.read(lkr_.cols, nvalues);
-      p.read(lkr_.values, nvalues);
+      p.read_ref(lkr_.ncols, global_nrows);
+      p.read_ref(lkr_.b, global_nrows);
+      p.read_ref(lkr_.cols, nvalues);
+      p.read_ref(lkr_.values, nvalues);
       p.read(tol);
       p.read(max_iter);
 
@@ -105,22 +111,43 @@ namespace dpl::hypre::mpi
     operator ls_known_ref() const { return lkr_; }
   };
 
-  inline auto load_values(HYPRE_BigInt nrows) {
+  using solve_result = std::tuple<std::unique_ptr<HYPRE_Complex[]>, HYPRE_Real, HYPRE_Int>;
+
+  // struct solve_result
+  // {
+  //   std::unique_ptr<HYPRE_Complex[]> uptr;
+  //   HYPRE_Real residual;
+  //   HYPRE_Int iters;
+  // };
+
+  inline solve_result load_values(HYPRE_BigInt nrows) {
     auto values = std::make_unique<HYPRE_Complex[]>(nrows);
-    std::memcpy(
-      values.get(),
-      bi::mapped_region{
-        bi::shared_memory_object{bi::open_only, smo_hypre_output, bi::read_only},
-        bi::read_only}.get_address(),
-      nrows*sizeof(HYPRE_Complex));
-    return values;
+    HYPRE_Real residual;
+    HYPRE_Int iters;
+
+    auto region = bi::mapped_region{
+      bi::shared_memory_object{bi::open_only, smo_hypre_output, bi::read_only},
+      bi::read_only
+    };
+
+    parser p{region.get_address()};
+
+    p.read_copy(values.get(), nrows);
+    p.read(residual);
+    p.read(iters);
+
+    return {std::move(values), residual, iters};
   }
 
-  inline void save_values(const HYPRE_Complex* values, HYPRE_BigInt nrows) {
-    bi::shared_memory_object smo_output{bi::open_or_create, smo_hypre_output, bi::read_write};
-    smo_output.truncate(nrows*sizeof(HYPRE_Complex));  // NOLINT(cppcoreguidelines-narrowing-conversions)
-    bi::mapped_region region_output(smo_output, bi::read_write);
-    std::memcpy(region_output.get_address(), values, nrows*sizeof(HYPRE_Complex));
+  inline void save_values(const HYPRE_Complex* values, HYPRE_BigInt nrows, HYPRE_Real residual, HYPRE_Int iters) {
+    bi::shared_memory_object smo{bi::open_or_create, smo_hypre_output, bi::read_write};
+    smo.truncate(nrows*sizeof(HYPRE_Complex) + sizeof(HYPRE_Real) + sizeof(HYPRE_Int));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+
+    auto region = bi::mapped_region{smo, bi::read_write};
+    parser p{region.get_address()};
+    p.write(values, nrows);
+    p.write(residual);
+    p.write(iters);
   }
 
   inline void save(
@@ -128,7 +155,8 @@ namespace dpl::hypre::mpi
 
     bi::shared_memory_object smo{bi::open_or_create, smo_hypre_input, bi::read_write};
 
-    auto buffer_size = sizeof(HYPRE_BigInt) + sizeof(size_t) +
+    auto buffer_size = 
+      sizeof(HYPRE_BigInt) + sizeof(size_t) +
       nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
       nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)) +
       blocks.size()*sizeof(index_range) +
@@ -164,7 +192,7 @@ namespace dpl::hypre::mpi
     auto local_nrows = input.range->width();
     auto local_values = std::make_unique<HYPRE_Complex[]>(local_nrows);
 
-    dpl::hypre::solve(*input.range, input, local_values.get(), input.tol, input.max_iter);
+    auto [residual, iters] = dpl::hypre::solve(*input.range, input, local_values.get(), input.tol, input.max_iter);
 
     std::unique_ptr<HYPRE_Complex[]> recvbuf;
     std::unique_ptr<int[]> recvcounts;
@@ -189,6 +217,6 @@ namespace dpl::hypre::mpi
       root, MPI_COMM_WORLD);
 
     if (m_rank == root)
-      dpl::hypre::mpi::save_values(recvbuf.get(), input.global_nrows);
+      dpl::hypre::mpi::save_values(recvbuf.get(), input.global_nrows, residual, iters);
   }
 }

@@ -199,16 +199,16 @@ namespace dpl::hypre
     // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
 
 
-    HYPRE_Real final_residual = 0;
-    HYPRE_Int num_interations = 0;
+    HYPRE_Real residual = 0;
+    HYPRE_Int iters = 0;
     
-    HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &final_residual);
-    HYPRE_BoomerAMGGetNumIterations(solver, &num_interations);
+    HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &residual);
+    HYPRE_BoomerAMGGetNumIterations(solver, &iters);
 
     HYPRE_BoomerAMGDestroy(solver);                  
   
     x.get_values(nrows, indices.get(), values);
 
-    return {final_residual, num_interations};
+    return {residual, iters};
   }
 }

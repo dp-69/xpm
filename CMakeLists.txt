@@ -141,6 +141,13 @@ find_package(Boost COMPONENTS iostreams graph REQUIRED)
 target_link_libraries(xpm PRIVATE Boost::iostreams Boost::graph)
 
 
+find_package(fmt CONFIG REQUIRED)
+target_link_libraries(xpm PRIVATE fmt::fmt)
+
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(xpm PRIVATE nlohmann_json::nlohmann_json)
+
+
 find_package(MPI)
 if(MPI_FOUND)
   target_link_libraries(xpm PRIVATE MPI::MPI_CXX)
