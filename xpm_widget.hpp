@@ -536,10 +536,11 @@ namespace xpm
     auto ProcessImage(const std::filesystem::path& p) const {
       namespace fs = std::filesystem;
 
-      auto fn = p.filename();
+      auto filename = p.filename();
 
-      copy(p, "pnextract"/fn, fs::copy_options::update_existing);
-      
+      if (auto copy_fn = "pnextract"/filename; !fs::equivalent(p, copy_fn))
+        copy(p, copy_fn, fs::copy_options::update_existing);
+
       auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
       auto prev = fs::current_path();
@@ -553,7 +554,7 @@ namespace xpm
         std::cout << "=========== pnextract's network extraction begin ===========\n";
 
         /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
-          fmt::format("pnextract.exe {}", fn.string()).c_str());
+          fmt::format("pnextract.exe \"{}\"", filename).c_str());
       
         fs::create_directory(network_dir);
         for (fs::path f : files)
@@ -573,42 +574,21 @@ namespace xpm
 
     
     void Init() {
-      std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      parse::image_dict input_spec{
-        .solid = 1,       // dummy value, no '1' is in the image
-        .pore = 0,
-        .microporous = 255, // we read actual solid '0' as microporous
-      };
+      startup_settings startup;
 
-      HYPRE_Real tolerance = 1.e-20;
-      HYPRE_Int max_iterations = 20;
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
+      // parse::image_dict input_spec{
+      //   .pore = 0,
+      //   .solid = 1,       // dummy value, no '1' is in the image
+      //   .microporous = 255, // we read actual solid as microporous
+      // };
 
-      auto millidarcy = 1.0;
-
-
-      if (std::filesystem::exists("config.json")) {
-        using json = nlohmann::json;
-
-        std::ifstream file("config.json");
-        json data = json::parse(file, nullptr, true, true);
-
-        image_path = static_cast<std::string>(data["image"]);
-
-        input_spec = {
-          .solid = data["phase"]["solid"],       
-          .pore = data["phase"]["void"],
-          .microporous = data["phase"]["microporous"],
-        };
-
-        tolerance = data["solver"]["tolerance"];
-        max_iterations = data["solver"]["max_iterations"];
-        millidarcy = data["microporosity"]["permeability"];
-      }
-
-      
+      auto has_config = std::filesystem::exists("config.json");
+      if (has_config)
+        startup.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true)); //TODO: ifs CURLY
 
 
-      std::cout << fmt::format("image path: {}\n\n", image_path.string());
+      std::cout << fmt::format("image path: {}\n\n", startup.image.path);
 
 
       
@@ -627,7 +607,7 @@ namespace xpm
       // HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
 
 
-      auto pnm_path = ProcessImage(image_path)/"";
+      auto pnm_path = ProcessImage(startup.image.path)/"";
 
 
 
@@ -645,16 +625,18 @@ namespace xpm
         processors = {4, 3, 2};
       else if (proc_count == 32)
         processors = {4, 4, 2};
+      else if (proc_count == 48)
+        processors = {4, 4, 3};
 
 
 
 
       
-      auto const_permeability = millidarcy*0.001*presets::darcy_to_m2;
+      auto const_permeability = startup.microporous_perm*0.001*presets::darcy_to_m2;
 
       
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
-        image_path.stem().string(), const_permeability/presets::darcy_to_m2*1e3);
+        startup.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
 
 
       InitGUI();
@@ -678,20 +660,21 @@ namespace xpm
 
 
       #ifdef _WIN32
-        pn.connectivity_flow_summary(tolerance, max_iterations);
+        pn.connectivity_flow_summary(startup.solver.tolerance, startup.solver.max_iterations);
       #elif
         pn.connectivity_flow_summary_MPI(tolerance, max_iterations);
       #endif
 
 
       {
-        img_.read_image(image_path, input_spec);
+        img_.read_image(startup.image.path, startup.image.phases);
 
         #ifdef XPM_DEBUG_OUTPUT
           std::cout << "\n\nImage phases read and array created";
         #endif
 
-        img_.dim = std::round(std::cbrt(img_.size));
+        img_.dim = has_config ? startup.image.size : std::round(std::cbrt(img_.size));
+
         img_.read_icl_velems(pnm_path);
 
         #ifdef XPM_DEBUG_OUTPUT
@@ -771,9 +754,12 @@ namespace xpm
         cout << "\n\nPRE HYPRE SAVE & SOLVE TIME: " <<
           duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||";
 
-        std::cout << "\n\nSave hypre input START...";
+        std::cout << 
+          fmt::format("\n\nSave hypre input START [{} MB]...", (
+            nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
+            nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
-        dpl::hypre::mpi::save(input, nrows, nvalues, decomposition.blocks, tolerance, max_iterations);
+        dpl::hypre::mpi::save(input, nrows, nvalues, decomposition.blocks, startup.solver.tolerance, startup.solver.max_iterations);
 
         std::cout << "\n\nSave hypre input END|||";
 
@@ -782,7 +768,7 @@ namespace xpm
         auto start = std::chrono::high_resolution_clock::now();
         
         /*auto solve_result = */ std::system(  // NOLINT(concurrency-mt-unsafe)
-          fmt::format("mpiexec -np {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec.string()).c_str()); 
+          fmt::format("mpiexec -np {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec).c_str()); 
         
         auto stop = std::chrono::high_resolution_clock::now();
         
@@ -1079,8 +1065,9 @@ namespace xpm
       
       
       // renderer_->GetActiveCamera()->AddObserver(vtkCommand::ModifiedEvent, this, &TidyAxes::RefreshAxes);
-      
-      tidy_axes_.SetFormat(".2e");
+
+      tidy_axes_.SetScale(1.e-6/*startup.image.resolution*/);
+      // tidy_axes_.SetFormat(".2e");
 
       double bounds[] = {
         0., pn.physical_size.x(),

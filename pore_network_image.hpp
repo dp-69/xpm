@@ -532,7 +532,6 @@ namespace xpm
       std::ifstream is(image_path);
       is.seekg(0, std::ios_base::end);
       size = static_cast<idx1d_t>(is.tellg());
-      size = static_cast<idx1d_t>(is.tellg());
       is.seekg(0, std::ios_base::beg);
       phase = std::make_unique<voxel_tag::phase[]>(size);
       is.read(reinterpret_cast<char*>(phase.get()), size);

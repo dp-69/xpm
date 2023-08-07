@@ -49,7 +49,6 @@ message("VTK_VERSION: " ${VTK_VERSION})
 add_executable(xpm # WIN32
   "xpm_widget.hpp"  
 
-  "mywidg.ui"
   "main.cpp"
   
   "functions.cpp"

@@ -2,6 +2,8 @@
 
 #include <dpl/static_vector.hpp>
 
+#include <HYPRE_utilities.h>
+
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 
@@ -9,9 +11,27 @@
 #include <fstream>
 
 
+#include <fmt/format.h>
+
+template <>
+struct fmt::formatter<std::filesystem::path>: formatter<std::string_view>
+{
+    template <typename FormatContext>
+    auto format(const std::filesystem::path& path, FormatContext& ctx)
+    {
+        return formatter<std::string_view>::format(path.string(), ctx);
+    }
+};
 
 namespace xpm
 {
+  
+
+
+
+
+
+
   template <typename Derived, std::integral T>
   struct strong_integer
   {
@@ -216,21 +236,56 @@ namespace xpm
 
 
 
-
-
-
-
-
-
+  
   namespace parse
   {
     struct image_dict
     {
-      std::uint8_t solid;
       std::uint8_t pore;
+      std::uint8_t solid;
       std::uint8_t microporous;
+
+      void load(const nlohmann::json& j) {
+        pore = j["void"];
+        solid = j["solid"];
+        microporous = j["microporous"];
+      }
     };
   }
+
+
+  struct startup_settings
+  {
+    struct {
+      std::filesystem::path path;
+      dpl::vector3i size;
+      double resolution;
+      parse::image_dict phases;
+
+      void load(const nlohmann::json& j) {
+        path = static_cast<std::string>(j["path"]);
+        size = j["size"];
+        resolution = j["resolution"];
+        phases.load(j["phase"]);
+      }
+    } image;
+
+    double microporous_perm; /* mD */
+
+    struct
+    {
+      HYPRE_Real tolerance = 1.e-20;
+      HYPRE_Int max_iterations = 20;
+    } solver;
+
+    void load(const nlohmann::json& j) {
+      image.load(j["image"]);
+      microporous_perm = j["properties"]["microporosity"]["permeability"].get<double>();
+      solver.tolerance = j["solver"]["tolerance"];
+      solver.max_iterations = j["solver"]["max_iterations"];
+    }
+  };
+
 
 
   
