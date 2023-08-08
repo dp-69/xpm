@@ -8,6 +8,9 @@ int main(int argc, char* argv[])
   xpm::test::split_join_validity_check();
 
 
+  getchar();
+  return 0;
+
 
 
 

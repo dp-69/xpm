@@ -2,6 +2,8 @@
 
 #include <boost/intrusive/set.hpp>
 
+#include <boost/intrusive/avltree_algorithms.hpp>
+
 namespace boost
 {
   namespace intrusive
@@ -14,19 +16,17 @@ namespace boost
 
       static auto const ET_MAX_DEPTH = 256;
 
-      inline static node_ptr path0[ET_MAX_DEPTH];
-      inline static node_ptr path1[ET_MAX_DEPTH];
-      inline static node_ptr path2[ET_MAX_DEPTH];
-      inline static node_ptr path3[ET_MAX_DEPTH];
+      static inline node_ptr path0[ET_MAX_DEPTH];
+      static inline node_ptr path1[ET_MAX_DEPTH];
+      static inline node_ptr path2[ET_MAX_DEPTH];
+      static inline node_ptr path3[ET_MAX_DEPTH];
     };
-
-
 
 
     class avl_extended_tree_algorithms_not_implemented_error : public std::logic_error
     {
     public:
-      avl_extended_tree_algorithms_not_implemented_error() : logic_error("Function not yet implemented") { };
+      avl_extended_tree_algorithms_not_implemented_error() : logic_error("not implemented") {}
     };
 
 
@@ -38,21 +38,22 @@ namespace boost
     class avl_extended_tree_algorithms : public bstree_algorithms<NodeTraits>
     {      
     public:
-      typedef typename NodeTraits::node node;
-      typedef NodeTraits node_traits;
-      typedef typename NodeTraits::node_ptr node_ptr;
-      typedef typename NodeTraits::const_node_ptr const_node_ptr;
-      typedef typename NodeTraits::balance balance;      
+      using node_traits = NodeTraits;
 
-      typedef default_path_buffer<NodeTraits> default_path;
+      using node = typename node_traits::node;
+      using node_ptr = node*;
+      using const_node_ptr = const node*;
+      using balance = typename NodeTraits::balance;
 
-      typedef bstree_algorithms<NodeTraits> bstree_algo;
-      typedef typename bstree_algorithms<NodeTraits>::insert_commit_data insert_commit_data;     
+      using default_path = default_path_buffer<NodeTraits>;
+
+      using bstree_algo = bstree_algorithms<NodeTraits>;
+      using insert_commit_data = typename bstree_algorithms<NodeTraits>::insert_commit_data;     
 
 
       using this_algo = avl_extended_tree_algorithms<NodeTraits>;
 
-      static node_ptr get_header(node_ptr node) {
+      static node* get_header(node* node) {
         while (!is_header(node))
           node = node_traits::get_parent(node);
         return node;
@@ -90,25 +91,25 @@ namespace boost
 
 
 
-      static void split_tree(const node_ptr& headerA, const node_ptr& splitNode, const node_ptr& headerB) {
-        if (node_traits::get_right(headerA) == splitNode) {
-          erase(headerA, splitNode);
+      static void split_tree(const node_ptr& header_a, const node_ptr& split_node, const node_ptr& header_b) {
+        if (node_traits::get_right(header_a) == split_node) {
+          erase(header_a, split_node);
           return;
         }
 
-        if (node_traits::get_left(headerA) == splitNode) {
-          erase(headerA, splitNode);
-          bstree_algorithms<NodeTraits>::swap_tree(headerA, headerB);
+        if (node_traits::get_left(header_a) == split_node) {
+          erase(header_a, split_node);
+          bstree_algorithms<NodeTraits>::swap_tree(header_a, header_b);
           return;
         }
 
-        auto splitNodeHeight = node_height(splitNode);
+        auto splitNodeHeight = node_height(split_node);
 
-        auto leftTailNode = node_traits::get_left(splitNode);
-        auto leftTailHeight = splitNodeHeight - (node_traits::get_balance(splitNode) == node_traits::positive() ? 2 : 1);
+        auto leftTailNode = node_traits::get_left(split_node);
+        auto leftTailHeight = splitNodeHeight - (node_traits::get_balance(split_node) == node_traits::positive() ? 2 : 1);
 
-        auto rightTailNode = node_traits::get_right(splitNode);
-        auto rightTailHeight = splitNodeHeight - (node_traits::get_balance(splitNode) == node_traits::negative() ? 2 : 1);
+        auto rightTailNode = node_traits::get_right(split_node);
+        auto rightTailHeight = splitNodeHeight - (node_traits::get_balance(split_node) == node_traits::negative() ? 2 : 1);
 
         auto leftRight = node_ptr();
         auto rightLeft = node_ptr();
@@ -126,13 +127,13 @@ namespace boost
         }
 
 
-        auto node = splitNode;
-        auto parent = node_traits::get_parent(splitNode);
+        auto node = split_node;
+        auto parent = node_traits::get_parent(split_node);
         auto grandParent = node_traits::get_parent(parent);
 
         auto height = splitNodeHeight;
 
-        while (parent != headerA) {
+        while (parent != header_a) {
           if (node_traits::get_left(parent) == node) {
             if (!rightLeft)
               rightLeft = parent;
@@ -237,15 +238,15 @@ namespace boost
 //                node_traits::augment_propagate(x, lNode, v);
               }
 
-              node_traits::set_parent(headerB, rNode);
-              node_traits::set_parent(rNode, headerB);
+              node_traits::set_parent(header_b, rNode);
+              node_traits::set_parent(rNode, header_b);
 
-              if (rebalance_after_insertion_no_balance_assignment(headerB, x))
+              if (rebalance_after_insertion_no_balance_assignment(header_b, x))
                 rightTailHeight = rHeight + 1;
               else
                 rightTailHeight = rHeight;
 
-              rightTailNode = node_traits::get_parent(headerB);
+              rightTailNode = node_traits::get_parent(header_b);
             }
           }
           else {
@@ -351,15 +352,15 @@ namespace boost
 //                node_traits::augment_propagate(x, v, rNode);
               }
 
-              node_traits::set_parent(headerB, lNode);
-              node_traits::set_parent(lNode, headerB);
+              node_traits::set_parent(header_b, lNode);
+              node_traits::set_parent(lNode, header_b);
 
-              if (rebalance_after_insertion_no_balance_assignment(headerB, x))
+              if (rebalance_after_insertion_no_balance_assignment(header_b, x))
                 leftTailHeight = lHeight + 1;
               else
                 leftTailHeight = lHeight;
 
-              leftTailNode = node_traits::get_parent(headerB);
+              leftTailNode = node_traits::get_parent(header_b);
             }
           }
 
@@ -368,20 +369,20 @@ namespace boost
           grandParent = node_traits::get_parent(grandParent);
         }
 
-        node_traits::set_parent(headerB, rightTailNode);
-        node_traits::set_left(headerB, rightLeft);
-        node_traits::set_right(headerB, node_traits::get_right(headerA));
+        node_traits::set_parent(header_b, rightTailNode);
+        node_traits::set_left(header_b, rightLeft);
+        node_traits::set_right(header_b, node_traits::get_right(header_a));
 
-        node_traits::set_parent(rightTailNode, headerB);
+        node_traits::set_parent(rightTailNode, header_b);
 
 
-        node_traits::set_parent(headerA, leftTailNode);
+        node_traits::set_parent(header_a, leftTailNode);
         //node_traits::set_left(headerA, node_traits::get_left(headerA));                    
-        node_traits::set_right(headerA, leftRight);
+        node_traits::set_right(header_a, leftRight);
 
-        node_traits::set_parent(leftTailNode, headerA);
+        node_traits::set_parent(leftTailNode, header_a);
 
-        init(splitNode);
+        init(split_node);
       }
 
 
@@ -748,17 +749,16 @@ namespace boost
 //        NodeTraits::set_balance(header, NodeTraits::zero());        
       }
 
-      static node_ptr erase(const node_ptr& header, const node_ptr& z) {
+      static node_ptr erase(const node_ptr& header, const node_ptr& n) {
         typename bstree_algo::data_for_rebalance info;
 
+        bstree_algo::erase(header, n, info);
+        if (info.y != n)
+          node_traits::set_balance(info.y, node_traits::get_balance(n));
 
-        bstree_algo::erase(header, z, info);
-        if (info.y != z) {
-          NodeTraits::set_balance(info.y, NodeTraits::get_balance(z));
-        }
         //Rebalance avltree
         rebalance_after_erasure(header, info.x, info.x_parent);
-        return z;
+        return n;
       }
 
       template <class Cloner, class Disposer>
@@ -868,7 +868,7 @@ namespace boost
         rebalance_after_insertion(header, new_value);
       }
 
-      static bool is_header(const const_node_ptr& p) {
+      static bool is_header(const node* p) {
         return node_traits::is_header(p);
       }
 
@@ -877,12 +877,17 @@ namespace boost
       }
 
       static bool verify(const node_ptr& header) {
+        
+
         std::size_t height;
         std::size_t count;
         return verify_recursion(NodeTraits::get_parent(header), count, height);
       }
 
       //   private:
+
+
+
 
 
 
@@ -943,6 +948,8 @@ namespace boost
 
         return true;
       }
+
+
 
       static void rebalance_after_erasure(const node_ptr& header, node_ptr x, node_ptr x_parent) {
         for (node_ptr root = NodeTraits::get_parent(header)

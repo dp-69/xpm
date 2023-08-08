@@ -31,8 +31,8 @@ namespace dpl::units
   struct quantity_traits;
   
 
-  inline static constexpr auto milli = std::milli{};
-  inline static constexpr auto centi = std::centi{};
+  static inline constexpr auto milli = std::milli{};
+  static inline constexpr auto centi = std::centi{};
   
 
   constexpr auto pow(double value, int exponent) {

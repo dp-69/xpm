@@ -2,39 +2,37 @@
 
 namespace HW { namespace dynamic_connectivity
 { 
-  template<class Algo>
+  template<class Algorithms>
   class cyclic_operations
   {
-    typedef Algo algo;    
+    typedef Algorithms algo;    
     typedef typename algo::node_traits node_traits;
-    typedef typename node_traits::node_ptr node_ptr;
-    typedef typename node_traits::node node;
+
+    using node = typename node_traits::node;
+    using node_ptr = node*;
     
     typedef boost::intrusive::default_path_buffer<node_traits> default_path;
 
   public:    
-    static void principal_cut(const node_ptr& header, const node_ptr& least_element) {      
-      if (node_traits::get_left(header) != least_element)
-        if (node_traits::get_right(header) == least_element) {
-          algo::erase(header, least_element);
-          algo::push_front(header, least_element);
+    static void principal_cut(node* header, node* least_node) {      
+      if (node_traits::get_left(header) != least_node) {
+        if (node_traits::get_right(header) == least_node) {
+          algo::erase(header, least_node);
+          algo::push_front(header, least_node);
         }
         else {       
-          node headerNodeB;
-          auto headerB = &headerNodeB;
-          algo::init_header(headerB);          
+          node header_b_storage;
+          auto header_b = &header_b_storage;
+          algo::init_header(header_b);          
+          algo::split_tree(header, least_node, header_b);
+          algo::push_front(header_b, least_node);
 
-          algo::split_tree(header, least_element, headerB);
-
-          algo::push_front(headerB, least_element);
-
-          auto rightB = node_traits::get_right(headerB);
-          algo::erase(headerB, rightB);
-
-          algo::join_trees(headerB, rightB, header);
-          
-          algo::swap_tree(header, headerB);
+          auto right_b = node_traits::get_right(header_b);
+          algo::erase(header_b, right_b);
+          algo::join_trees(header_b, right_b, header);
+          algo::swap_tree(header, header_b);
         }
+      }
     }
 
     static void principal_cut_least_dropped(const node_ptr& header, const node_ptr& least_element) {

@@ -70,7 +70,7 @@ namespace dpl::hypre::mpi
     auto* ptr() const { return ptr_; }
   };
 
-  inline static std::filesystem::path mpi_exec;
+  static inline std::filesystem::path mpi_exec;
 
   inline constexpr auto smo_hypre_input = "dpl-hypre-input";
   inline constexpr auto smo_hypre_output = "dpl-hypre-output";

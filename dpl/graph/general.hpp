@@ -256,35 +256,36 @@ namespace HW
     }
   };
 
-  template<class T>
+  template<class Node>
   struct default_avl_lrpb_node_traits : default_avl_balance_node_traits // lrpb = left, right, parent, balance
   {  
-    typedef T node;
-    typedef T* node_ptr;
-    typedef const T* const_node_ptr;
+    using node = Node;
+    using node_ptr = node*;
+    using const_node_ptr = const node*;
+    // TODO!!!!
+
+    static node* get_left(const node* n) {
+      return n->left;
+    }
+
+    static void set_left(node* n, node* l) {
+      n->left = l;
+    }
+
+    static node* get_right(const node* n) {
+      return n->right;
+    }
+
+    static void set_right(node* n, node* r) {
+      n->right = r;
+    }
     
-    static node_ptr get_left(const const_node_ptr& n) {
-      return n->left_;
+    static node* get_parent(const node* n) {
+      return n->parent;
     }
 
-    static void set_left(const node_ptr& n, const node_ptr& l) {
-      n->left_ = l;
-    }
-
-    static node_ptr get_right(const const_node_ptr& n) {
-      return n->right_;
-    }
-
-    static void set_right(const node_ptr& n, const node_ptr& r) {
-      n->right_ = r;
-    }
-    
-    static node_ptr get_parent(const const_node_ptr& n) {
-      return n->parent_;
-    }
-
-    static void set_parent(const node_ptr& n, const node_ptr& p) {
-      n->parent_ = p;
+    static void set_parent(node* n, node* p) {
+      n->parent = p;
     }
   };
 

@@ -9,6 +9,11 @@
 
 #undef max
 
+namespace dpl::graph
+{
+  struct et_node;
+}
+
 namespace HW { namespace dynamic_connectivity
 {    
   template<class Node>
@@ -34,8 +39,8 @@ namespace HW { namespace dynamic_connectivity
   struct directed_edge;  
   typedef directed_edge* directed_edge_ptr;  
 
-  struct euler_tour_node;
-  typedef euler_tour_node* euler_tour_node_ptr;
+  
+  typedef dpl::graph::et_node* euler_tour_node_ptr;
 
   struct euler_tour_non_tree_edge_node;
   typedef euler_tour_non_tree_edge_node* euler_tour_non_tree_edge_node_ptr;
