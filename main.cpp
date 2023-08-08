@@ -5,6 +5,15 @@
 
 int main(int argc, char* argv[])
 {
+  xpm::test::split_join_validity_check();
+
+
+
+
+
+
+
+
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
     dpl::hypre::mpi::process();
