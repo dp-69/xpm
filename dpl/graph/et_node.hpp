@@ -34,7 +34,6 @@ namespace dpl::graph
   using namespace HW;
   using namespace HW::dynamic_connectivity;
 
-
   struct et_node
   {
     et_node() = default;
@@ -63,7 +62,7 @@ namespace dpl::graph
 
   struct euler_tour_non_tree_edge_node;
       
-  struct et_traits : default_avl_lrpb_node_traits<et_node>
+  struct et_traits //: default_avl_lrpb_node_traits<et_node>
   {    
   private:
     template<class T> 
@@ -72,6 +71,16 @@ namespace dpl::graph
     }
 
   public:
+    using node = et_node;
+    using node_ptr = node*;
+    using const_node_ptr = const node*;
+
+    using balance = avl_balance;
+
+    static constexpr balance negative() { return avl_balance::negative_t; }
+    static constexpr balance zero() { return avl_balance::zero_t; }
+    static constexpr balance positive() { return avl_balance::positive_t; }
+
     typedef euler_tour_non_tree_edge_node* etnte_node_ptr;
 
     // -----------
@@ -109,7 +118,7 @@ namespace dpl::graph
     // -----------
 
     static void init_header(et_node* n) {
-      n->ptr_type_balance = n->ptr_type_balance & ~et_node::balance_bits | et_node::balance_bits; // TODO?
+      n->ptr_type_balance = (n->ptr_type_balance & ~et_node::balance_bits) | et_node::balance_bits; // TODO?
     }
 
     // Has to be very efficient O(1) predicate.

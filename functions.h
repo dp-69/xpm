@@ -229,7 +229,7 @@ namespace xpm
 
 
       constexpr auto display_output = false;
-      constexpr auto check_validity_naive = false;
+      constexpr auto check_validity_naive = true;
 
       // euler_tour_tree treeA;
       // auto headerA = treeA.header_ptr();
@@ -481,7 +481,7 @@ namespace xpm
 
       iter = 0;
 
-      while (iter++ < 5000000) {
+      while (iter++ < 50000) {
         bIdx = static_cast<int>(round(unit_dist(random_engine) * (total_size - 1)));
 
 
@@ -490,7 +490,7 @@ namespace xpm
 
         aIdx = bIdx;
 
-        if (iter % 1000000 == 0) {
+        if (iter % 10000 == 0) {
           t1 = system_clock::now();
           cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl;
           t0 = t1;
@@ -505,7 +505,7 @@ namespace xpm
       iter = 0;
 
 
-      while (iter++ < 5000000)
+      while (iter++ < 50000)
       //  while (iter++ >= 0)       
       {
         //    if (pseudoRandomIdx == pseudoRandomSize)
@@ -532,7 +532,7 @@ namespace xpm
 
 
         //    cout << endl << format("total: %i; splitIdx: %i") % totalSize % splitIdx << endl;
-        if (iter % 1000000 == 0) {
+        if (iter % 10000 == 0) {
           //      if (!avl_augmented_tree_algorithms::verify_max(treeA.header_ptr()))
           //        cout << "{A} INVALID\n";
 
@@ -548,13 +548,13 @@ namespace xpm
         //      int www  = 3;
         //    }
 
-        if (display_output) {
-          cout << "\nTREE {A}\n";
-          //      for (auto& x : treeA)
-          ////        cout << value_traits::to_node_ptr(x)->MY_V0 << " ";        
-          //        cout << x.v0 << " ";
-          cout << endl;
-        }
+        // if (display_output) {
+        //   cout << "\nTREE {A}\n";
+        //   //      for (auto& x : treeA)
+        //   ////        cout << value_traits::to_node_ptr(x)->MY_V0 << " ";        
+        //   //        cout << x.v0 << " ";
+        //   cout << endl;
+        // }
 
 
         auto splitValue = &input[splitIdx];
@@ -563,13 +563,13 @@ namespace xpm
         auto sizeB = total_size - sizeA - 1;
 
 
-        if (check_validity_naive)
-          if (!et_algo::verify(header_a))
-            cout << "{A} INVALID\n";
-
-        if (check_validity_naive)
-          if (!et_algo::verify(headerB))
-            cout << "{B} INVALID\n";
+        // if (check_validity_naive)
+        //   if (!et_algo::verify(header_a))
+        //     cout << "{A} INVALID\n";
+        //
+        // if (check_validity_naive)
+        //   if (!et_algo::verify(headerB))
+        //     cout << "{B} INVALID\n";
 
 
         et_algo::split_tree(header_a, splitValue, headerB);
@@ -606,67 +606,71 @@ namespace xpm
           //        cout << "{B} INVALID SIZE\n";
         }
 
-        if (display_output) {
-          cout << endl << "\nSPLIT\n";
+        // if (display_output) {
+        //   cout << endl << "\nSPLIT\n";
+        //
+        //   cout << "TREE {A}\n";
+        //   //      for (auto& x : treeA)
+        //   ////        cout << value_traits::to_node_ptr(x)->MY_V0 << " ";
+        //   //        cout << x.v0 << " ";
+        //
+        //   //      cout << "\n\n___" << splitValue.v0 << "___\n\n";
+        //   //      cout << "\n\n___" << value_traits::to_node_ptr(splitValue)->MY_V0 << "___\n\n";
+        //
+        //   cout << "TREE {B}\n";
+        //   //      for (auto& x : treeB)
+        //   ////        cout << value_traits::to_node_ptr(x)->MY_V0 << " ";
+        //   //      cout << x.v0 << " ";
+        // }
 
-          cout << "TREE {A}\n";
-          //      for (auto& x : treeA)
-          ////        cout << value_traits::to_node_ptr(x)->MY_V0 << " ";
-          //        cout << x.v0 << " ";
 
-          //      cout << "\n\n___" << splitValue.v0 << "___\n\n";
-          //      cout << "\n\n___" << value_traits::to_node_ptr(splitValue)->MY_V0 << "___\n\n";
+        // if (check_validity_naive) {
+        //   auto preHeightA = et_algo::node_height(et_traits::get_parent(header_a));
+        //   auto preHeightB = et_algo::node_height(et_traits::get_parent(headerB));
+        //
+        //   // auto heightIncrQ = et_algo::join_trees(header_a, splitValue, headerB);
+        //
+        //   auto diff =
+        //     et_algo::node_height(et_traits::get_parent(header_a)) -
+        //     max(preHeightA, preHeightB);
+        //
+        //   // if (diff > 1 || heightIncrQ && diff == 0 || !heightIncrQ && diff == 1)
+        //   //   cout << "MERGE HEIGHT ERROR\n";
+        //
+        //   if (!et_algo::verify(header_a))
+        //     cout << "{A<>B} INVALID\n";
+        //
+        //   //      auto treeAsize = treeA.size();
+        //   //      auto rootASize = euler_tour_node_traits::get_size(treeA.root().pointed_node());
+        //
+        //   //      if (treeAsize != totalSize || totalSize != rootASize)
+        //   //        cout << "{A<>B} INVALID SIZE\n";
+        //
+        //   //      auto calcSizeB = treeB.size();
+        //
+        //   //      if (calcSizeB != 0)
+        //   //        cout << "{B} INVALID SIZE\n";
+        // }
 
-          cout << "TREE {B}\n";
-          //      for (auto& x : treeB)
-          ////        cout << value_traits::to_node_ptr(x)->MY_V0 << " ";
-          //      cout << x.v0 << " ";
-        }
-
-
-        if (check_validity_naive) {
-          auto preHeightA = et_algo::node_height(et_traits::get_parent(header_a));
-          auto preHeightB = et_algo::node_height(et_traits::get_parent(headerB));
-
-          auto heightIncrQ = et_algo::join_trees(header_a, splitValue, headerB);
-
-          auto diff =
-            et_algo::node_height(et_traits::get_parent(header_a)) -
-            max(preHeightA, preHeightB);
-
-          if (diff > 1 || heightIncrQ && diff == 0 || !heightIncrQ && diff == 1)
-            cout << "MERGE HEIGHT ERROR\n";
-
-          if (!et_algo::verify(header_a))
-            cout << "{A<>B} INVALID\n";
-
-          //      auto treeAsize = treeA.size();
-          //      auto rootASize = euler_tour_node_traits::get_size(treeA.root().pointed_node());
-
-          //      if (treeAsize != totalSize || totalSize != rootASize)
-          //        cout << "{A<>B} INVALID SIZE\n";
-
-          //      auto calcSizeB = treeB.size();
-
-          //      if (calcSizeB != 0)
-          //        cout << "{B} INVALID SIZE\n";
-        }
-        else
-          et_algo::join_trees(header_a, splitValue, headerB);
+        et_algo::join_trees(header_a, splitValue, headerB);
 
         //      if (totalSize != euler_tour_node_traits::get_size(euler_tour_node_traits::get_parent(headerA)))
         //        cout << "{A<>B} INVALID SIZE\n";       
 
 
-        if (display_output) {
-          cout << "\nMERGED TREE {A<>B}\n";
+        if (check_validity_naive)
+          if (!et_algo::verify(header_a))
+            cout << "{A<>B} INVALID\n";
 
-          //      for (auto& x : treeA)                
-          //        cout << x.v0 << " ";
-          ////      cout << value_traits::to_node_ptr(splitValue)->MY_V0 << " ";
-
-          cout << endl;
-        }
+        // if (display_output) {
+        //   cout << "\nMERGED TREE {A<>B}\n";
+        //
+        //   //      for (auto& x : treeA)                
+        //   //        cout << x.v0 << " ";
+        //   ////      cout << value_traits::to_node_ptr(splitValue)->MY_V0 << " ";
+        //
+        //   cout << endl;
+        // }
 
 
         //    auto valid = euler_tour_directed_edge_algorithms::verify(headerA);
