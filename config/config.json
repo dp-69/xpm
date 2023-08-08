@@ -1,0 +1,67 @@
+// {
+//   "image":  {
+//     "path" : "pnextract/M1-9-SLS_1800x500x600_5p5um.raw",
+//     "size" : [1800, 500, 600],
+//     "resolution": 5.5e-6,
+//     "phase": {
+//       "void" : 0, /* must be 0 for Ali's extraction */
+//       "solid" : 2,
+//       "microporous": 1
+//     }  
+//   },
+//   "properties": {
+//     "microporosity": {
+//       "permeability": 1.0 /* mD */
+//     }
+//   },
+//   "solver" : {
+//     "tolerance" : 1e-9,
+//     "max_iterations" : 19
+//   }
+// }
+
+
+
+{
+  "image":  {
+    "path" : "C:/Users/dmytr/OneDrive - Imperial College London/hwu_backup/temp/images/Bmps-v0s255_252x252x252_6p0um.raw",
+    "size" : [252, 252, 252],
+    "resolution": 6.0e-6,
+    "phase": {
+      "void" : 0, /* must be 0 for Ali's extraction */
+      "solid" : 1,
+      "microporous": 255
+    }  
+  },
+  "properties": {
+    "microporosity": {
+      "permeability": 1.0 /* mD */
+    }
+  },
+  "solver" : {
+    "tolerance" : 1e-9,
+    "max_iterations" : 19
+  }
+}
+
+
+
+// {
+//   "image": "C:\\Users\\dmytr\\OneDrive - Imperial College London\\hwu_backup\\temp\\images\\Est-v0m2s3_500x500x500_4p0um.raw",
+//   "phase": {
+//     "void" : 0, /* void = 0 for Ali's extraction */
+//     "solid" : 3,
+//     "microporous": 2
+//   },
+//   "resolution": 4e-6,
+//   "microporosity": {
+//     "permeability": 1.0 /* mD */
+//   },
+//   "solver" : {
+//     "tolerance" : 1e-9,
+//     "max_iterations" : 1000
+//   }
+// }
+
+
+

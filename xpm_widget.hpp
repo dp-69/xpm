@@ -10,6 +10,7 @@
 #include <dpl/qt/property_editor/QPropertyTreeView.hpp>
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
+#include <dpl/vtk/ImageDataGlyphMapper.hpp>
   
 // #include <QWidget>
 #include <QMainWindow>
@@ -66,280 +67,7 @@ namespace xpm
   
 
 
-  class GlyphMapperFace
-  {
-  protected:
-    vtkNew<vtkPoints> points_;
-    std::vector<idx1d_t> original_indices_;
-
-    vtkNew<vtkGlyph3DMapper> glyph_mapper_;
-    vtkNew<vtkActor> actor_;
-    vtkNew<vtkDoubleArray> color_arr_;
-
-  public:
-    auto* GetActor() const {
-      return actor_.Get();
-    }
-
-    auto* GetGlyphMapper() const {
-      return glyph_mapper_.Get();
-    }
-
-    auto& GetIndices() const {
-      return original_indices_;
-    }
-
-    auto* GetColorArray() const {
-      return color_arr_.Get();
-    }
-  };
   
-  template<int face_idx>
-  class GlyphMapperFaceGeneric : public GlyphMapperFace
-  {
-    using face = dpl::face_cubic<face_idx>;
-    using dims = dpl::cdims<face::dim>;
-
-    static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {
-      auto quad = vtkSmartPointer<vtkPolyData>::New();
-
-      vtkNew<vtkPoints> points;
-      quad->SetPoints(points);
-      
-      vtkNew<vtkCellArray> cells;
-      quad->SetPolys(cells);
-        
-      v3d pos;
-      pos[dims::e0] = 0;
-      pos[dims::e1] = -half_length;
-      pos[dims::e2] = -half_length;
-      points->InsertNextPoint(pos);
-
-      pos[dims::e1] = half_length;
-      points->InsertNextPoint(pos);
-
-      pos[dims::e2] = half_length;
-      points->InsertNextPoint(pos);
-
-      pos[dims::e1] = -half_length;
-      points->InsertNextPoint(pos);
-
-      if constexpr (face::is_upper) {
-        vtkIdType indices[] = {0, 1, 2, 3};
-        cells->InsertNextCell(4, indices);
-      }
-      else {
-        vtkIdType indices[] = {3, 2, 1, 0};
-        cells->InsertNextCell(4, indices);
-      }
-
-      return quad;
-    }
-
-    
-  public:
-    void Init(double half_length = 0.5) {
-      
-      // POLY_polydata__->SetPoints(POLY_points__);
-      // POLY_polydata__->SetPolys(POLY_cells__);
-      // POLY_polydata__->GetCellData()->SetScalars(color_arr_);
-
-
-
-
-      // color_arr_->SetName("darcy_adj");
-
-      vtkNew<vtkPolyData> polydata;
-      polydata->GetPointData()->SetScalars(color_arr_);
-      polydata->SetPoints(points_);
-
-      glyph_mapper_->OrientOff();
-      glyph_mapper_->SetScaleFactor(half_length/*1.0000*/); 
-      glyph_mapper_->SetScaleModeToNoDataScaling();
-      glyph_mapper_->SetInputData(polydata);
-      glyph_mapper_->SetSourceData(Quad(/*half_length/2*/));
-    }
-
-    void Populate(const v3i& cells, const v3d& cell_size, const auto& filter) {
-      idx3d_t map_idx{1, cells.x(), cells.x()*cells.y()};
-      idx3d_t ijk;
-      
-      auto [e0, e1, e2] = dims::tie(ijk);
-      auto [e0_count, e1_count, e2_count] = dims::tie(cells);
-      
-      auto adj_step = map_idx[dims::e0];
-
-      v3d pos;
-      
-      idx1d_t idx1d;
-      
-      for (e2 = 0; e2 < e2_count; ++e2)
-        for (e1 = 0; e1 < e1_count; ++e1) {
-          e0 = 0;
-
-          idx1d = ijk.dot(map_idx);
-
-          if constexpr (!face::is_upper) {
-            if (filter(idx1d)) {
-              pos[dims::e0] = 0; //(0)*cell_size[e1_dim];
-              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
-              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
-
-              points_->InsertNextPoint(pos);
-              original_indices_.push_back(idx1d);
-              // post(idx1d);
-
-              // auto pts_count = POLY_points__->GetNumberOfPoints();
-              //
-              // pos[dims::e0] = 0;
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // pos[dims::e2] = (e2)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              // vtkIdType indices[] = {pts_count + 3, pts_count + 2, pts_count + 1, pts_count + 0};
-              // POLY_cells__->InsertNextCell(4, indices);
-
-            }
-          }
-          
-          for (; e0 < e0_count - 1; ++e0) {
-            idx1d = ijk.dot(map_idx);
-            bool filtered = filter(idx1d);
-
-            auto adj_idx1d = idx1d + adj_step;
-            bool adj_filtered = filter(adj_idx1d);
-
-            if (filtered != adj_filtered) {
-              pos[dims::e0] = (e0 + 1.0)*cell_size[dims::e0];
-              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
-              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
-
-
-
-              // auto pts_count = POLY_points__->GetNumberOfPoints();
-              //
-              // pos[dims::e0] = (e0 + 1)*cell_size[dims::e0];
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // pos[dims::e2] = (e2)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-
-              if constexpr (face::is_upper) {
-                if (filtered) {
-                  points_->InsertNextPoint(pos);
-                  original_indices_.push_back(idx1d);
-                  // post(idx1d);
-
-                  // vtkIdType indices[] = {pts_count + 0, pts_count + 1, pts_count + 2, pts_count + 3};
-                  // POLY_cells__->InsertNextCell(4, indices);
-                }
-              }
-              else {
-                if (adj_filtered) {
-                  points_->InsertNextPoint(pos);
-                  original_indices_.push_back(adj_idx1d);
-                  // post(adj_idx1d);
-
-
-                  // vtkIdType indices[] = {pts_count + 3, pts_count + 2, pts_count + 1, pts_count + 0};
-                  // POLY_cells__->InsertNextCell(4, indices);
-                }
-              }
-            }
-          }
-
-
-          if constexpr (face::is_upper) {
-            idx1d = ijk.dot(map_idx);
-            
-            if (filter(idx1d)) {
-              pos[dims::e0] = (e0_count)*cell_size[dims::e0];
-              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
-              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
-              
-              points_->InsertNextPoint(pos);
-              original_indices_.push_back(idx1d);
-              // post(idx1d);
-
-
-
-
-
-              // auto pts_count = POLY_points__->GetNumberOfPoints();
-              //
-              // pos[dims::e0] = (e0_count)*cell_size[dims::e0];
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // pos[dims::e2] = (e2)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              // vtkIdType indices[] = {pts_count + 0, pts_count + 1, pts_count + 2, pts_count + 3};
-              // POLY_cells__->InsertNextCell(4, indices);
-            }
-          }
-        }
-
-      color_arr_->SetNumberOfTuples(points_->GetNumberOfPoints());
-    }
-  };
-
-
-  class ImageDataGlyphMapper
-  {
-  public:
-
-    void Init(double half_length) {
-      dpl::sfor<6>([=, this](auto i) {
-        std::get<i>(faces_).Init(half_length);
-      });
-    }
-
-    void Populate(const v3i& dims, const v3d& cell_size, const auto& filter) {
-      auto start = std::chrono::high_resolution_clock::now();
-      
-      dpl::psfor<6>([=, this](auto i) {
-        std::get<i>(faces_).Populate(dims, cell_size, filter);
-        // std::cout << "\n\nFaces " << i;
-      });
-
-      auto stop = std::chrono::high_resolution_clock::now();
- 
-      cout << "\n\nFaces total time: " <<
-        duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms" << endl;
-    }
-
-    std::tuple<
-      GlyphMapperFaceGeneric<0>,
-      GlyphMapperFaceGeneric<1>,
-      GlyphMapperFaceGeneric<2>,
-      GlyphMapperFaceGeneric<3>,
-      GlyphMapperFaceGeneric<4>,
-      GlyphMapperFaceGeneric<5>
-    > faces_;
-  };
 
   
 
@@ -378,7 +106,7 @@ namespace xpm
     vtkNew<vtkLookupTable> lut_node_throat_;
 
 
-    ImageDataGlyphMapper img_glyph_mapper_;
+    dpl::vtk::ImageDataGlyphMapper<idx1d_t> img_glyph_mapper_;
 
 
 
@@ -388,12 +116,11 @@ namespace xpm
 
 
     image_data img_;
+    std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
-    
 
-
-    bool use_cache = false;
-    bool save_cache = false;
+    bool use_cache = true;
+    bool save_cache = true;
 
     
 
@@ -483,11 +210,11 @@ namespace xpm
 
         edges.name = "Edges";
         edges.get = [this] {
-          return std::get<0>(img_glyph_mapper_.faces_).GetActor()->GetProperty()->GetEdgeVisibility();
+          return static_cast<bool>(std::get<0>(img_glyph_mapper_.faces_).GetActor()->GetProperty()->GetEdgeVisibility());
         };
         edges.set = [this](bool v) {
           dpl::sfor<6>([this, v](auto i) {
-            static_cast<GlyphMapperFace&>(std::get<i>(img_glyph_mapper_.faces_)).GetActor()->GetProperty()->SetEdgeVisibility(v);
+            static_cast<dpl::vtk::GlyphMapperFace<idx1d_t>&>(std::get<i>(img_glyph_mapper_.faces_)).GetActor()->GetProperty()->SetEdgeVisibility(v);
             render_window_->Render();
           });
         };
@@ -508,32 +235,7 @@ namespace xpm
 
 
 
-
-  public:
-    // void LoadImage() {
-    //   
-    //
-    //
-    //   // auto image_path = 
-    //   //   // R"(C:\dev\.temp\images\Bentheimer1000_normalized.raw)"
-    //   //   
-    //   //   R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\temp\images\Bmps252_6um.raw)"
-    //   //   // R"(C:\Users\dmytr\OneDrive - Heriot-Watt University\pnm_petronas\images\Est_3phase500cubed4micron_NORM.raw)"
-    //   // ;
-    //   //
-    //   // auto velems_path = 
-    //   //   R"(C:\dev\pnextract\out\build\x64-Release\Bmps252_INV\)"
-    //   //   // R"(C:\dev\pnextract\out\build\x64-Release\EstThreePhase500_NORM\)"
-    //   // ;
-    //
-    //   
-    //   // size_t image_size;
-    //   
-    // }
-
-
-
-    auto ProcessImage(const std::filesystem::path& p) const {
+    auto ProcessImage(const std::filesystem::path& p) {
       namespace fs = std::filesystem;
 
       auto filename = p.filename();
@@ -572,47 +274,47 @@ namespace xpm
       return network_dir;
     }
 
-    
-    void Init() {
-      startup_settings startup;
 
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      // parse::image_dict input_spec{
-      //   .pore = 0,
-      //   .solid = 1,       // dummy value, no '1' is in the image
-      //   .microporous = 255, // we read actual solid as microporous
-      // };
+  public:
+    void Init() {
+      InitGUI();
+
+
+
+
+      ComputePressure();
+
+
+
+
+      renderer_->ResetCamera(bounds_.data());
+      renderer_->GetActiveCamera()->Zoom(0.70);
+      // renderer_->ResetCameraClippingRange();
+      
+      tidy_axes_.Init(renderer_.Get());
+
+      connect(qvtk_widget_, &QVTKWidgetRef::resized, this, [this]() { tidy_axes_.RefreshAxes(); });
+
+      // tidy_axes_.SetScale(1.e-6/*startup.image.resolution*/);
+      // tidy_axes_.SetFormat(".2e");
+      tidy_axes_.Build(bounds_.data());
+    }
+
+    void ComputePressure() {
+      using clock = std::chrono::high_resolution_clock;
+
+      startup_settings startup;
 
       auto has_config = std::filesystem::exists("config.json");
       if (has_config)
-        startup.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true)); //TODO: ifs CURLY
+        startup.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
 
 
       std::cout << fmt::format("image path: {}\n\n", startup.image.path);
 
-
-      
-
-
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
-      //   .pore = 0,
-      //   .microporous = 2
-      // };
-
-
-
-     
-      // HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
-
-
       auto pnm_path = ProcessImage(startup.image.path)/"";
 
-
-
-      auto begin_init_time = std::chrono::high_resolution_clock::now();
-
+      auto begin_init_time = clock::now();
 
       //------------------------------
 
@@ -629,8 +331,6 @@ namespace xpm
         processors = {4, 4, 3};
 
 
-
-
       
       auto const_permeability = startup.microporous_perm*0.001*presets::darcy_to_m2;
 
@@ -639,7 +339,6 @@ namespace xpm
         startup.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
 
 
-      InitGUI();
 
       InitLutNodeThroat(lut_node_throat_);
       InitLutPoreSolidMicro(lut_pore_solid_micro_);
@@ -654,7 +353,7 @@ namespace xpm
       pore_network pn{pnm_path, pore_network::file_format::statoil};
 
       #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\nNetwork loaded";
+        std::cout << "\nnetwork loaded";
         std::cout << (pn.eval_inlet_outlet_connectivity() ? " [CONNECTED]" : " [DISCONNECTED]");
       #endif
 
@@ -669,31 +368,31 @@ namespace xpm
       {
         img_.read_image(startup.image.path, startup.image.phases);
 
-        #ifdef XPM_DEBUG_OUTPUT
-          std::cout << "\n\nImage phases read and array created";
-        #endif
+        // #ifdef XPM_DEBUG_OUTPUT
+        //   std::cout << "\n\nImage phases read and array created";
+        // #endif
 
         img_.dim = has_config ? startup.image.size : std::round(std::cbrt(img_.size));
 
         img_.read_icl_velems(pnm_path);
 
-        #ifdef XPM_DEBUG_OUTPUT
-          std::cout << "\n\nVelems file read";
-        #endif
+        // #ifdef XPM_DEBUG_OUTPUT
+        //   std::cout << "\n\nVelems file read";
+        // #endif
 
         auto mapped_range = std::ranges::subrange{img_.velem.get(), img_.velem.get() + img_.size}
           | std::views::transform([](voxel_tag::velem x) { return *x; });
 
         InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range));
 
-        #ifdef XPM_DEBUG_OUTPUT
-          std::cout << "\n\nlut_velem_ created";
-        #endif
+        // #ifdef XPM_DEBUG_OUTPUT
+        //   std::cout << "\n\nlut_velem_ created";
+        // #endif
 
         img_.eval_microporous_velem();
 
         #ifdef XPM_DEBUG_OUTPUT
-          std::cout << "\n\nLoaded image";
+          std::cout << "\n\nimage loaded";
         #endif
       }
 
@@ -702,13 +401,13 @@ namespace xpm
       pore_network_image pni{pn, img_};
 
       #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nSTART_CONNECTIVITY ...";
+        std::cout << "\n\nconnectivity...";
       #endif
 
       pni.connectivity_inlet_outlet();
 
       #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "\n\nEND_CONNECTIVITY ///";
+        std::cout << " done";
       #endif
 
 
@@ -721,7 +420,7 @@ namespace xpm
 
 
       if (use_cache && std::filesystem::exists(cache_path)) {
-        std::cout << "\n\nUsing CACHED pressure";
+        std::cout << "\n\nusing cached pressure";
 
         std::ifstream is(cache_path, std::ifstream::binary);
         is.seekg(0, std::ios_base::end);
@@ -731,7 +430,7 @@ namespace xpm
         is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));
       }
       else {
-        std::cout << "\n\ndecomposition START...";
+        std::cout << "\n\ndecomposition...";
 
         auto decomposition = pni.decompose_rows(processors);
 
@@ -742,46 +441,53 @@ namespace xpm
         //     decomposition.rows_per_block[i].second,
         //     decomposition.rows_per_block[i].second - decomposition.rows_per_block[i].first + 1);
 
-        std::cout << "\n\ndecomposition END|||";
-
-        std::cout << "\n\ngenerate input START...";
-
+        std::cout
+          << " done"
+          << "\n\ninput matrix build...";
 
         auto [nrows, nvalues, input] = pni.generate_pressure_input(decomposition, const_permeability);
 
-        std::cout << "\n\ngenerate input END|||";
-        
-        cout << "\n\nPRE HYPRE SAVE & SOLVE TIME: " <<
-          duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin_init_time).count() << "ms END|||";
+        std::cout
+          << " done"
+          << "\n\npre hypre time: " <<
+          duration_cast<std::chrono::milliseconds>(clock::now() - begin_init_time).count() << "ms";
 
         std::cout << 
-          fmt::format("\n\nSave hypre input START [{} MB]...", (
+          fmt::format("\n\nsave input matrix [{} MB]...", (
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
         dpl::hypre::mpi::save(input, nrows, nvalues, decomposition.blocks, startup.solver.tolerance, startup.solver.max_iterations);
 
-        std::cout << "\n\nSave hypre input END|||";
-
-        std::cout << "\n\nHypre solve MPI START...";
+        std::cout
+          << " done"
+          << "\n\nhypre MPI solve...";
         
-        auto start = std::chrono::high_resolution_clock::now();
+        auto start = clock::now();
         
-        /*auto solve_result = */ std::system(  // NOLINT(concurrency-mt-unsafe)
+        std::system(  // NOLINT(concurrency-mt-unsafe)
           fmt::format("mpiexec -np {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec).c_str()); 
         
-        auto stop = std::chrono::high_resolution_clock::now();
+        auto stop = clock::now();
         
-        cout << "\n\nHypre solve MPI: " <<
-          duration_cast<std::chrono::seconds>(stop - start).count() << "s END|||";
+        cout << " done " << duration_cast<std::chrono::seconds>(stop - start).count() << "s";
 
-        auto [decomposed_pressure, out_residual, out_iters] = dpl::hypre::mpi::load_values(nrows);
-        residual = out_residual;
-        iters = out_iters;
 
-        pressure.resize(nrows);
-        for (auto i : dpl::range(nrows))
-          pressure[decomposition.decomposed_to_net[i]] = decomposed_pressure[i];
+
+
+
+        // auto [decomposed_pressure, out_residual, out_iters] = dpl::hypre::mpi::load_values(nrows);
+        // residual = out_residual;
+        // iters = out_iters;
+
+        {
+          std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
+          std::tie(decomposed_pressure, residual, iters) = dpl::hypre::mpi::load_values(nrows);
+
+          pressure.resize(nrows);
+          for (auto i : dpl::range(nrows))
+            pressure[decomposition.decomposed_to_net[i]] = decomposed_pressure[i];
+        }
 
         std::cout << "\n\nPressure solved";
 
@@ -975,11 +681,7 @@ namespace xpm
 
       renderer_->AddActor(assembly);
       
-      std::cout << "\n\nNetwork actor created";
-
-
-      
-
+      // std::cout << "\n\nNetwork actor created";
 
       {
         
@@ -1000,10 +702,17 @@ namespace xpm
               ;
             }
 
+            auto start = clock::now();
+
             img_glyph_mapper_.Populate(img_.dim, pn.physical_size/img_.dim, [&](idx1d_t idx1d) { return filter[idx1d]; });
+
+            auto stop = clock::now();
+ 
+            cout << "\n3D faces time: " << duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms\n";
+
               
             dpl::sfor<6>([&](auto face_idx) {
-              GlyphMapperFace& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+              dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
 
               idx1d_t i = 0;
               for (auto idx1d : face.GetIndices()) {
@@ -1050,32 +759,47 @@ namespace xpm
       }
 
 
-      renderer_->ResetCamera();
-      
-      tidy_axes_.Init(renderer_.Get());
-
-
-
-      connect(
-        qvtk_widget_,
-        &QVTKWidgetRef::resized, this, [this]() {
-          tidy_axes_.RefreshAxes();
-        });
-      
-      
-      
-      // renderer_->GetActiveCamera()->AddObserver(vtkCommand::ModifiedEvent, this, &TidyAxes::RefreshAxes);
-
+      // renderer_->ResetCamera();
+      //
+      // tidy_axes_.Init(renderer_.Get());
+      //
+      // connect(
+      //   qvtk_widget_,
+      //   &QVTKWidgetRef::resized, this, [this]() {
+      //     tidy_axes_.RefreshAxes();
+      //   });
+      //
+      // // renderer_->GetActiveCamera()->AddObserver(vtkCommand::ModifiedEvent, this, &TidyAxes::RefreshAxes);
+      //
       tidy_axes_.SetScale(1.e-6/*startup.image.resolution*/);
-      // tidy_axes_.SetFormat(".2e");
+      // // tidy_axes_.SetFormat(".2e");
 
-      double bounds[] = {
+      bounds_ = {
         0., pn.physical_size.x(),
         0., pn.physical_size.y(),
         0., pn.physical_size.z()};
-      tidy_axes_.Build(bounds);
-      // tidy_axes_.Build();
-      // renderer_->ResetCamera();
+
+      // tidy_axes_.Build(bounds);
+      // // tidy_axes_.Build();
+      // // renderer_->ResetCamera();
     }
   };
 }
+
+
+
+// std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
+      // parse::image_dict input_spec{
+      //   .pore = 0,
+      //   .solid = 1,       // dummy value, no '1' is in the image
+      //   .microporous = 255, // we read actual solid as microporous
+      // };
+
+      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
+      // constexpr parse::image_dict input_spec{
+      //   .solid = 3,
+      //   .pore = 0,
+      //   .microporous = 2
+      // };
+     
+      // HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;

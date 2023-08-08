@@ -431,7 +431,7 @@ namespace xpm
         double inlet_flow = 0;
         double outlet_flow = 0;
       
-        std::cout << fmt::format("\n\n Disconnected {} macro EXCLUSIVE nodes", disconnected_macro);
+        std::cout << fmt::format("\n  disconnected {} nodes", disconnected_macro);
       
         for (auto i : dpl::range(throat_count())) {
           auto [l, r] = throat_[attribs::adj][i];
@@ -445,7 +445,11 @@ namespace xpm
               outlet_flow += coef(i)*(pressure[*l]);
         }
       
-        std::cout << fmt::format("\n\nMACRO EXCLUSIVE\nINLET_PERM={} mD\nOUTLET_PERM={} mD\nresidual={:.6g}, iterations={}\n",
+        std::cout << fmt::format(
+          R"(
+  INLET_PERM={} mD
+  OUTLET_PERM={} mD
+  residual={:.6g}, iterations={})",
           -inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
           -outlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
           residual,
@@ -523,9 +527,9 @@ namespace xpm
             }
           }
 
-      #ifdef XPM_DEBUG_OUTPUT  
-        std::cout << "\n\nVelems_adj array produced and filled"; // NOLINT(clang-diagnostic-misleading-indentation)
-      #endif
+      // #ifdef XPM_DEBUG_OUTPUT  
+      //   std::cout << "\n\nVelems_adj array produced and filled"; // NOLINT(clang-diagnostic-misleading-indentation)
+      // #endif
     }
 
     void read_image(const auto& image_path, parse::image_dict input_config) {
