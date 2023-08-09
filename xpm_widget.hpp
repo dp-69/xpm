@@ -240,7 +240,7 @@ namespace xpm
 
       auto filename = p.filename();
 
-      if (auto copy_fn = "pnextract"/filename; !fs::equivalent(p, copy_fn))
+      if (auto copy_fn = "pnextract"/filename; fs::absolute(copy_fn) != fs::absolute(p))
         copy(p, copy_fn, fs::copy_options::update_existing);
 
       auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
