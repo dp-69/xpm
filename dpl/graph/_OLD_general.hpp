@@ -1,5 +1,9 @@
 #pragma once
-// #include <Windows.h>
+
+
+#include "core.hpp"
+
+
 // #include <chrono>
 
 
@@ -237,22 +241,22 @@ namespace HW
 
 
 
-  enum class avl_balance { negative_t, zero_t, positive_t, fourth_state_t };
+  
 
   struct default_avl_balance_node_traits
   {
-    typedef avl_balance balance;
+    typedef dpl::graph::avl_balance balance;
 
     static balance negative() {
-      return avl_balance::negative_t;
+      return dpl::graph::avl_balance::negative_t;
     }
 
     static balance zero() {
-      return avl_balance::zero_t;
+      return dpl::graph::avl_balance::zero_t;
     }
 
     static balance positive() {
-      return avl_balance::positive_t;
+      return dpl::graph::avl_balance::positive_t;
     }
   };
 

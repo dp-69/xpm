@@ -1,7 +1,6 @@
 #pragma once
 
 #include <boost/intrusive/set.hpp>
-
 #include <boost/intrusive/avltree_algorithms.hpp>
 
 namespace boost
@@ -10,106 +9,91 @@ namespace boost
   {
     template<class NodeTraits>
     struct default_path_buffer
-    {    
-      typedef NodeTraits node_traits;
-      typedef typename node_traits::node_ptr node_ptr;    
-
-      static auto const ET_MAX_DEPTH = 256;
-
-      static inline node_ptr path0[ET_MAX_DEPTH];
-      static inline node_ptr path1[ET_MAX_DEPTH];
-      static inline node_ptr path2[ET_MAX_DEPTH];
-      static inline node_ptr path3[ET_MAX_DEPTH];
-    };
-
-
-    class avl_extended_tree_algorithms_not_implemented_error : public std::logic_error
     {
-    public:
-      avl_extended_tree_algorithms_not_implemented_error() : logic_error("not implemented") {}
+      using node_ptr = typename NodeTraits::node_ptr;
+      using const_node_ptr = typename NodeTraits::const_node_ptr;
+
+      static inline constexpr auto ET_MAX_DEPTH = 256;
+
+      static inline const_node_ptr path0[ET_MAX_DEPTH];
+      static inline const_node_ptr path1[ET_MAX_DEPTH];
+      static inline const_node_ptr path2[ET_MAX_DEPTH];
+      static inline const_node_ptr path3[ET_MAX_DEPTH];
     };
 
 
-
-
-
-
-    template <class NodeTraits>
+    template <typename NodeTraits>
     class avl_extended_tree_algorithms : public avltree_algorithms<NodeTraits>
-    {      
+    {
+      using base = avltree_algorithms<NodeTraits>;
+
     public:
       using node_traits = NodeTraits;
 
       using node = typename node_traits::node;
-      using node_ptr = node*;
-      using const_node_ptr = const node*;
-      using balance = typename NodeTraits::balance;
-
-      using default_path = default_path_buffer<NodeTraits>;
-
-      using base = avltree_algorithms<NodeTraits>;
-
-      using bstree_algo = bstree_algorithms<NodeTraits>;
-      using insert_commit_data = typename bstree_algorithms<NodeTraits>::insert_commit_data;     
-
-
-      using this_algo = avl_extended_tree_algorithms<NodeTraits>;
-
-      static node* get_header(node* node) {
+      using node_ptr = typename node_traits::node_ptr;
+      using const_node_ptr = typename node_traits::const_node_ptr;
+      using balance = typename node_traits::balance;
+      
+      static const_node_ptr get_header(const_node_ptr node) {
         while (!is_header(node))
           node = node_traits::get_parent(node);
         return node;
       }
 
-      static void init(const node_ptr& node) {
-        bstree_algo::init(node);
-        NodeTraits::set_balance(node, NodeTraits::zero());
+      static void init(node_ptr node) {
+        base::init(node);
+        node_traits::set_balance(node, node_traits::zero());
       }
 
-      static void init_header(const node_ptr& header) {
-        bstree_algo::init_header(header);        
+      static void init_header(node_ptr header) {
+        bstree_algorithms<node_traits>::init_header(header);        
         node_traits::init_header(header);
-//        NodeTraits::set_balance(header, NodeTraits::zero());        
       }
 
-      static bool is_header(const node* p) {
+      static bool is_header(const_node_ptr p) {
         return node_traits::is_header(p);
       }
 
 
-      static node_ptr* get_path(node_ptr node, node_ptr* path) {               
-        while (!is_header(node)) {
-          *++path = node;
-          node = node_traits::get_parent(node);
+      static const_node_ptr* get_path(const_node_ptr n, const_node_ptr* path) {   
+        while (!is_header(n)) {
+          *++path = n; // TODO
+          n = node_traits::get_parent(n);
         }       
 
         return path;
       }      
       
-      static bool less_than(const node_ptr& n0, const node_ptr& n1) {
-        auto iter0 = get_path(n0, default_path::path0);
-        auto iter1 = get_path(n1, default_path::path1);
-        return less_than(iter0, iter1, default_path::path0);
+      /**
+       * \brief l and r must not be equal
+       */
+      static bool less_than(const_node_ptr l, const_node_ptr r) {
+        using default_path = default_path_buffer<node_traits>;
+
+        auto l_subpath = get_path(l, default_path::path0);
+        auto r_subpath = get_path(r, default_path::path1);
+        return less_than(l_subpath, r_subpath, default_path::path0);
       }
 
-      static bool less_than(node_ptr* iter0, node_ptr* iter1, node_ptr* path0) {                        
+      static bool less_than(const_node_ptr* l_subpath, const_node_ptr* r_subpath, const_node_ptr* l_path) {  // TODO                      
         // equal if *(path0 + 1) == *(path1 + 1)
         // should not be equal
         
-        while (*iter0 == *iter1) {
-          --iter0;
-          --iter1;
+        while (*l_subpath == *r_subpath) {
+          --l_subpath;
+          --r_subpath;
         }
 
-        if (iter0 == path0)
-          return node_traits::get_right(*(iter1 + 1)) == *iter1;
+        if (l_subpath == l_path)
+          return node_traits::get_right(*(r_subpath + 1)) == *r_subpath;
 
-        return node_traits::get_left(*(iter0 + 1)) == *iter0;        
+        return node_traits::get_left(*(l_subpath + 1)) == *l_subpath;        
       }    
 
 
 
-      static void split_tree(const node_ptr& header_a, const node_ptr& split_node, const node_ptr& header_b) {
+      static void split_tree(node_ptr header_a, node_ptr split_node, node_ptr header_b) {
         if (node_traits::get_right(header_a) == split_node) {
           base::erase(header_a, split_node);
           return;
@@ -121,25 +105,25 @@ namespace boost
           return;
         }
 
-        auto splitNodeHeight = node_height(split_node);
+        auto split_node_height = node_height(split_node);
 
-        auto leftTailNode = node_traits::get_left(split_node);
-        auto leftTailHeight = splitNodeHeight - (node_traits::get_balance(split_node) == node_traits::positive() ? 2 : 1);
+        auto left_tail_node = node_traits::get_left(split_node);
+        auto left_tail_height = split_node_height - (node_traits::get_balance(split_node) == node_traits::positive() ? 2 : 1);
 
-        auto rightTailNode = node_traits::get_right(split_node);
-        auto rightTailHeight = splitNodeHeight - (node_traits::get_balance(split_node) == node_traits::negative() ? 2 : 1);
+        auto right_tail_node = node_traits::get_right(split_node);
+        auto right_tail_height = split_node_height - (node_traits::get_balance(split_node) == node_traits::negative() ? 2 : 1);
 
         auto leftRight = node_ptr();
         auto rightLeft = node_ptr();
 
-        if (leftTailNode) {
-          leftRight = leftTailNode;
+        if (left_tail_node) {
+          leftRight = left_tail_node;
           while (node_traits::get_right(leftRight))
             leftRight = node_traits::get_right(leftRight);
         }
 
-        if (rightTailNode) {
-          rightLeft = rightTailNode;
+        if (right_tail_node) {
+          rightLeft = right_tail_node;
           while (node_traits::get_left(rightLeft))
             rightLeft = node_traits::get_left(rightLeft);
         }
@@ -149,21 +133,21 @@ namespace boost
         auto parent = node_traits::get_parent(split_node);
         auto grandParent = node_traits::get_parent(parent);
 
-        auto height = splitNodeHeight;
+        auto height = split_node_height;
 
         while (parent != header_a) {
           if (node_traits::get_left(parent) == node) {
             if (!rightLeft)
               rightLeft = parent;
 
-            const auto& lHeight = rightTailHeight;
+            const auto& lHeight = right_tail_height;
             auto rHeight =
               node_traits::get_balance(parent) == node_traits::positive() ? ++++height - 1
                 : node_traits::get_balance(parent) == node_traits::negative() ? ++height - 2 : ++height - 1;
 
             auto x = parent;
 
-            const auto& lNode = rightTailNode;
+            const auto& lNode = right_tail_node;
             auto rNode = node_traits::get_right(x);
 
             auto heightDiff = rHeight - lHeight;
@@ -175,15 +159,15 @@ namespace boost
 
               if (heightDiff == 1) {
                 node_traits::set_balance(x, node_traits::positive());
-                rightTailHeight = rHeight + 1;
+                right_tail_height = rHeight + 1;
               }
               else if (heightDiff == 0) {
                 node_traits::set_balance(x, node_traits::zero());
-                rightTailHeight = rHeight + 1;
+                right_tail_height = rHeight + 1;
               }
               else /*if (heightDiff == -1)*/ {
                 node_traits::set_balance(x, node_traits::negative());
-                rightTailHeight = rHeight + 2;
+                right_tail_height = rHeight + 2;
               }
 
               
@@ -192,7 +176,7 @@ namespace boost
 
 //              node_traits::augment_propagate(x, lNode, rNode);
 
-              rightTailNode = x;
+              right_tail_node = x;
             }
             else {
               if (lHeight == -1) {
@@ -260,11 +244,11 @@ namespace boost
               node_traits::set_parent(rNode, header_b);
 
               if (base::rebalance_after_insertion_no_balance_assignment(header_b, x))
-                rightTailHeight = rHeight;
+                right_tail_height = rHeight;
               else
-                rightTailHeight = rHeight + 1;
+                right_tail_height = rHeight + 1;
 
-              rightTailNode = node_traits::get_parent(header_b);
+              right_tail_node = node_traits::get_parent(header_b);
             }
           }
           else {
@@ -275,12 +259,12 @@ namespace boost
               node_traits::get_balance(parent) == node_traits::negative() ? ++++height - 1
                 : node_traits::get_balance(parent) == node_traits::positive() ? ++height - 2 : ++height - 1;
 
-            const auto& rHeight = leftTailHeight;
+            const auto& rHeight = left_tail_height;
 
             auto x = parent;
 
             auto lNode = node_traits::get_left(x);
-            const auto& rNode = leftTailNode;
+            const auto& rNode = left_tail_node;
 
             auto heightDiff = lHeight - rHeight;
 
@@ -291,15 +275,15 @@ namespace boost
 
               if (heightDiff == 1) {
                 node_traits::set_balance(x, node_traits::negative());
-                leftTailHeight = lHeight + 1;
+                left_tail_height = lHeight + 1;
               }
               else if (heightDiff == 0) {
                 node_traits::set_balance(x, node_traits::zero());
-                leftTailHeight = lHeight + 1;
+                left_tail_height = lHeight + 1;
               }
               else /*if (heightDiff == -1)*/ {
                 node_traits::set_balance(x, node_traits::positive());
-                leftTailHeight = lHeight + 2;
+                left_tail_height = lHeight + 2;
               }
 
 //              node_traits::set_size(x,
@@ -307,7 +291,7 @@ namespace boost
 
 //              node_traits::augment_propagate(x, lNode, rNode);
 
-              leftTailNode = x;
+              left_tail_node = x;
             }
             else {
               if (rHeight == -1) {
@@ -374,11 +358,11 @@ namespace boost
               node_traits::set_parent(lNode, header_b);
 
               if (base::rebalance_after_insertion_no_balance_assignment(header_b, x))
-                leftTailHeight = lHeight;
+                left_tail_height = lHeight;
               else
-                leftTailHeight = lHeight + 1;
+                left_tail_height = lHeight + 1;
 
-              leftTailNode = node_traits::get_parent(header_b);
+              left_tail_node = node_traits::get_parent(header_b);
             }
           }
 
@@ -387,18 +371,18 @@ namespace boost
           grandParent = node_traits::get_parent(grandParent);
         }
 
-        node_traits::set_parent(header_b, rightTailNode);
+        node_traits::set_parent(header_b, right_tail_node);
         node_traits::set_left(header_b, rightLeft);
         node_traits::set_right(header_b, node_traits::get_right(header_a));
 
-        node_traits::set_parent(rightTailNode, header_b);
+        node_traits::set_parent(right_tail_node, header_b);
 
 
-        node_traits::set_parent(header_a, leftTailNode);
+        node_traits::set_parent(header_a, left_tail_node);
         //node_traits::set_left(headerA, node_traits::get_left(headerA));                    
         node_traits::set_right(header_a, leftRight);
 
-        node_traits::set_parent(leftTailNode, header_a);
+        node_traits::set_parent(left_tail_node, header_a);
 
         init(split_node);
       }
@@ -747,7 +731,7 @@ namespace boost
       
 
       static size_t calculate_subtree_size(const const_node_ptr& p) {
-        return bstree_algo::subtree_size(p);
+        return base::subtree_size(p);
       }
     };
     

@@ -3,6 +3,10 @@
 #include "pore_network_image.hpp"
 
 #include <dpl/graph/et_node.hpp>
+#include <dpl/graph/avl_extended_tree_algorithms.hpp>
+#include <dpl/graph/cyclic_operations.hpp>
+#include <dpl/graph/dynamic_connectivity_graph.hpp>
+
 
 // #include <dpl/graph/avl_extended_augmented_tree_algorithms.hpp>
 // #include <dpl/graph/cyclic_operations.hpp>
@@ -198,10 +202,13 @@ namespace xpm
 
 
       using et_node = dpl::graph::et_node;
-      using et_algo = dpl::graph::euler_tour_algorithms;
-      using vertex = HW::dynamic_connectivity::vertex;
       using et_traits = dpl::graph::et_traits;
-      using et_cyclic_op = dpl::graph::et_cyclic_op;
+      using et_algo = intrusive::avl_extended_tree_algorithms<et_traits>;
+      using et_cyclic_op = HW::dynamic_connectivity::cyclic_operations<et_algo>;
+
+      using vertex = HW::dynamic_connectivity::vertex;
+      
+       //dpl::graph::et_cyclic_op;
 
       random_device rand_seed;
       // auto random_engine = default_random_engine(1500);  

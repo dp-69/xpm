@@ -14,18 +14,18 @@ namespace HW { namespace dynamic_connectivity
     typedef boost::intrusive::default_path_buffer<node_traits> default_path;
 
   public:    
-    static void principal_cut(node* header, node* least_node) {      
-      if (node_traits::get_left(header) != least_node) {
-        if (node_traits::get_right(header) == least_node) {
-          algo::erase(header, least_node);
-          algo::push_front(header, least_node);
+    static void principal_cut(node* header, node* least) {      
+      if (node_traits::get_left(header) != least) {
+        if (node_traits::get_right(header) == least) {
+          algo::erase(header, least);
+          algo::push_front(header, least);
         }
         else {       
           node header_b_storage;
           auto header_b = &header_b_storage;
           algo::init_header(header_b);          
-          algo::split_tree(header, least_node, header_b);
-          algo::push_front(header_b, least_node);
+          algo::split_tree(header, least, header_b);
+          algo::push_front(header_b, least);
 
           auto right_b = node_traits::get_right(header_b);
           algo::erase(header_b, right_b);

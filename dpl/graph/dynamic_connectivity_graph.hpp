@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "general.hpp"
+#include "_OLD_general.hpp"
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/two_bit_color_map.hpp>
 #include <boost/intrusive/list.hpp>

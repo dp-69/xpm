@@ -23,17 +23,17 @@
 
 #pragma once
 
-#include "avl_extended_augmented_tree_algorithms.hpp"
+#include "core.hpp"
 
-#include "cyclic_operations.hpp"
-#include "dynamic_connectivity_graph.hpp"
-#include "smart_pool.hpp"
+namespace HW::dynamic_connectivity {
+  struct euler_tour_non_tree_edge_node;
+  struct directed_edge;
+  struct vertex;
+}
+
 
 namespace dpl::graph
 {
-  using namespace HW;
-  using namespace HW::dynamic_connectivity;
-
   struct et_node
   {
     et_node() = default;
@@ -59,18 +59,11 @@ namespace dpl::graph
     static inline constexpr auto balance_bits = type_bits - 1;
   };
 
+  
 
-  struct euler_tour_non_tree_edge_node;
-      
-  struct et_traits //: default_avl_lrpb_node_traits<et_node>
-  {    
-  private:
-    template<class T> 
-    static T* get_ptr(const et_node* n) {
-      return reinterpret_cast<T*>(n->ptr_type_balance & et_node::ptr_bits);  // NOLINT(performance-no-int-to-ptr)
-    }
 
-  public:
+  struct et_traits
+  {
     using node = et_node;
     using node_ptr = node*;
     using const_node_ptr = const node*;
@@ -81,136 +74,77 @@ namespace dpl::graph
     static constexpr balance zero() { return avl_balance::zero_t; }
     static constexpr balance positive() { return avl_balance::positive_t; }
 
-    typedef euler_tour_non_tree_edge_node* etnte_node_ptr;
+  private:
+    template<class T> 
+    static T* get_ptr(const_node_ptr n) {
+      return reinterpret_cast<T*>(n->ptr_type_balance & et_node::ptr_bits);  // NOLINT(performance-no-int-to-ptr)
+    }
+
+    using de = HW::dynamic_connectivity::directed_edge;
+    using ve = HW::dynamic_connectivity::vertex;
+    using pt = HW::dynamic_connectivity::euler_tour_non_tree_edge_node;
+
+  public:
 
     // -----------
 
-    static etnte_node_ptr get_non_tree_edge_header(const et_node* n) {
-      return get_ptr<euler_tour_non_tree_edge_node>(n);
-    }
+    static pt* get_non_tree_edge_header(const_node_ptr n) { return get_ptr<pt>(n); }
 
-    static void set_non_tree_edge_header(et_node* n, etnte_node_ptr etnte_header) {
+    static void set_non_tree_edge_header(node_ptr n, pt* etnte_header) {
       n->ptr_type_balance = reinterpret_cast<size_t>(etnte_header) | et_node::balance_bits; // TODO?
     }
 
     // -----------
 
-    static bool is_loop_edge(const et_node* n) { // that is 'vertex'
-      return n->ptr_type_balance & et_node::type_bits;
-    }
+    static de* get_directed_edge(const_node_ptr n) { return get_ptr<de>(n); }
+    static ve* get_vertex(const_node_ptr n) { return get_ptr<ve>(n); }
     
-    static directed_edge* get_directed_edge(const et_node* n) {
-      return get_ptr<directed_edge>(n);
-    }
-
-    static void set_directed_edge(et_node* n, directed_edge* directed_edge) {                  
+    static void set_directed_edge(node_ptr n, de* directed_edge) {                  
       n->ptr_type_balance = reinterpret_cast<size_t>(directed_edge) | (n->ptr_type_balance & et_node::balance_bits);
     }
-
-    static vertex* get_vertex(const et_node* n) {
-      return get_ptr<vertex>(n);
-    } 
     
-    static void set_vertex(et_node* n, vertex* vertex) {
+    static void set_vertex(node_ptr n, ve* vertex) {
       n->ptr_type_balance = reinterpret_cast<size_t>(vertex) | et_node::type_bits | (n->ptr_type_balance & et_node::balance_bits);      
     }                     
 
+
+    static bool is_loop_edge(const_node_ptr n) { // that is 'vertex'
+      return n->ptr_type_balance & et_node::type_bits;
+    }
+
     // -----------
 
-    static void init_header(et_node* n) {
+    static void init_header(node_ptr n) {
       n->ptr_type_balance = (n->ptr_type_balance & ~et_node::balance_bits) | et_node::balance_bits; // TODO?
     }
 
     // Has to be very efficient O(1) predicate.
-    static bool is_header(const et_node* n) {
+    static bool is_header(const_node_ptr n) {
       return (n->ptr_type_balance & et_node::balance_bits) == et_node::balance_bits;
     }
 
     // -----------
 
-    static node* get_left(const node* n) { return n->left; }
-    static node* get_right(const node* n) { return n->right; }
-    static node* get_parent(const node* n) { return n->parent; }
-    static balance get_balance(const et_node* n) {
+    static node_ptr get_left(const_node_ptr n) { return n->left; }
+    static node_ptr get_right(const_node_ptr n) { return n->right; }
+    static node_ptr get_parent(const_node_ptr n) { return n->parent; }
+    static balance get_balance(const_node_ptr n) {
       return static_cast<balance>(n->ptr_type_balance & et_node::balance_bits);
     }
 
-    static void set_left(node* n, node* l) { n->left = l; }
-    static void set_right(node* n, node* r) { n->right = r; }
-    static void set_parent(node* n, node* p) { n->parent = p; }
-    static void set_balance(et_node* n, balance b) {
+    static void set_left(node_ptr n, node_ptr l) { n->left = l; }
+    static void set_right(node_ptr n, node_ptr r) { n->right = r; }
+    static void set_parent(node_ptr n, node_ptr p) { n->parent = p; }
+    static void set_balance(node_ptr n, balance b) {
       n->ptr_type_balance = (n->ptr_type_balance & ~et_node::balance_bits) | static_cast<size_t>(b);
     }   
   };
 
       
-  typedef bi::avl_extended_tree_algorithms<et_traits> euler_tour_algorithms;
-  typedef cyclic_operations<euler_tour_algorithms> euler_tour_cyclic_operations;
-  
-  typedef euler_tour_node_ptr et_node_ptr;
-  typedef euler_tour_algorithms et_algo;
-  typedef euler_tour_cyclic_operations et_cyclic_op;
-  
-
-
-
-
-  //  typedef bi::avl_extended_tree_algorithms<euler_tour_node_traits> et_algo_not_augmented;
-  
-
-
-
-  //  template<>
-  //  struct smart_pool_traits<et_node>
-  //  {
-  //    static et_node_ptr get_next(et_node_ptr x) {            
-  //      return static_cast<et_node_ptr>(x->graph_element_entry_type_avl_balance);
-  //    }
+  // typedef bi::avl_extended_tree_algorithms<et_traits> euler_tour_algorithms;
+  // typedef cyclic_operations<euler_tour_algorithms> euler_tour_cyclic_operations;
   //
-  //    static void set_next(et_node_ptr x, et_node_ptr y) {
-  //      x->graph_element_entry_type_avl_balance = y;
-  //    }
-  //  };
-
-  //  class euler_tour_iterator : public iterator<forward_iterator_tag, euler_tour_node>
-  //  {    
-  //    typedef euler_tour_node_traits::node_ptr node_ptr;
-  //
-  //    node_ptr _node;      
-  //
-  //  public:
-  //    explicit euler_tour_iterator(const node_ptr& node)
-  //      : _node(node) {}
-  //
-  //    euler_tour_iterator& operator++() {
-  //      _node = euler_tour_cyclic_operations::next_node(_node);        
-  //      return *this;
-  //    }
-  //
-  //    euler_tour_iterator& operator++(int) {
-  //      auto temp(*this);
-  //      operator++();
-  //      return temp;
-  //    }
-  //
-  //    bool operator==(const euler_tour_iterator& rhs) const {
-  //      return _node == rhs._node;
-  //    }
-  //
-  //    bool operator!=(const euler_tour_iterator& rhs) const {
-  //      return _node != rhs._node;
-  //    }
-  //
-  //    node_ptr ptr() const {
-  //      return _node;
-  //    }
-  //
-  //    euler_tour_node& operator*() const {
-  //      return *_node;
-  //    }
-  //
-  //    node_ptr operator->() const {
-  //      return _node;
-  //    }
-  //  };
+  // typedef euler_tour_node_ptr et_node_ptr;
+  // typedef euler_tour_algorithms et_algo;
+  // typedef euler_tour_cyclic_operations et_cyclic_op;
 }
