@@ -3,7 +3,7 @@
 #include "pore_network_image.hpp"
 
 #include <dpl/graph/et_node.hpp>
-#include <dpl/graph/avl_extended_tree_algorithms.hpp>
+#include <dpl/graph/avltree_algorithms_ext.hpp>
 #include <dpl/graph/cyclic_operations.hpp>
 #include <dpl/graph/dynamic_connectivity_graph.hpp>
 
@@ -203,7 +203,7 @@ namespace xpm
 
       using et_node = dpl::graph::et_node;
       using et_traits = dpl::graph::et_traits;
-      using et_algo = intrusive::avl_extended_tree_algorithms<et_traits>;
+      using et_algo = intrusive::avltree_algorithms_ext<et_traits>;
       using et_cyclic_op = HW::dynamic_connectivity::cyclic_operations<et_algo>;
 
       using vertex = HW::dynamic_connectivity::vertex;
