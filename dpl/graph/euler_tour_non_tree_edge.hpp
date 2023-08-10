@@ -1,6 +1,16 @@
 ﻿#pragma once
 
-#include "HW/dynamic_connectivity/euler_tour_node.hpp"
+#include "et_node.hpp"
+#include "_OLD_general.hpp"
+#include "avl_extended_augmented_tree_algorithms.hpp"
+#include "cyclic_operations.hpp"
+
+
+namespace HW::dynamic_connectivity {
+  struct euler_tour_non_tree_edge_node;
+  struct directed_edge;
+  struct vertex;
+}
 
 namespace HW { namespace dynamic_connectivity
 { 
@@ -27,6 +37,12 @@ namespace HW { namespace dynamic_connectivity
   
   struct euler_tour_non_tree_edge_node_traits : default_avl_lrpb_node_traits<euler_tour_non_tree_edge_node>
   {
+  private:
+    using directed_edge_ptr = HW::dynamic_connectivity::directed_edge*;
+    using et_node_ptr = HW::dynamic_connectivity::et_node*;
+
+  public:
+
     typedef euler_tour_non_tree_edge_node node;
     typedef euler_tour_non_tree_edge_node* node_ptr;
     typedef const euler_tour_non_tree_edge_node* const_node_ptr;            
@@ -63,7 +79,9 @@ namespace HW { namespace dynamic_connectivity
     static et_node_ptr get_vertex_entry(const directed_edge_ptr& de) {
       // sorted by a pointing-in vertex, the pointing-out works as well        
 //      return de->opposite_->v1_->et_entry_;   
-      return de->v1->et_entry_;      
+
+      
+      return nullptr; // TODO:         return de->v1->et_entry_;
     }
     
     static et_node_ptr get_vertex_entry(const node_ptr& n) {
@@ -123,17 +141,18 @@ namespace HW { namespace dynamic_connectivity
 
     
   
-  typedef bi::avl_extended_augmented_tree_algorithms<euler_tour_non_tree_edge_node_traits> euler_tour_non_tree_edge_algorithm;
-
-  
+  typedef boost::intrusive::avl_extended_augmented_tree_algorithms<euler_tour_non_tree_edge_node_traits> euler_tour_non_tree_edge_algorithm;
 
 
-  typedef euler_tour_non_tree_edge_node etnte_node;
-  typedef euler_tour_non_tree_edge_node* etnte_node_ptr;
+  using et_node_ptr = HW::dynamic_connectivity::et_node*;
+  using et_nt = HW::dynamic_connectivity::et_traits;
+  using et_algo = boost::intrusive::avltree_algorithms_ext<et_nt>;
 
-  typedef euler_tour_non_tree_edge_node_traits etnte_nt;
-  
-  typedef euler_tour_non_tree_edge_algorithm etnte_algo;
+  using etnte_node = euler_tour_non_tree_edge_node;
+  using etnte_node_ptr = euler_tour_non_tree_edge_node*;
+
+  using etnte_nt = euler_tour_non_tree_edge_node_traits;
+  using etnte_algo = euler_tour_non_tree_edge_algorithm;
 
 
   inline pair<size_t, size_t> num_vertices_and_edges(const et_node_ptr header) {    
@@ -188,15 +207,15 @@ namespace HW { namespace dynamic_connectivity
   template <class NodeTraits>
   struct euler_tour_pseudo_cut_less_than_comparator // key < x
   {
-    et_node_ptr x0_;    
-    et_node_ptr* x0_it_;
+    et_node_ptr x0_;
+    et_nt::const_node_ptr* x0_it_;
 
     et_node_ptr x1_;    
-    et_node_ptr* x1_it_;
+    et_nt::const_node_ptr* x1_it_;
 
     bool x1Side_;
-    
-    typedef et_algo::default_path default_path;
+
+    using default_path = boost::intrusive::default_path_buffer<et_nt>;
 
     // x0_least - the least entry, representing a pseudo principal cut
     // x1_key - is a entry of interest
@@ -246,14 +265,14 @@ namespace HW { namespace dynamic_connectivity
   struct euler_tour_pseudo_cut_more_than_comparator // x < key
   {
     et_node_ptr x0_;    
-    et_node_ptr* x0_it_;
+    et_nt::const_node_ptr* x0_it_;
 
     et_node_ptr x2_;    
-    et_node_ptr* x2_it_;
+    et_nt::const_node_ptr* x2_it_;
 
     bool x2Side_;
-    
-    typedef et_algo::default_path default_path;
+
+    using default_path = boost::intrusive::default_path_buffer<et_nt>;
 
     // x0_least - the least entry, representing a pseudo principal cut
     // x1/node - running entry
@@ -368,7 +387,7 @@ namespace HW { namespace dynamic_connectivity
         }
       }
       else {
-        if (et_cyclic_op::less_than_low_low(etLeast, et_ab, et_ba)) {
+        if (cyclic_operations<et_algo>::less_than_low_low(etLeast, et_ab, et_ba)) {
           // B is empty                             
         }
         else 

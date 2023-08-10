@@ -245,18 +245,18 @@ namespace HW
 
   struct default_avl_balance_node_traits
   {
-    typedef dpl::graph::avl_balance balance;
+    typedef HW::dynamic_connectivity::avl_balance balance;
 
     static balance negative() {
-      return dpl::graph::avl_balance::negative_t;
+      return HW::dynamic_connectivity::avl_balance::negative_t;
     }
 
     static balance zero() {
-      return dpl::graph::avl_balance::zero_t;
+      return HW::dynamic_connectivity::avl_balance::zero_t;
     }
 
     static balance positive() {
-      return dpl::graph::avl_balance::positive_t;
+      return HW::dynamic_connectivity::avl_balance::positive_t;
     }
   };
 
@@ -269,27 +269,27 @@ namespace HW
     // TODO!!!!
 
     static node* get_left(const node* n) {
-      return n->left;
+      return n->left_;
     }
 
     static void set_left(node* n, node* l) {
-      n->left = l;
+      n->left_ = l;
     }
 
     static node* get_right(const node* n) {
-      return n->right;
+      return n->right_;
     }
 
     static void set_right(node* n, node* r) {
-      n->right = r;
+      n->right_ = r;
     }
     
     static node* get_parent(const node* n) {
-      return n->parent;
+      return n->parent_;
     }
 
     static void set_parent(node* n, node* p) {
-      n->parent = p;
+      n->parent_ = p;
     }
   };
 

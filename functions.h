@@ -3,6 +3,7 @@
 #include "pore_network_image.hpp"
 
 #include <dpl/graph/et_node.hpp>
+#include <dpl/graph/euler_tour_non_tree_edge.hpp>
 #include <dpl/graph/avltree_algorithms_ext.hpp>
 #include <dpl/graph/cyclic_operations.hpp>
 #include <dpl/graph/dynamic_connectivity_graph.hpp>
@@ -201,8 +202,8 @@ namespace xpm
       using namespace chrono;
 
 
-      using et_node = dpl::graph::et_node;
-      using et_traits = dpl::graph::et_traits;
+      using et_node = HW::dynamic_connectivity::et_node;
+      using et_traits = HW::dynamic_connectivity::et_traits;
       using et_algo = intrusive::avltree_algorithms_ext<et_traits>;
       using et_cyclic_op = HW::dynamic_connectivity::cyclic_operations<et_algo>;
 

@@ -23,7 +23,7 @@
 
 #pragma once
 
-namespace dpl::graph
+namespace HW::dynamic_connectivity
 {
   enum class avl_balance
   {

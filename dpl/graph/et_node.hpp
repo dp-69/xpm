@@ -32,7 +32,7 @@ namespace HW::dynamic_connectivity {
 }
 
 
-namespace dpl::graph
+namespace HW::dynamic_connectivity
 {
   struct et_node
   {

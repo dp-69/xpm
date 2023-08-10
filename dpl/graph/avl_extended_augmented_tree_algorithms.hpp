@@ -1,6 +1,6 @@
 #pragma once
 
-#include "avl_extended_tree_algorithms.hpp"
+#include "avltree_algorithms_ext.hpp"
 
 namespace boost
 {
@@ -11,7 +11,7 @@ namespace boost
 
     template <class NodeTraits>
     class avl_extended_augmented_tree_algorithms
-      : public avl_extended_tree_algorithms<NodeTraits>
+      : public avltree_algorithms_ext<NodeTraits>
     {
       
 
@@ -45,7 +45,7 @@ namespace boost
         }
 
         
-        auto splitNodeHeight = avl_extended_tree_algorithms<NodeTraits>::node_height(splitNode);
+        auto splitNodeHeight = avltree_algorithms_ext<NodeTraits>::node_height(splitNode);
 
         auto leftTailNode = node_traits::get_left(splitNode);
         auto leftTailHeight = splitNodeHeight - (node_traits::get_balance(splitNode) == node_traits::positive() ? 2 : 1);
@@ -341,8 +341,8 @@ namespace boost
           return push_front(headerA, x);
         }
 
-        auto heightA = avl_extended_tree_algorithms<NodeTraits>::node_height(rootA);
-        auto heightB = avl_extended_tree_algorithms<NodeTraits>::node_height(rootB);            
+        auto heightA = avltree_algorithms_ext<NodeTraits>::node_height(rootA);
+        auto heightB = avltree_algorithms_ext<NodeTraits>::node_height(rootB);            
           
         if (abs(heightB - heightA) <= 1) {                        
           node_traits::set_parent(headerA, x);
@@ -368,7 +368,7 @@ namespace boost
 //            node_traits::get_size(rootA) + node_traits::get_size(rootB) + 1);
           node_traits::augment_propagate(x, rootA, rootB);
 
-          avl_extended_tree_algorithms<NodeTraits>::init_header(headerB);
+          avltree_algorithms_ext<NodeTraits>::init_header(headerB);
 
 
           return true;            
@@ -414,7 +414,7 @@ namespace boost
 //          node_traits::set_size(x, node_traits::get_size(v) + sizeB + 1);
           node_traits::augment_propagate(x, v, rootB);
     
-          avl_extended_tree_algorithms<NodeTraits>::init_header(headerB);
+          avltree_algorithms_ext<NodeTraits>::init_header(headerB);
         }
         else {            
 //          auto sizeA = node_traits::get_size(rootA);
@@ -453,7 +453,7 @@ namespace boost
 //          node_traits::set_size(x, sizeA + node_traits::get_size(v) + 1);
           node_traits::augment_propagate(x, rootA, v);
 
-          avl_extended_tree_algorithms<NodeTraits>::init_header(headerA);
+          avltree_algorithms_ext<NodeTraits>::init_header(headerA);
           bstree_algorithms<NodeTraits>::swap_tree(headerA, headerB);
         }
 

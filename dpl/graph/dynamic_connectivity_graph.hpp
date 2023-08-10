@@ -9,7 +9,7 @@
 
 #undef max
 
-namespace dpl::graph
+namespace HW::dynamic_connectivity
 {
   struct et_node;
 }
@@ -30,24 +30,32 @@ namespace HW { namespace dynamic_connectivity
 
   namespace b = boost;
   namespace bi = b::intrusive;
-  
+
+
+
   struct dynamic_connectivity_graph;
 
-  struct vertex;  
-  typedef vertex* vertex_ptr;    
 
-  struct directed_edge;  
-  typedef directed_edge* directed_edge_ptr;  
 
-  
-  typedef dpl::graph::et_node* euler_tour_node_ptr;
+  struct vertex;
+  using vertex_ptr = vertex*;    
+
+
+
+  struct directed_edge;
+  using directed_edge_ptr = directed_edge*;
+
+
+  using euler_tour_node_ptr = HW::dynamic_connectivity::et_node*;
+
 
   struct euler_tour_non_tree_edge_node;
-  typedef euler_tour_non_tree_edge_node* euler_tour_non_tree_edge_node_ptr;
+  using euler_tour_non_tree_edge_node_ptr = euler_tour_non_tree_edge_node*;
 
-
-
+  
   typedef default_list_node_traits<directed_edge> directed_edge_node_traits;
+
+
 
   typedef inorder_iter<directed_edge_node_traits> out_edge_iterator;
    
