@@ -8,7 +8,43 @@
 //#include "HW/pore_network_modelling/pnm_static.hpp"
 
 namespace HW { namespace dynamic_connectivity
-{      
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //  struct component_description
 //  {
 //    et_node_ptr header,
@@ -94,8 +130,8 @@ namespace HW { namespace dynamic_connectivity
       etnte_traits::set_directed_edge(entry, de);
       etnte_traits::set_directed_edge(entryOpp, deOpp);
             
-      etnte_op::insert(_etnteHeader, entry);
-      etnte_op::insert(_etnteHeader, entryOpp);                    
+      etnte_et_operations::insert(_etnteHeader, entry);
+      etnte_et_operations::insert(_etnteHeader, entryOpp);                    
     }
 
     void start_vertex(vertex_ptr, const dynamic_connectivity_graph&) {            
@@ -104,7 +140,7 @@ namespace HW { namespace dynamic_connectivity
         
       _etnteHeader = _etntePool.acquire();
       etnte_algo::init_header(_etnteHeader);      
-      et_traits::set_non_tree_edge_header(_etHeader, _etnteHeader);             
+      et_context_traits::set_non_tree_edge_header(_etHeader, _etnteHeader);             
 
       _components.push_back(_etHeader);
     }    
@@ -112,7 +148,7 @@ namespace HW { namespace dynamic_connectivity
     void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
       auto entry = acquire_zero_level_et_entry();        
       
-      et_traits::set_vertex(entry, v);
+      et_context_traits::set_vertex(entry, v);
       v->et_entry_ = entry;
 //      vertex_color_property_map::set_et_entry(v, entry);
 
@@ -123,7 +159,7 @@ namespace HW { namespace dynamic_connectivity
     void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
       auto entry = acquire_zero_level_et_entry();
 
-      et_traits::set_directed_edge(entry, e);
+      et_context_traits::set_directed_edge(entry, e);
       directed_edge::set_tree_edge_entry(e, entry);
 
       et_algo::push_back(_etHeader, entry);      
@@ -137,8 +173,8 @@ namespace HW { namespace dynamic_connectivity
         
         auto top = *_treeEdgeStackTop--;
 
-        auto top_de_opposite = et_traits::get_directed_edge(top)->opposite;
-        et_traits::set_directed_edge(entry, top_de_opposite);        
+        auto top_de_opposite = et_context_traits::get_directed_edge(top)->opposite;
+        et_context_traits::set_directed_edge(entry, top_de_opposite);        
         directed_edge::set_tree_edge_entry(top_de_opposite, entry);
 
 //        et_algo_not_augmented::push_back(_etHeader, entry);        

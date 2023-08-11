@@ -244,7 +244,7 @@ namespace xpm
       vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        traits::set_vertex(&input[i], &vertices[i]);
+        HW::dynamic_connectivity::et_context_traits::set_vertex(&input[i], &vertices[i]);
         algo::push_back(header_a, &input[i]);
       }
 
@@ -353,7 +353,7 @@ namespace xpm
 
       using node = HW::dynamic_connectivity::etnte_node;
       using traits = HW::dynamic_connectivity::etnte_traits;
-      using algo = intrusive::avl_extended_augmented_tree_algorithms<traits>;
+      using algo = intrusive::aug_avltree_algorithms_ext<traits>;
       using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
 
       // using vertex = HW::dynamic_connectivity::vertex;

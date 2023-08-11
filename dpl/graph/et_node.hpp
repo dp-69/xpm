@@ -26,16 +26,8 @@
 #include "core.hpp"
 #include "avltree_algorithms_ext.hpp"
 
-namespace HW::dynamic_connectivity {
-  struct etnte_node;
-  struct directed_edge;
-  struct vertex;
-}
-
-
 namespace HW::dynamic_connectivity
 {
-  
   struct et_node
   {
     et_node() = default;
@@ -44,97 +36,25 @@ namespace HW::dynamic_connectivity
     et_node& operator=(const et_node& other) = delete;
     et_node& operator=(et_node&& other) noexcept = delete;
 
-  private:
-    friend struct et_traits;
-    friend struct avl_traits<et_node>;
-
-
     /**
      *  has to be the first field for the smart_pool
      *
-     *  size_t has to be 8 bytes = 64 bits on a x64 system
-     *
-     *  [61 bits, element pointer]
-     *  [1 bit] - '0' for directed edge, '1' for vertex
-     *  [2 bits for avl balance]
+     *  must be 8 bytes (64 bits)
+     *  61 bits - context data, e.g. pointer
+     *  1 bit   - boolean flag
+     *  2 bits  - avl balance
      */
-    std::enable_if_t<sizeof(size_t) == 8, size_t> ptr_type_balance; 
+    std::enable_if_t<sizeof(std::size_t) == 8, std::size_t> tag; 
 
-    // ReSharper disable CppInconsistentNaming
-    et_node* parent_;
-    et_node* left_;
-    et_node* right_;
-    // ReSharper restore CppInconsistentNaming
-
-    static inline constexpr auto ptr_bits = ~((static_cast<size_t>(1) << 3) - 1);
-    static inline constexpr auto type_bits = static_cast<size_t>(1) << 2;
-    static inline constexpr auto balance_bits = type_bits - 1;
-  };
-  
-
-  
-
-
-  struct et_traits : avl_traits<et_node>
-  {
-  private:
-    template<class T> 
-    static T* get_ptr(const_node_ptr n) {
-      return reinterpret_cast<T*>(n->ptr_type_balance & et_node::ptr_bits);  // NOLINT(performance-no-int-to-ptr)
-    }
-
-  public:
-
-    // -----------
-
-    static etnte_node* get_non_tree_edge_header(const_node_ptr n) { return get_ptr<etnte_node>(n); }
-
-    static void set_non_tree_edge_header(node_ptr n, etnte_node* etnte_header) {
-      n->ptr_type_balance = reinterpret_cast<size_t>(etnte_header) | et_node::balance_bits; // TODO?
-    }
-
-    // -----------
-
-    static directed_edge* get_directed_edge(const_node_ptr n) { return get_ptr<directed_edge>(n); }
-    static vertex* get_vertex(const_node_ptr n) { return get_ptr<vertex>(n); }
-    
-    static void set_directed_edge(node_ptr n, directed_edge* directed_edge) {                  
-      n->ptr_type_balance = reinterpret_cast<size_t>(directed_edge) | (n->ptr_type_balance & et_node::balance_bits);
-    }
-    
-    static void set_vertex(node_ptr n, vertex* vertex) {
-      n->ptr_type_balance = reinterpret_cast<size_t>(vertex) | et_node::type_bits | (n->ptr_type_balance & et_node::balance_bits);      
-    }                     
-
-
-    static bool is_loop_edge(const_node_ptr n) { // that is 'vertex'
-      return n->ptr_type_balance & et_node::type_bits;
-    }
-
-    // -----------
-
-    static void init_header(node_ptr n) {
-      n->ptr_type_balance = (n->ptr_type_balance & ~et_node::balance_bits) | et_node::balance_bits; // TODO?
-    }
-
-    // Has to be very efficient O(1) predicate.
-    static bool is_header(const_node_ptr n) {
-      return (n->ptr_type_balance & et_node::balance_bits) == et_node::balance_bits;
-    }
-
-    // -----------
-
-    static balance get_balance(const_node_ptr n) {
-      return static_cast<balance>(n->ptr_type_balance & et_node::balance_bits);
-    }
-
-    static void set_balance(node_ptr n, balance b) {
-      n->ptr_type_balance = (n->ptr_type_balance & ~et_node::balance_bits) | static_cast<size_t>(b);
-    }   
+    et_node* parent;
+    et_node* left;
+    et_node* right;
   };
 
+  using et_traits = avl_traits<et_node>;
   using et_node_ptr = et_traits::node_ptr;
   using et_algo = boost::intrusive::avltree_algorithms_ext<et_traits>;
+}
 
 
 
@@ -144,11 +64,44 @@ namespace HW::dynamic_connectivity
 
 
 
-      
-  // typedef bi::avl_extended_tree_algorithms<et_traits> euler_tour_algorithms;
-  // typedef cyclic_operations<euler_tour_algorithms> euler_tour_cyclic_operations;
-  //
-  // typedef euler_tour_node_ptr et_node_ptr;
-  
-  // typedef euler_tour_cyclic_operations et_cyclic_op;
+namespace HW::dynamic_connectivity
+{
+  struct etnte_node;
+  struct directed_edge;
+  struct vertex;
+
+  class et_context_traits
+  {
+    using node_ptr = et_node*;
+    using const_node_ptr = const et_node*;
+
+  public:
+    static etnte_node* get_non_tree_edge_header(const_node_ptr n) {
+      return mask::get_ptr<etnte_node>(n->tag);
+    }
+
+    static void set_non_tree_edge_header(node_ptr n, etnte_node* etnte_header) {
+      mask::set_ptr_balance(n->tag, etnte_header, mask::balance);
+    }
+
+    static directed_edge* get_directed_edge(const_node_ptr n) {
+      return mask::get_ptr<directed_edge>(n->tag);
+    }
+
+    static vertex* get_vertex(const_node_ptr n) {
+      return mask::get_ptr<vertex>(n->tag);
+    }
+    
+    static void set_directed_edge(node_ptr n, const directed_edge* de) {
+      mask::set_ptr(n->tag, de);
+    }
+    
+    static void set_vertex(node_ptr n, const vertex* v) {
+      mask::set_ptr_bit(n->tag, v);
+    }                     
+
+    static bool is_loop_edge(const_node_ptr n) { // that is 'vertex'
+      return mask::get_bit(n->tag);
+    }
+  };
 }

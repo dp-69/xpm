@@ -6,8 +6,8 @@ namespace boost
 {
   namespace intrusive
   {
-    template <class NodeTraits>
-    class avl_extended_augmented_tree_algorithms : public avltree_algorithms_ext<NodeTraits>
+    template <typename NodeTraits>
+    class aug_avltree_algorithms_ext : public avltree_algorithms_ext<NodeTraits>
     {
       using base = avltree_algorithms_ext<NodeTraits>;
       using bstree_algo = bstree_algorithms<NodeTraits>;
@@ -107,7 +107,7 @@ namespace boost
         rebalance_after_insertion(header, new_node);
       }
 
-      template <class NodePtrCompare>
+      template <typename NodePtrCompare>
       static node_ptr insert_equal_lower_bound(node_ptr header, node_ptr new_node, NodePtrCompare comp) {
         bstree_algo::insert_equal_lower_bound(header, new_node, comp);
         size_increment_after_insert(header, new_node);
@@ -115,7 +115,7 @@ namespace boost
         return new_node;
       }
 
-      template <class NodePtrCompare>
+      template <typename NodePtrCompare>
       static node_ptr insert_equal_upper_bound(node_ptr header, node_ptr new_node, NodePtrCompare comp) {
         bstree_algo::insert_equal_upper_bound(header, new_node, comp);
         size_increment_after_insert(header, new_node);
@@ -723,26 +723,6 @@ namespace boost
 
       
     };  
-
-
-
-
-    // const algo_types AvlExtendedAugmentedTreeAlgorithms = algo_types(10001);
-    //
-    // template <class NodeTraits>
-    // struct get_algo<AvlExtendedAugmentedTreeAlgorithms, NodeTraits>
-    // {
-    //   typedef avl_extended_augmented_tree_algorithms<NodeTraits> type;
-    // };
-
-
-
-
-    //    template <class ValueTraits, class NodePtrCompare, class ExtraChecker>
-    //    struct get_node_checker<AvlAugmentedTreeAlgorithms, ValueTraits, NodePtrCompare, ExtraChecker>
-    //    {
-    //        typedef detail::avltree_node_checker<ValueTraits, NodePtrCompare, ExtraChecker> type;
-    //    };
   }
 }
 
