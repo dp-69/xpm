@@ -257,55 +257,9 @@ namespace HW
 
   
 
-  struct default_avl_balance_node_traits
-  {
-    typedef HW::dynamic_connectivity::avl_balance balance;
+  
 
-    static balance negative() {
-      return HW::dynamic_connectivity::avl_balance::negative_t;
-    }
-
-    static balance zero() {
-      return HW::dynamic_connectivity::avl_balance::zero_t;
-    }
-
-    static balance positive() {
-      return HW::dynamic_connectivity::avl_balance::positive_t;
-    }
-  };
-
-  template<class Node>
-  struct default_avl_lrpb_node_traits : default_avl_balance_node_traits // lrpb = left, right, parent, balance
-  {  
-    using node = Node;
-    using node_ptr = node*;
-    using const_node_ptr = const node*;
-    // TODO!!!!
-
-    static node* get_left(const node* n) {
-      return n->left_;
-    }
-
-    static void set_left(node* n, node* l) {
-      n->left_ = l;
-    }
-
-    static node* get_right(const node* n) {
-      return n->right_;
-    }
-
-    static void set_right(node* n, node* r) {
-      n->right_ = r;
-    }
-    
-    static node* get_parent(const node* n) {
-      return n->parent_;
-    }
-
-    static void set_parent(node* n, node* p) {
-      n->parent_ = p;
-    }
-  };
+  
 
 
   template<class NodeTraits>

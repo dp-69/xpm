@@ -35,6 +35,7 @@ namespace HW::dynamic_connectivity {
 
 namespace HW::dynamic_connectivity
 {
+  
   struct et_node
   {
     et_node() = default;
@@ -45,6 +46,8 @@ namespace HW::dynamic_connectivity
 
   private:
     friend struct et_traits;
+    friend struct avl_traits<et_node>;
+
 
     /**
      *  has to be the first field for the smart_pool
@@ -57,30 +60,23 @@ namespace HW::dynamic_connectivity
      */
     std::enable_if_t<sizeof(size_t) == 8, size_t> ptr_type_balance; 
 
-    et_node* parent;
-    et_node* left;
-    et_node* right;
+    // ReSharper disable CppInconsistentNaming
+    et_node* parent_;
+    et_node* left_;
+    et_node* right_;
+    // ReSharper restore CppInconsistentNaming
 
     static inline constexpr auto ptr_bits = ~((static_cast<size_t>(1) << 3) - 1);
     static inline constexpr auto type_bits = static_cast<size_t>(1) << 2;
     static inline constexpr auto balance_bits = type_bits - 1;
   };
+  
 
   
 
 
-  struct et_traits
+  struct et_traits : avl_traits<et_node>
   {
-    using node = et_node;
-    using node_ptr = et_node*;
-    using const_node_ptr = const et_node*;
-
-    using balance = avl_balance;
-
-    static constexpr balance negative() { return avl_balance::negative_t; }
-    static constexpr balance zero() { return avl_balance::zero_t; }
-    static constexpr balance positive() { return avl_balance::positive_t; }
-
   private:
     template<class T> 
     static T* get_ptr(const_node_ptr n) {
@@ -128,16 +124,10 @@ namespace HW::dynamic_connectivity
 
     // -----------
 
-    static node_ptr get_left(const_node_ptr n) { return n->left; }
-    static node_ptr get_right(const_node_ptr n) { return n->right; }
-    static node_ptr get_parent(const_node_ptr n) { return n->parent; }
     static balance get_balance(const_node_ptr n) {
       return static_cast<balance>(n->ptr_type_balance & et_node::balance_bits);
     }
 
-    static void set_left(node_ptr n, node_ptr l) { n->left = l; }
-    static void set_right(node_ptr n, node_ptr r) { n->right = r; }
-    static void set_parent(node_ptr n, node_ptr p) { n->parent = p; }
     static void set_balance(node_ptr n, balance b) {
       n->ptr_type_balance = (n->ptr_type_balance & ~et_node::balance_bits) | static_cast<size_t>(b);
     }   

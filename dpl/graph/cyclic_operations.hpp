@@ -10,11 +10,12 @@ namespace HW { namespace dynamic_connectivity
 
     using node = typename node_traits::node;
     using node_ptr = node*;
+    using const_node_ptr = const node*;
     
     typedef boost::intrusive::default_path_buffer<node_traits> default_path;
 
   public:    
-    static void principal_cut(node* header, node* least) {      
+    static void principal_cut(node_ptr header, node_ptr least) {      
       if (node_traits::get_left(header) != least) {
         if (node_traits::get_right(header) == least) {
           algo::erase(header, least);
@@ -35,15 +36,15 @@ namespace HW { namespace dynamic_connectivity
       }
     }
 
-    static void principal_cut_least_dropped(const node_ptr& header, const node_ptr& least_element) {
-      if (node_traits::get_right(header) == least_element || node_traits::get_left(header) == least_element)
-        algo::erase(header, least_element);
+    static void principal_cut_least_dropped(node_ptr header, node_ptr least) {
+      if (node_traits::get_right(header) == least || node_traits::get_left(header) == least)
+        algo::erase(header, least);
       else {        
         node headerNodeB;
         auto headerB = &headerNodeB;
         algo::init_header(headerB);        
 
-        algo::split_tree(header, least_element, headerB);
+        algo::split_tree(header, least, headerB);
 
         auto rightB = node_traits::get_right(headerB);
         algo::erase(headerB, rightB);
@@ -54,7 +55,7 @@ namespace HW { namespace dynamic_connectivity
       }  
     }
 
-    static node_ptr next_node(const node_ptr& node) {
+    static node_ptr next_node(node_ptr node) {
       auto next = algo::next_node(node);      
       return node_traits::is_header(next) ? node_traits::get_left(next) : next;       
     }
@@ -65,7 +66,7 @@ namespace HW { namespace dynamic_connectivity
     //   headerB <- B (from n0 to n1)
     //   headerA <- C + A (from n1 to n0)
 
-    static void split(const node_ptr& headerA, const node_ptr& headerB, const node_ptr& n0, const node_ptr& n1) {            
+    static void split(node_ptr headerA, node_ptr headerB, node_ptr n0, node_ptr n1) {            
       algo::split_tree(headerA, n0, headerB);
             
       node headerNodeC;

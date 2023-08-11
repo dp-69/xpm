@@ -8,6 +8,10 @@
 #include <dpl/graph/cyclic_operations.hpp>
 #include <dpl/graph/dynamic_connectivity_graph.hpp>
 
+// #include <dpl/graph/euler_tour_visitor.hpp>
+#include <dpl/graph/euler_tour_dynamic_connectivity_context.hpp>
+
+
 
 // #include <dpl/graph/avl_extended_augmented_tree_algorithms.hpp>
 // #include <dpl/graph/cyclic_operations.hpp>
@@ -745,13 +749,13 @@ namespace xpm
         if (check_validity_naive) {
           if (auto* root = traits::get_parent(header_a); !(
             algo::verify(header_a) &&
-            algo::calculate_subtree_size(root) == traits::get_size(root)))
+            algo::calculate_subtree_size(root) == (root ? traits::get_size(root) : 0)))
 
             cout << "{A} INVALID\n";
 
           if (auto* root = traits::get_parent(header_b); !(
             algo::verify(header_b) &&
-            algo::calculate_subtree_size(root) == traits::get_size(root)))
+            algo::calculate_subtree_size(root) == (root ? traits::get_size(root) : 0)))
             cout << "{B} INVALID\n";
 
           //      auto calcSizeA = treeA.size();            

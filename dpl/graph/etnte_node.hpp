@@ -13,12 +13,15 @@ namespace HW::dynamic_connectivity {
 }
 
 namespace HW { namespace dynamic_connectivity
-{ 
+{
   struct etnte_node : non_copyable_movable
   {    
     private:
       friend struct etnte_traits;      
-      friend struct default_avl_lrpb_node_traits<etnte_node>;
+      friend struct avl_traits<etnte_node>;
+
+      // ReSharper disable CppInconsistentNaming
+
 
       /**
        *  has to be the first field for the smart_pool
@@ -29,18 +32,23 @@ namespace HW { namespace dynamic_connectivity
        *  [1 bit, EMPTY]
        *  [2 bits for avl balance]
        */
+      
       std::size_t de_and_balance_;
 
       etnte_node* parent_;
       etnte_node* left_;
-      etnte_node* right_;                            
-      std::size_t size_;                                                                   
+      etnte_node* right_;
+
+      std::size_t size_;
+      // ReSharper restore CppInconsistentNaming
   };
+  
+
 
   // typedef euler_tour_non_tree_edge_node* euler_tour_non_tree_edge_node_ptr;
   
   
-  struct etnte_traits : default_avl_lrpb_node_traits<etnte_node>
+  struct etnte_traits : avl_traits<etnte_node>
   {
     using node = etnte_node;
     using node_ptr = etnte_node*;
@@ -88,46 +96,8 @@ namespace HW { namespace dynamic_connectivity
 
     using subsize = size_t;
 
-    static subsize get_size(const_node_ptr n) {
-      return n ? n->size_ : 0;
-    }
-
-    static void set_size(node_ptr n, subsize s) {
-      n->size_ = s;
-    }
-    
-
-    // static void augment_init(const node_ptr& n) {
-    //   set_size(n, 0);
-    // }
-
-    static void augment_identity(const node_ptr& n) {
-      set_size(n, 1);
-    }
-
-    static void augment_copy_from(const node_ptr& n, const node_ptr& f) {
-      set_size(n, get_size(f));
-    }
-
-    static void augment_propagate(const node_ptr& n, const node_ptr& l, const node_ptr& r) {
-      set_size(n, get_size(l) + get_size(r) + 1);
-    }
-
-    static void augment_propagate(const node_ptr& n, const node_ptr& c) {
-      set_size(n, get_size(c) + 1);
-    }
-
-    // static void augment_remove_node_propagate(const node_ptr& n) {
-    //   set_size(n, get_size(n) - 1);
-    // }
-
-    static void augment_inserted_node(const node_ptr& n, const node_ptr& in) {
-      set_size(n, get_size(n) + 1);
-    }
-
-    static void augment_inserted_subtree(const node_ptr& n, const node_ptr& is) {
-      set_size(n, get_size(n) + get_size(is));
-    }
+    static subsize get_size(const_node_ptr n) { return n->size_; /*return n ? n->size_ : 0;*/ }
+    static void set_size(node_ptr n, subsize s) { n->size_ = s; }
   };
 
 
@@ -266,10 +236,12 @@ namespace HW { namespace dynamic_connectivity
   template<class Algo>
   struct euler_tour_non_tree_edge_operations
   {
-    typedef Algo algo;    
-    typedef typename algo::node_traits node_traits;
-    typedef typename node_traits::node_ptr node_ptr;
-    typedef typename node_traits::node node;
+    typedef Algo algo;
+    using node_traits = typename algo::node_traits;
+    using node = typename node_traits::node;
+    using node_ptr = typename node_traits::node_ptr;
+    using const_node_ptr = typename node_traits::const_node_ptr;
+    
     typedef euler_tour_pseudo_cut_less_than_comparator<node_traits> less_than_comparator;
     typedef euler_tour_pseudo_cut_more_than_comparator<node_traits> more_than_comparator;
     

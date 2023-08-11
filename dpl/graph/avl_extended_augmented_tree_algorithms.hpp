@@ -30,18 +30,24 @@ namespace boost
       static void size_rotate_right(node_ptr x, node_ptr x_oldleft) {
         nt::set_size(x_oldleft, nt::get_size(x));
 
+        const_node_ptr x_right = nt::get_right(x);
+        const_node_ptr x_oldleft_right = nt::get_right(x_oldleft);
+
         nt::set_size(x,
-          nt::get_size(nt::get_right(x)) +
-          nt::get_size(nt::get_right(x_oldleft)) +
+          (x_right ? nt::get_size(x_right) : 0) +
+          (x_oldleft_right ? nt::get_size(x_oldleft_right) : 0) +
           1);
       }
 
       static void size_rotate_left(node_ptr x, node_ptr x_oldright) {
         nt::set_size(x_oldright, nt::get_size(x));
 
+        const_node_ptr x_left = nt::get_left(x);
+        const_node_ptr x_oldright_left = nt::get_left(x_oldright);
+
         nt::set_size(x,
-          nt::get_size(nt::get_left(x)) +
-          nt::get_size(nt::get_left(x_oldright)) +
+          (x_left ? nt::get_size(x_left) : 0) +
+          (x_oldright_left ? nt::get_size(x_oldright_left) : 0) +
           1);
       }
 
@@ -128,440 +134,400 @@ namespace boost
 
 
 
+      static void join_trees(node_ptr header_a, node_ptr x, node_ptr header_b) {
+        auto root_a = nt::get_parent(header_a);
+        auto root_b = nt::get_parent(header_b);
 
-
-
-
-
-      static void split_tree(const node_ptr& headerA, const node_ptr& splitNode, const node_ptr& headerB) {
-        if (nt::get_right(headerA) == splitNode) {
-          erase(headerA, splitNode);
+        if (!root_b) {
+          push_back(header_a, x);
           return;
         }
 
-        if (nt::get_left(headerA) == splitNode) {
-          erase(headerA, splitNode);
-          bstree_algorithms<nt>::swap_tree(headerA, headerB);
+        if (!root_a) {
+          bstree_algorithms<nt>::swap_tree(header_a, header_b);            
+          push_front(header_a, x);
+          return;
+        }
+
+        auto height_a = base::node_height(root_a);
+        auto height_b = base::node_height(root_b);            
+          
+        if (abs(height_b - height_a) <= 1) {                        
+          nt::set_parent(header_a, x);
+          nt::set_left(header_a, nt::get_left(header_a));
+          nt::set_right(header_a, nt::get_right(header_b));
+
+          nt::set_parent(x, header_a);
+
+          nt::set_left(x, root_a);
+          nt::set_right(x, root_b);
+
+          nt::set_parent(root_a, x);
+          nt::set_parent(root_b, x);
+
+          nt::set_balance(x, 
+            height_a < height_b ? nt::positive() :
+            height_a > height_b ? nt::negative() :
+            nt::zero());
+
+          nt::set_size(x, nt::get_size(root_a) + nt::get_size(root_b) + 1);
+
+          base::init_header(header_b);
+
+          return;            
+        }
+          
+        if (height_a > height_b) {
+          node_ptr v = root_a;
+          auto h = height_a;
+          while (h > height_b + 1) {
+            if (nt::get_balance(v) == nt::negative())
+              h -= 2;
+            else
+              --h;
+
+            nt::set_size(v, nt::get_size(v) + nt::get_size(root_b) + 1);
+
+            v = nt::get_right(v);
+          }
+
+          auto v_parent = nt::get_parent(v);
+
+          nt::set_left(x, v);
+          nt::set_parent(v, x);
+
+          nt::set_right(x, root_b);        
+          nt::set_parent(root_b, x);
+    
+          nt::set_right(v_parent, x);
+          nt::set_parent(x, v_parent);    
+
+          nt::set_right(header_a, nt::get_right(header_b));
+
+          nt::set_balance(x, height_b == h ? nt::zero() : nt::negative());
+
+          nt::set_size(x, nt::get_size(v) + nt::get_size(root_b) + 1);
+    
+          base::init_header(header_b);
+        }
+        else {            
+          node_ptr v = root_b;
+          auto h = height_b;
+          while (h > height_a + 1) {
+            if (nt::get_balance(v) == nt::positive())
+              h -= 2;
+            else
+              --h;
+
+            nt::set_size(v, nt::get_size(v) + nt::get_size(root_a) + 1);
+
+            v = nt::get_left(v);
+          }
+
+          node_ptr v_parent = nt::get_parent(v);
+
+          nt::set_right(x, v);
+          nt::set_parent(v, x);
+
+          nt::set_left(x, root_a);        
+          nt::set_parent(root_a, x);
+    
+          nt::set_left(v_parent, x);
+          nt::set_parent(x, v_parent);    
+
+          nt::set_left(header_b, nt::get_left(header_a));
+
+          nt::set_balance(x, height_a == h ? nt::zero() : nt::positive());
+
+          nt::set_size(x, nt::get_size(v) + nt::get_size(root_a) + 1);
+
+          base::init_header(header_a);
+          bstree_algo::swap_tree(header_a, header_b);
+        }
+
+        rebalance_after_insertion_no_balance_assignment(header_a, x);
+      }
+
+
+      static void split_tree(node_ptr header_a, node_ptr k, node_ptr header_b) {
+        if (nt::get_right(header_a) == k) {
+          erase(header_a, k);
+          return;
+        }
+
+        if (nt::get_left(header_a) == k) {
+          erase(header_a, k);
+          bstree_algorithms<nt>::swap_tree(header_a, header_b);
           return;
         }
 
         
-        auto splitNodeHeight = avltree_algorithms_ext<NodeTraits>::node_height(splitNode);
+        auto k_height = avltree_algorithms_ext<NodeTraits>::node_height(k);
 
-        auto leftTailNode = nt::get_left(splitNode);
-        auto leftTailHeight = splitNodeHeight - (nt::get_balance(splitNode) == nt::positive() ? 2 : 1);
+        auto left_tail_node = nt::get_left(k);
+        auto left_tail_height = k_height - (nt::get_balance(k) == nt::positive() ? 2 : 1);
 
-        auto rightTailNode = nt::get_right(splitNode);
-        auto rightTailHeight = splitNodeHeight - (nt::get_balance(splitNode) == nt::negative() ? 2 : 1);
+        auto right_tail_node = nt::get_right(k);
+        auto right_tail_height = k_height - (nt::get_balance(k) == nt::negative() ? 2 : 1);
 
-        auto leftRight = node_ptr();
-        auto rightLeft = node_ptr();
+        node_ptr left_rightmost = nullptr;
+        node_ptr right_leftmost = nullptr;
 
-        if (leftTailNode) {
-          leftRight = leftTailNode;
-          while (nt::get_right(leftRight))
-            leftRight = nt::get_right(leftRight);
+        if (left_tail_node) {
+          left_rightmost = left_tail_node;
+          while (nt::get_right(left_rightmost))
+            left_rightmost = nt::get_right(left_rightmost);
         }
 
-        if (rightTailNode) {
-          rightLeft = rightTailNode;
-          while (nt::get_left(rightLeft))
-            rightLeft = nt::get_left(rightLeft);
+        if (right_tail_node) {
+          right_leftmost = right_tail_node;
+          while (nt::get_left(right_leftmost))
+            right_leftmost = nt::get_left(right_leftmost);
         }
 
 
-        auto node = splitNode;
-        auto parent = nt::get_parent(splitNode);
-        auto grandParent = nt::get_parent(parent);
+        node_ptr node = k;
+        node_ptr parent = nt::get_parent(k);
+        node_ptr grand_parent = nt::get_parent(parent);
 
-        auto height = splitNodeHeight;
+        auto height = k_height;
 
-        while (parent != headerA) {
+        while (parent != header_a) {
           if (nt::get_left(parent) == node) {
-            if (!rightLeft)
-              rightLeft = parent;
+            if (!right_leftmost)
+              right_leftmost = parent;
 
-            const auto& lHeight = rightTailHeight;
-            auto rHeight =
-              nt::get_balance(parent) == nt::positive() ? ++++height - 1
-                : nt::get_balance(parent) == nt::negative() ? ++height - 2 : ++height - 1;
+            auto l_height = right_tail_height;
+            auto r_height =
+              nt::get_balance(parent) == nt::positive()
+                ? ++++height - 1
+                : nt::get_balance(parent) == nt::negative()
+                    ? ++height - 2
+                    : ++height - 1;
 
-            auto x = parent;
+            node_ptr x = parent;
+            node_ptr l_node = right_tail_node;
+            node_ptr r_node = nt::get_right(x);
 
-            const auto& lNode = rightTailNode;
-            auto rNode = nt::get_right(x);
+            auto height_diff = r_height - l_height;
 
-            auto heightDiff = rHeight - lHeight;
+            if (height_diff <= 1) {
+              nt::set_left(x, l_node);
+              if (l_node)
+                nt::set_parent(l_node, x);
 
-            if (heightDiff <= 1) {
-              nt::set_left(x, lNode);
-              if (lNode)
-                nt::set_parent(lNode, x);
-
-              if (heightDiff == 1) {
+              if (height_diff == 1) {
                 nt::set_balance(x, nt::positive());
-                rightTailHeight = rHeight + 1;
+                right_tail_height = r_height + 1;
               }
-              else if (heightDiff == 0) {
+              else if (height_diff == 0) {
                 nt::set_balance(x, nt::zero());
-                rightTailHeight = rHeight + 1;
+                right_tail_height = r_height + 1;
               }
               else /*if (heightDiff == -1)*/ {
                 nt::set_balance(x, nt::negative());
-                rightTailHeight = rHeight + 2;
+                right_tail_height = r_height + 2;
               }
-
               
-//              nt::set_size(x,
-//                nt::get_size(lNode) + nt::get_size(rNode) + 1);
+              nt::set_size(x,
+                (l_node ? nt::get_size(l_node) : 0) +
+                (r_node ? nt::get_size(r_node) : 0) +
+                1);
 
-              nt::augment_propagate(x, lNode, rNode);
-
-              rightTailNode = x;
+              right_tail_node = x;
             }
             else {
-              if (lHeight == -1) {
-                nt::set_left(x, node_ptr());
-                nt::set_right(x, node_ptr());
+              if (l_height == -1) {
+                nt::set_left(x, nullptr);
+                nt::set_right(x, nullptr);
                 nt::set_balance(x, nt::zero());
                 
-//                nt::set_size(x, 1);
-                nt::augment_identity(x);
-                
-                
-                auto l = rNode;
+                nt::set_size(x, 1);
+                nt::set_size(r_node, nt::get_size(r_node) + 1);
 
-//                nt::size_increment(rNode);
-                nt::augment_inserted_node(rNode, x);
+                node_ptr l = r_node;
 
                 while (nt::get_left(l)) {
                   l = nt::get_left(l);
-//                  nt::size_increment(l);
-                  nt::augment_inserted_node(l, x);
+                  nt::set_size(l, nt::get_size(l) + 1);
                 }
 
                 nt::set_left(l, x);
                 nt::set_parent(x, l);
-                
               }
               else {
-//                auto lNodeSize = nt::get_size(lNode);
-
-                auto v = rNode;
-                auto hPrime = rHeight;
-                while (hPrime > lHeight + 1) {
+                node_ptr v = r_node;
+                auto h = r_height;
+                while (h > l_height + 1) {
                   if (nt::get_balance(v) == nt::positive())
-                    hPrime -= 2;
+                    h -= 2;
                   else
-                    --hPrime;                                    
+                    --h;                                    
 
-//                  nt::size_increment(v, lNodeSize + 1 /*x*/);
-
-                  nt::augment_inserted_node(v, x);
-                  nt::augment_inserted_subtree(v, lNode);                  
+                  nt::set_size(v, nt::get_size(v) + nt::get_size(l_node) + 1);
 
                   v = nt::get_left(v);
                 }
 
-                auto u = nt::get_parent(v);
+                auto v_parent = nt::get_parent(v);
 
                 nt::set_right(x, v);
                 nt::set_parent(v, x);
 
-                nt::set_left(x, lNode);
-                if (lNode)
-                  nt::set_parent(lNode, x);
+                nt::set_left(x, l_node);
+                if (l_node)
+                  nt::set_parent(l_node, x);
 
-                nt::set_balance(x, lHeight == hPrime ? nt::zero() : nt::positive());
+                nt::set_left(v_parent, x);
+                nt::set_parent(x, v_parent);
 
-                nt::set_left(u, x);
-                nt::set_parent(x, u);
+                nt::set_balance(x, l_height == h ? nt::zero() : nt::positive());
 
-//                nt::set_size(x, lNodeSize + nt::get_size(v) + 1);
-                nt::augment_propagate(x, lNode, v);
+                nt::set_size(x, nt::get_size(v) + nt::get_size(l_node) + 1);
               }
 
-              nt::set_parent(headerB, rNode);
-              nt::set_parent(rNode, headerB);
+              nt::set_parent(header_b, r_node);
+              nt::set_parent(r_node, header_b);
 
-              if (rebalance_after_insertion_no_balance_assignment(headerB, x))
-                rightTailHeight = rHeight + 1;
+              if (rebalance_after_insertion_no_balance_assignment(header_b, x))
+                right_tail_height = r_height;
               else
-                rightTailHeight = rHeight;
+                right_tail_height = r_height + 1;
 
-              rightTailNode = nt::get_parent(headerB);
+              right_tail_node = nt::get_parent(header_b);
             }
           }
           else {
-            if (!leftRight)
-              leftRight = parent;
+            if (!left_rightmost)
+              left_rightmost = parent;
 
-            auto lHeight =
-              nt::get_balance(parent) == nt::negative() ? ++++height - 1
-                : nt::get_balance(parent) == nt::positive() ? ++height - 2 : ++height - 1;
+            auto l_height =
+              nt::get_balance(parent) == nt::negative()
+                ? ++++height - 1
+                : nt::get_balance(parent) == nt::positive()
+                    ? ++height - 2
+                    : ++height - 1;
 
-            const auto& rHeight = leftTailHeight;
+            const auto& r_height = left_tail_height;
 
-            auto x = parent;
+            node_ptr x = parent;
+            node_ptr l_node = nt::get_left(x);
+            node_ptr r_node = left_tail_node;
 
-            auto lNode = nt::get_left(x);
-            const auto& rNode = leftTailNode;
+            auto height_diff = l_height - r_height;
 
-            auto heightDiff = lHeight - rHeight;
+            if (height_diff <= 1) {
+              nt::set_right(x, r_node);
+              if (r_node)
+                nt::set_parent(r_node, x);
 
-            if (heightDiff <= 1) {
-              nt::set_right(x, rNode);
-              if (rNode)
-                nt::set_parent(rNode, x);
-
-              if (heightDiff == 1) {
+              if (height_diff == 1) {
                 nt::set_balance(x, nt::negative());
-                leftTailHeight = lHeight + 1;
+                left_tail_height = l_height + 1;
               }
-              else if (heightDiff == 0) {
+              else if (height_diff == 0) {
                 nt::set_balance(x, nt::zero());
-                leftTailHeight = lHeight + 1;
+                left_tail_height = l_height + 1;
               }
               else /*if (heightDiff == -1)*/ {
                 nt::set_balance(x, nt::positive());
-                leftTailHeight = lHeight + 2;
+                left_tail_height = l_height + 2;
               }
 
-//              nt::set_size(x,
-//                nt::get_size(lNode) + nt::get_size(rNode) + 1);
+              nt::set_size(x,
+                (l_node ? nt::get_size(l_node) : 0) +
+                (r_node ? nt::get_size(r_node) : 0) +
+                1);
 
-              nt::augment_propagate(x, lNode, rNode);
-
-              leftTailNode = x;
+              left_tail_node = x;
             }
             else {
-              if (rHeight == -1) {
-                nt::set_left(x, node_ptr());
-                nt::set_right(x, node_ptr());
+              if (r_height == -1) {
+                nt::set_left(x, nullptr);
+                nt::set_right(x, nullptr);
                 nt::set_balance(x, nt::zero());
 
-//                nt::set_size(x, 1);
-                nt::augment_identity(x);
+                nt::set_size(x, 1);
                 
-                
-                auto r = lNode;
+                auto r = l_node;
 
-//                nt::size_increment(lNode);
-                nt::augment_inserted_node(lNode, x);
+                nt::set_size(l_node, nt::get_size(l_node) + 1);
 
                 while (nt::get_right(r)) {
                   r = nt::get_right(r);
-//                  nt::size_increment(r);
-                  nt::augment_inserted_node(r, x);
+                  nt::set_size(r, nt::get_size(r) + 1);
                 }
 
                 nt::set_right(r, x);
                 nt::set_parent(x, r);               
               }
               else {
-//                auto rNodeSize = nt::get_size(rNode);
-
-                auto v = lNode;
-                auto hPrime = lHeight;
-                while (hPrime > rHeight + 1) {
+                node_ptr v = l_node;
+                auto h = l_height;
+                while (h > r_height + 1) {
                   if (nt::get_balance(v) == nt::negative())
-                    hPrime -= 2;
+                    h -= 2;
                   else
-                    --hPrime;
+                    --h;
 
-//                  nt::size_increment(v, rNodeSize + 1 /*x*/);
-
-                  nt::augment_inserted_node(v, x);
-                  nt::augment_inserted_subtree(v, rNode);
+                  nt::set_size(v, nt::get_size(v) + nt::get_size(r_node) + 1);
 
                   v = nt::get_right(v);
                 }
 
-                auto u = nt::get_parent(v);
+                auto v_parent = nt::get_parent(v);
 
                 nt::set_left(x, v);
                 nt::set_parent(v, x);
 
-                nt::set_right(x, rNode);
-                if (rNode)
-                  nt::set_parent(rNode, x);
+                nt::set_right(x, r_node);
+                if (r_node)
+                  nt::set_parent(r_node, x);
 
-                nt::set_balance(x, rHeight == hPrime ? nt::zero() : nt::negative());
+                nt::set_right(v_parent, x);
+                nt::set_parent(x, v_parent);
 
-                nt::set_right(u, x);
-                nt::set_parent(x, u);
+                nt::set_balance(x, r_height == h ? nt::zero() : nt::negative());
 
-//                nt::set_size(x, nt::get_size(v) + rNodeSize + 1);
-                nt::augment_propagate(x, v, rNode);
+                nt::set_size(x, nt::get_size(v) + nt::get_size(r_node) + 1);
               }
 
-              nt::set_parent(headerB, lNode);
-              nt::set_parent(lNode, headerB);
+              nt::set_parent(header_b, l_node);
+              nt::set_parent(l_node, header_b);
 
-              if (rebalance_after_insertion_no_balance_assignment(headerB, x))
-                leftTailHeight = lHeight + 1;
+              if (rebalance_after_insertion_no_balance_assignment(header_b, x))
+                left_tail_height = l_height;
               else
-                leftTailHeight = lHeight;
+                left_tail_height = l_height + 1;
 
-              leftTailNode = nt::get_parent(headerB);
+              left_tail_node = nt::get_parent(header_b);
             }
           }
 
           node = parent;
-          parent = grandParent;
-          grandParent = nt::get_parent(grandParent);
+          parent = grand_parent;
+          grand_parent = nt::get_parent(grand_parent);
         }
 
-        nt::set_parent(headerB, rightTailNode);
-        nt::set_left(headerB, rightLeft);
-        nt::set_right(headerB, nt::get_right(headerA));
+        nt::set_parent(header_b, right_tail_node);
+        nt::set_left(header_b, right_leftmost);
+        nt::set_right(header_b, nt::get_right(header_a));
 
-        nt::set_parent(rightTailNode, headerB);
+        nt::set_parent(right_tail_node, header_b);
 
 
-        nt::set_parent(headerA, leftTailNode);
+        nt::set_parent(header_a, left_tail_node);
         //nt::set_left(headerA, nt::get_left(headerA));                    
-        nt::set_right(headerA, leftRight);
+        nt::set_right(header_a, left_rightmost);
 
-        nt::set_parent(leftTailNode, headerA);
+        nt::set_parent(left_tail_node, header_a);
 
-        init(splitNode);
+        init(k);
       }
 
 
 
-      static void join_trees(const node_ptr& headerA, const node_ptr& x, const node_ptr& headerB) {
-        auto rootA = nt::get_parent(headerA);
-        auto rootB = nt::get_parent(headerB);
-
-        if (!rootB) {
-          push_back(headerA, x);
-          return;
-        }
-
-        if (!rootA) {
-          bstree_algorithms<nt>::swap_tree(headerA, headerB);            
-          push_front(headerA, x);
-          return;
-        }
-
-        auto heightA = avltree_algorithms_ext<NodeTraits>::node_height(rootA);
-        auto heightB = avltree_algorithms_ext<NodeTraits>::node_height(rootB);            
-          
-        if (abs(heightB - heightA) <= 1) {                        
-          nt::set_parent(headerA, x);
-          nt::set_left(headerA, nt::get_left(headerA));
-          nt::set_right(headerA, nt::get_right(headerB));
-
-          nt::set_parent(x, headerA);
-
-          nt::set_left(x, rootA);
-          nt::set_right(x, rootB);
-
-          nt::set_parent(rootA, x);
-          nt::set_parent(rootB, x);
-   
-          if (heightA < heightB)
-            nt::set_balance(x, nt::positive());
-          else if (heightA > heightB)
-            nt::set_balance(x, nt::negative());
-          else
-            nt::set_balance(x, nt::zero());
-
-//          nt::set_size(x,
-//            nt::get_size(rootA) + nt::get_size(rootB) + 1);
-          nt::augment_propagate(x, rootA, rootB);
-
-          avltree_algorithms_ext<NodeTraits>::init_header(headerB);
-
-          return;            
-        }
-          
-
-
-
-        if (heightA > heightB) {
-//          auto sizeB = nt::get_size(rootB);
-                        
-          auto v = rootA;
-          auto hPrime = heightA;
-          while (hPrime > heightB + 1) {
-            if (nt::get_balance(v) == nt::negative())
-              hPrime -= 2;
-            else
-              --hPrime;
-
-//            nt::size_increment(v, sizeB + 1 /*x*/);
-
-            nt::augment_inserted_node(v, x);
-            nt::augment_inserted_subtree(v, rootB);
-
-            v = nt::get_right(v);
-          }
-
-          auto u = nt::get_parent(v);
-
-          nt::set_left(x, v);
-          nt::set_parent(v, x);
-
-          nt::set_right(x, rootB);        
-          nt::set_parent(rootB, x);
-
-          nt::set_balance(x, heightB == hPrime ? nt::zero() : nt::negative());
-    
-          nt::set_right(u, x);
-          nt::set_parent(x, u);    
-
-          nt::set_right(headerA, nt::get_right(headerB));
-
-//          nt::set_size(x, nt::get_size(v) + sizeB + 1);
-          nt::augment_propagate(x, v, rootB);
-    
-          avltree_algorithms_ext<NodeTraits>::init_header(headerB);
-        }
-        else {            
-//          auto sizeA = nt::get_size(rootA);
-
-          auto v = rootB;
-          auto hPrime = heightB;
-          while (hPrime > heightA + 1) {
-            if (nt::get_balance(v) == nt::positive())
-              hPrime -= 2;
-            else
-              --hPrime;
-
-//            nt::size_increment(v, sizeA + 1 /*x*/);
-
-            nt::augment_inserted_node(v, x);
-            nt::augment_inserted_subtree(v, rootA);
-
-            v = nt::get_left(v);
-          }
-
-          auto u = nt::get_parent(v);
-
-          nt::set_right(x, v);
-          nt::set_parent(v, x);
-
-          nt::set_left(x, rootA);        
-          nt::set_parent(rootA, x);
-
-          nt::set_balance(x, heightA == hPrime ? nt::zero() : nt::positive());
-    
-          nt::set_left(u, x);
-          nt::set_parent(x, u);    
-
-          nt::set_left(headerB, nt::get_left(headerA));
-    
-//          nt::set_size(x, sizeA + nt::get_size(v) + 1);
-          nt::augment_propagate(x, rootA, v);
-
-          avltree_algorithms_ext<NodeTraits>::init_header(headerA);
-          bstree_algorithms<nt>::swap_tree(headerA, headerB);
-        }
-
-        rebalance_after_insertion_no_balance_assignment(headerA, x);
-      }
+      
                      
       
 
@@ -638,7 +604,7 @@ namespace boost
 
       
 
-      static void rebalance_after_erasure(const node_ptr& header, node_ptr x, node_ptr x_parent) {
+      static void rebalance_after_erasure(node_ptr header, node_ptr x, node_ptr x_parent) {
         for (node_ptr root = NodeTraits::get_parent(header)
              ; x != root; root = NodeTraits::get_parent(header) , x_parent = NodeTraits::get_parent(x)) {
           const balance x_parent_balance = NodeTraits::get_balance(x_parent);
@@ -704,12 +670,12 @@ namespace boost
         }
       }
 
-      static bool rebalance_after_insertion(const node_ptr& header, node_ptr x) {
+      static bool rebalance_after_insertion(node_ptr header, node_ptr x) {
         NodeTraits::set_balance(x, NodeTraits::zero());
         return rebalance_after_insertion_no_balance_assignment(header, x);
       }
 
-      static bool rebalance_after_insertion_no_balance_assignment(const node_ptr& header, node_ptr x) {
+      static bool rebalance_after_insertion_no_balance_assignment(node_ptr header, node_ptr x) {
         // Rebalance.
         for (node_ptr root = NodeTraits::get_parent(header); x != root; root = NodeTraits::get_parent(header)) {
           node_ptr const x_parent(NodeTraits::get_parent(x));
@@ -732,7 +698,7 @@ namespace boost
               else
                 avl_rotate_left(x_parent, x, header);
             }
-            return false;
+            return true;
           }
           else if (x_parent_balance == NodeTraits::negative()) {
             // if x is a left child, needs rebalancing
@@ -744,13 +710,13 @@ namespace boost
             }
             else
               NodeTraits::set_balance(x_parent, NodeTraits::zero());
-            return false;
+            return true;
           }
           else {
             BOOST_INTRUSIVE_INVARIANT_ASSERT(false); // never reached
           }
         }
-        return true;
+        return false;
       }
 
       

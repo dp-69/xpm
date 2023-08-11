@@ -1,7 +1,7 @@
 #pragma once
 
-#include "HW/dynamic_connectivity/euler_tour_visitor.hpp"
-#include "HW/pore_network_modelling/row_idx_populate_visitor.h"
+#include "euler_tour_visitor.hpp"
+// #include "HW/pore_network_modelling/row_idx_populate_visitor.h" //TODO
 
 namespace HW { namespace dynamic_connectivity
 {      
@@ -36,7 +36,10 @@ namespace HW { namespace dynamic_connectivity
   class euler_tour_dynamic_connectivity_context : non_copyable_movable
   {
     const static auto stack_capacity = 256;
-    
+
+    using et_nt = et_traits;
+    using et_cyclic_op = cyclic_operations<et_algo>;
+    using etnte_nt = etnte_traits;
     
   public:    
   

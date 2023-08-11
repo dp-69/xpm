@@ -32,4 +32,26 @@ namespace HW::dynamic_connectivity
     positive_t,
     fourth_state_t
   };
+
+  template<class Node>
+  struct avl_traits 
+  {  
+    using node = Node;
+    using node_ptr = node*;
+    using const_node_ptr = const node*;
+
+    typedef avl_balance balance;
+
+    static node_ptr get_left(const_node_ptr n) { return n->left_; }
+    static node_ptr get_right(const_node_ptr n) { return n->right_; }
+    static node_ptr get_parent(const_node_ptr n) { return n->parent_; }
+
+    static void set_left(node_ptr n, node_ptr l) { n->left_ = l; }
+    static void set_right(node_ptr n, node_ptr r) { n->right_ = r; }
+    static void set_parent(node_ptr n, node_ptr p) { n->parent_ = p; }
+
+    static balance negative() { return avl_balance::negative_t; }
+    static balance zero() { return avl_balance::zero_t; }
+    static balance positive() { return avl_balance::positive_t; }
+  };
 }

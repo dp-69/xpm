@@ -36,10 +36,10 @@ namespace boost
       using const_node_ptr = typename nt::const_node_ptr;
       using balance = typename nt::balance;
       
-      static const_node_ptr get_header(const_node_ptr node) {
+      static node_ptr get_header(const_node_ptr node) {
         while (!is_header(node))
           node = nt::get_parent(node);
-        return node;
+        return const_cast<node_ptr>(node);
       }
 
       static void init(node_ptr node) {
@@ -106,7 +106,7 @@ namespace boost
       }    
 
        template<class UnaryLessThanNodeComparator>
-      static node_ptr upper_bound(const_node_ptr header, UnaryLessThanNodeComparator comp) {
+      static node_ptr upper_bound(node_ptr header, UnaryLessThanNodeComparator comp) {
         node_ptr x = nt::get_parent(header);
         node_ptr y = header;
 
@@ -122,9 +122,9 @@ namespace boost
       }
 
       template<class UnaryMoreThanNodeComparator>
-      static node_ptr lower_bound(const_node_ptr header, UnaryMoreThanNodeComparator comp) {
-        const_node_ptr x = nt::get_parent(header);
-        const_node_ptr y = header;
+      static node_ptr lower_bound(node_ptr header, UnaryMoreThanNodeComparator comp) {
+        node_ptr x = nt::get_parent(header);
+        node_ptr y = header;
 
         while (x)
           if (comp(x))   // x < Key 
@@ -141,18 +141,18 @@ namespace boost
         return base::subtree_size(p);
       }
 
-      static void join_trees(node_ptr header_a, node_ptr k, node_ptr header_b) {
+      static void join_trees(node_ptr header_a, node_ptr x, node_ptr header_b) {
         node_ptr root_a = nt::get_parent(header_a);
         node_ptr root_b = nt::get_parent(header_b);
 
         if (!root_b) {
-          base::push_back(header_a, k);
+          base::push_back(header_a, x);
           return;
         }
 
         if (!root_a) {
           base::swap_tree(header_a, header_b);            
-          base::push_front(header_a, k);
+          base::push_front(header_a, x);
           return;
         }
 
@@ -160,19 +160,19 @@ namespace boost
         auto height_b = node_height(root_b);            
           
         if (std::abs(height_b - height_a) <= 1) {                        
-          nt::set_parent(header_a, k);
+          nt::set_parent(header_a, x);
           nt::set_left(header_a, nt::get_left(header_a));
           nt::set_right(header_a, nt::get_right(header_b));
 
-          nt::set_parent(k, header_a);
+          nt::set_parent(x, header_a);
 
-          nt::set_left(k, root_a);
-          nt::set_right(k, root_b);
+          nt::set_left(x, root_a);
+          nt::set_right(x, root_b);
 
-          nt::set_parent(root_a, k);
-          nt::set_parent(root_b, k);
+          nt::set_parent(root_a, x);
+          nt::set_parent(root_b, x);
 
-          nt::set_balance(k,
+          nt::set_balance(x,
             height_a < height_b ? nt::positive() :
             height_a > height_b ? nt::negative() :
             nt::zero()
@@ -196,16 +196,16 @@ namespace boost
 
           node_ptr v_parent = nt::get_parent(v);
 
-          nt::set_left(k, v);
-          nt::set_parent(v, k);
+          nt::set_left(x, v);
+          nt::set_parent(v, x);
 
-          nt::set_right(k, root_b);        
-          nt::set_parent(root_b, k);
+          nt::set_right(x, root_b);        
+          nt::set_parent(root_b, x);
 
-          nt::set_right(v_parent, k);
-          nt::set_parent(k, v_parent);
+          nt::set_right(v_parent, x);
+          nt::set_parent(x, v_parent);
 
-          nt::set_balance(k, height_b == h ? nt::zero() : nt::negative());
+          nt::set_balance(x, height_b == h ? nt::zero() : nt::negative());
 
           nt::set_right(header_a, nt::get_right(header_b));
     
@@ -225,16 +225,16 @@ namespace boost
 
           node_ptr v_parent = nt::get_parent(v);
 
-          nt::set_right(k, v);
-          nt::set_parent(v, k);
+          nt::set_right(x, v);
+          nt::set_parent(v, x);
 
-          nt::set_left(k, root_a);        
-          nt::set_parent(root_a, k);
+          nt::set_left(x, root_a);        
+          nt::set_parent(root_a, x);
     
-          nt::set_left(v_parent, k);
-          nt::set_parent(k, v_parent);
+          nt::set_left(v_parent, x);
+          nt::set_parent(x, v_parent);
 
-          nt::set_balance(k, height_a == h ? nt::zero() : nt::positive());
+          nt::set_balance(x, height_a == h ? nt::zero() : nt::positive());
 
           nt::set_left(header_b, nt::get_left(header_a));
     
@@ -242,7 +242,7 @@ namespace boost
           base::swap_tree(header_a, header_b);
         }
 
-        base::rebalance_after_insertion_no_balance_assignment(header_a, k);
+        base::rebalance_after_insertion_no_balance_assignment(header_a, x);
       }
 
 
@@ -266,19 +266,19 @@ namespace boost
         node_ptr right_tail_node = nt::get_right(k);
         auto right_tail_height = k_height - (nt::get_balance(k) == nt::negative() ? 2 : 1);
 
-        node_ptr left_right = nullptr;
-        node_ptr right_left = nullptr;
+        node_ptr left_rightmost = nullptr;
+        node_ptr right_leftmost = nullptr;
 
         if (left_tail_node) {
-          left_right = left_tail_node;
-          while (nt::get_right(left_right))
-            left_right = nt::get_right(left_right);
+          left_rightmost = left_tail_node;
+          while (nt::get_right(left_rightmost))
+            left_rightmost = nt::get_right(left_rightmost);
         }
 
         if (right_tail_node) {
-          right_left = right_tail_node;
-          while (nt::get_left(right_left))
-            right_left = nt::get_left(right_left);
+          right_leftmost = right_tail_node;
+          while (nt::get_left(right_leftmost))
+            right_leftmost = nt::get_left(right_leftmost);
         }
 
 
@@ -290,8 +290,8 @@ namespace boost
 
         while (parent != header_a) {
           if (nt::get_left(parent) == node) {
-            if (!right_left)
-              right_left = parent;
+            if (!right_leftmost)
+              right_leftmost = parent;
 
             auto l_height = right_tail_height;
             auto r_height =
@@ -380,8 +380,8 @@ namespace boost
             }
           }
           else {
-            if (!left_right)
-              left_right = parent;
+            if (!left_rightmost)
+              left_rightmost = parent;
 
             auto l_height =
               nt::get_balance(parent) == nt::negative()
@@ -393,7 +393,6 @@ namespace boost
             auto r_height = left_tail_height;
 
             node_ptr x = parent;
-
             node_ptr l_node = nt::get_left(x);
             node_ptr r_node = left_tail_node;
 
@@ -478,7 +477,7 @@ namespace boost
         }
 
         nt::set_parent(header_b, right_tail_node);
-        nt::set_left(header_b, right_left);
+        nt::set_left(header_b, right_leftmost);
         nt::set_right(header_b, nt::get_right(header_a));
 
         nt::set_parent(right_tail_node, header_b);
@@ -486,7 +485,7 @@ namespace boost
 
         nt::set_parent(header_a, left_tail_node);
         /* nt::set_left(headerA, nt::get_left(headerA)); */                    
-        nt::set_right(header_a, left_right);
+        nt::set_right(header_a, left_rightmost);
 
         nt::set_parent(left_tail_node, header_a);
 

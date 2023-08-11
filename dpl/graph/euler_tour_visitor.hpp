@@ -1,7 +1,8 @@
 ﻿#pragma once
 
 
-#include "HW/dynamic_connectivity/euler_tour_non_tree_edge.hpp"
+#include "etnte_node.hpp"
+#include "smart_pool.hpp"
 #include <stack>
 
 //#include "HW/pore_network_modelling/pnm_static.hpp"
@@ -58,9 +59,9 @@ namespace HW { namespace dynamic_connectivity
     et_node_ptr acquire_zero_level_et_entry() {
 //      auto entry = _etPtr++;
       auto entry = _etPool.acquire();
-//      et_nt::set_next_level_entry(entry, nullptr);                
+//      et_traits::set_next_level_entry(entry, nullptr);                
       
-//      et_nt::augment_identity(entry);
+//      et_traits::augment_identity(entry);
       return entry;
     }    
     
@@ -90,8 +91,8 @@ namespace HW { namespace dynamic_connectivity
       directed_edge::set_non_tree_edge_entry(de, entry); 
       directed_edge::set_non_tree_edge_entry(deOpp, entryOpp);
       
-      etnte_nt::set_directed_edge(entry, de);
-      etnte_nt::set_directed_edge(entryOpp, deOpp);
+      etnte_traits::set_directed_edge(entry, de);
+      etnte_traits::set_directed_edge(entryOpp, deOpp);
             
       etnte_op::insert(_etnteHeader, entry);
       etnte_op::insert(_etnteHeader, entryOpp);                    
@@ -103,7 +104,7 @@ namespace HW { namespace dynamic_connectivity
         
       _etnteHeader = _etntePool.acquire();
       etnte_algo::init_header(_etnteHeader);      
-      et_nt::set_non_tree_edge_header(_etHeader, _etnteHeader);             
+      et_traits::set_non_tree_edge_header(_etHeader, _etnteHeader);             
 
       _components.push_back(_etHeader);
     }    
@@ -111,7 +112,7 @@ namespace HW { namespace dynamic_connectivity
     void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
       auto entry = acquire_zero_level_et_entry();        
       
-      et_nt::set_vertex(entry, v);
+      et_traits::set_vertex(entry, v);
       v->et_entry_ = entry;
 //      vertex_color_property_map::set_et_entry(v, entry);
 
@@ -122,7 +123,7 @@ namespace HW { namespace dynamic_connectivity
     void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
       auto entry = acquire_zero_level_et_entry();
 
-      et_nt::set_directed_edge(entry, e);
+      et_traits::set_directed_edge(entry, e);
       directed_edge::set_tree_edge_entry(e, entry);
 
       et_algo::push_back(_etHeader, entry);      
@@ -136,8 +137,8 @@ namespace HW { namespace dynamic_connectivity
         
         auto top = *_treeEdgeStackTop--;
 
-        auto top_de_opposite = et_nt::get_directed_edge(top)->opposite;
-        et_nt::set_directed_edge(entry, top_de_opposite);        
+        auto top_de_opposite = et_traits::get_directed_edge(top)->opposite;
+        et_traits::set_directed_edge(entry, top_de_opposite);        
         directed_edge::set_tree_edge_entry(top_de_opposite, entry);
 
 //        et_algo_not_augmented::push_back(_etHeader, entry);        
@@ -150,8 +151,8 @@ namespace HW { namespace dynamic_connectivity
   
   template<class DFSVisitor>
   static void execute_dfs(const dynamic_connectivity_graph& g, vertex_ptr rootVertex, DFSVisitor visitor) {
-    b::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
-    b::tie(vi_start, vi_end) = vertices(g);
+    boost::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
+    boost::tie(vi_start, vi_end) = vertices(g);
             
     for (vi = vi_start; vi != vi_end; ++vi)
       vertex_color_property_map::compress_and_init(*vi);
@@ -191,8 +192,8 @@ namespace HW { namespace dynamic_connectivity
 //      return false;
     
 
-    b::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
-    b::tie(vi_start, vi_end) = vertices(g);
+    boost::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
+    boost::tie(vi_start, vi_end) = vertices(g);
             
     for (vi = vi_start; vi != vi_end; ++vi)
       vi->visited = false;
