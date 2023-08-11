@@ -11,46 +11,36 @@
 
 namespace HW::dynamic_connectivity
 {
-  struct et_node;
+  // struct et_node;
+  // struct etnte_node;
 }
 
-namespace HW { namespace dynamic_connectivity
-{    
-  template<class Node>
-  struct default_list_node_traits
-  {
-    typedef Node node;
-    typedef Node* node_ptr;
-    typedef const Node* const_node_ptr;
-    static node_ptr get_next(const_node_ptr n) { return n->next_; }
-    static void set_next(node_ptr n, node_ptr next) { n->next_ = next; }
-    static node* get_previous(const_node_ptr n) { return n->prev_; }
-    static void set_previous(node_ptr n, node_ptr prev) { n->prev_ = prev; }
-  };
-
-  namespace b = boost;
-  namespace bi = b::intrusive;
-
-
-
+namespace HW::dynamic_connectivity
+{
   struct dynamic_connectivity_graph;
 
-
-
   struct vertex;
-  using vertex_ptr = vertex*;    
-
-
-
   struct directed_edge;
+}
+
+
+namespace HW { namespace dynamic_connectivity
+{
+  // using et_node_ptr = HW::dynamic_connectivity::et_node*;
+  // using etnte_node_ptr = etnte_node*;
+
+  using vertex_ptr = vertex*;
   using directed_edge_ptr = directed_edge*;
 
 
-  using euler_tour_node_ptr = HW::dynamic_connectivity::et_node*;
 
 
-  struct euler_tour_non_tree_edge_node;
-  using euler_tour_non_tree_edge_node_ptr = euler_tour_non_tree_edge_node*;
+
+
+
+
+  
+  
 
   
   typedef default_list_node_traits<directed_edge> directed_edge_node_traits;
@@ -76,8 +66,6 @@ namespace HW { namespace dynamic_connectivity
 
 //    typedef pointer_plus_aligned_least_significant_bits<void*, bool, 1> compression;
     typedef tagged_pointer_as_size_t<bool, 1> compression;
-    typedef euler_tour_node_ptr et_node_ptr;
-    typedef euler_tour_non_tree_edge_node_ptr etnte_node_ptr;
 
     size_t entry_type_; 
 
@@ -125,10 +113,10 @@ namespace HW { namespace dynamic_connectivity
   };
 
     
-  typedef bi::list<
+  typedef boost::intrusive::list<
     directed_edge,
-    bi::value_traits<bi::trivial_value_traits<directed_edge_node_traits, bi::normal_link>>,
-    bi::constant_time_size<false>> out_edge_list;
+    boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<directed_edge_node_traits, boost::intrusive::normal_link>>,
+    boost::intrusive::constant_time_size<false>> out_edge_list;
   
 
 
@@ -166,17 +154,17 @@ namespace HW { namespace dynamic_connectivity
 //    static const size_t invalid_rel_idx = ~size_t(0) >> 2;
 
         
-    euler_tour_node_ptr et_entry_;
+    et_node_ptr et_entry_;
     bool visited = false;
 //    bool trapped = false;
   };
 
   typedef default_list_node_traits<vertex> vertex_node_traits;
  
-  typedef bi::list<
+  typedef boost::intrusive::list<
     vertex,
-    bi::value_traits<bi::trivial_value_traits<vertex_node_traits, bi::normal_link>>,
-    bi::constant_time_size<true>> vertex_list;
+    boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<vertex_node_traits, boost::intrusive::normal_link>>,
+    boost::intrusive::constant_time_size<true>> vertex_list;
 
   typedef inorder_iter<vertex_node_traits> vertex_iterator;
 
@@ -291,8 +279,8 @@ namespace HW { namespace dynamic_connectivity
 
   struct vertex_color_property_map
   {       
-    typedef b::read_write_property_map_tag category;
-    typedef b::two_bit_color_type value_type; 
+    typedef boost::read_write_property_map_tag category;
+    typedef boost::two_bit_color_type value_type; 
     typedef value_type& reference;
     typedef vertex_ptr key_type;
     
@@ -306,7 +294,7 @@ namespace HW { namespace dynamic_connectivity
   public:                
     static void compress_and_init(const vertex_ptr v) {      
       set_value(v, field(v));
-      set_color(v, b::color_traits<value_type>::white());
+      set_color(v, boost::color_traits<value_type>::white());
     }
 
     static void decompress_and_finish(const vertex_ptr v) {

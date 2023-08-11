@@ -5,7 +5,9 @@
 
 int main(int argc, char* argv[])
 {
-  xpm::test::split_join_validity_check();
+  xpm::test::split_join_validity_check_ET_ONLY();
+
+  xpm::test::split_join_validity_check_ETNTE_ONLY();
 
 
   getchar();

@@ -10,6 +10,18 @@
 namespace HW
 {
 
+  template<class Node>
+  struct default_list_node_traits
+  {
+    typedef Node node;
+    typedef Node* node_ptr;
+    typedef const Node* const_node_ptr;
+    static node_ptr get_next(const_node_ptr n) { return n->next_; }
+    static void set_next(node_ptr n, node_ptr next) { n->next_ = next; }
+    static node* get_previous(const_node_ptr n) { return n->prev_; }
+    static void set_previous(node_ptr n, node_ptr prev) { n->prev_ = prev; }
+  };
+
 
 
 //  template<class Real>
@@ -240,6 +252,8 @@ namespace HW
 
 
 
+
+  
 
   
 

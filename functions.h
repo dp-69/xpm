@@ -3,7 +3,7 @@
 #include "pore_network_image.hpp"
 
 #include <dpl/graph/et_node.hpp>
-#include <dpl/graph/euler_tour_non_tree_edge.hpp>
+#include <dpl/graph/etnte_node.hpp>
 #include <dpl/graph/avltree_algorithms_ext.hpp>
 #include <dpl/graph/cyclic_operations.hpp>
 #include <dpl/graph/dynamic_connectivity_graph.hpp>
@@ -196,18 +196,164 @@ namespace xpm
 
   namespace test
   {
-    inline void split_join_validity_check() {
+    inline void split_join_validity_check_ET_ONLY() {
       using namespace std;
       using namespace boost;
       using namespace chrono;
 
 
-      using et_node = HW::dynamic_connectivity::et_node;
-      using et_traits = HW::dynamic_connectivity::et_traits;
-      using et_algo = intrusive::avltree_algorithms_ext<et_traits>;
-      using et_cyclic_op = HW::dynamic_connectivity::cyclic_operations<et_algo>;
+      using node = HW::dynamic_connectivity::et_node;
+      using traits = HW::dynamic_connectivity::et_traits;
+      using algo = HW::dynamic_connectivity::et_algo;
+      using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
 
       using vertex = HW::dynamic_connectivity::vertex;
+      
+      random_device rand_seed;
+      auto random_engine = default_random_engine(rand_seed());
+      uniform_real_distribution<> unit_dist(0, 1);
+
+      system_clock::time_point t0, t1;
+
+      std::string text = "l lk km m mn n nj j jn nm mk ki ih hg g ge ec c cO O Oc ce ef f fe ed da a ad db b bt t tb bd d de e eg gh h hi i ik k kl";
+
+      std::regex word_regex("(\\w+)");
+      auto words_begin = std::sregex_iterator(text.begin(), text.end(), word_regex);
+      auto words_end = std::sregex_iterator();
+
+      int total_size = std::distance(words_begin, words_end); // NOLINT(cppcoreguidelines-narrowing-conversions)
+
+      vector<node> input(total_size);
+
+      
+      
+
+      constexpr auto display_output = false;
+      constexpr auto check_validity_naive = true;
+
+      node header_a_storage;
+      auto* header_a = &header_a_storage;
+      algo::init_header(header_a);
+
+
+      t0 = system_clock::now();
+      vector<vertex> vertices(total_size);
+
+      for (int i = 0; i < total_size; i++) {
+        traits::set_vertex(&input[i], &vertices[i]);
+        algo::push_back(header_a, &input[i]);
+      }
+
+      t1 = system_clock::now();
+      cout << boost::format("AVL creation: %i ms\n\n") % duration_cast<milliseconds>(t1 - t0).count();
+      cout << "*** verification: " << algo::verify(header_a) << "***\n";
+
+
+      cyclic_op::principal_cut(header_a, &input[0]); // tip: does effectively nothing
+
+
+      node headerNodeB;
+      auto header_b = &headerNodeB;
+      algo::init_header(header_b);
+
+
+      size_t iter = 0;
+
+      auto aIdx = total_size / 2;
+      auto bIdx = total_size / 4;
+      int cIdx;
+
+
+      cout << "Binary comparison\n";
+
+      t0 = system_clock::now();
+
+      iter = 0;
+
+      while (iter++ < 50000) {
+        bIdx = static_cast<int>(round(unit_dist(random_engine) * (total_size - 1)));
+
+
+        if (aIdx != bIdx && aIdx < bIdx != algo::less_than(&input[aIdx], &input[bIdx]))
+          cout << "\nINVALID COMPARISON\n";
+
+        aIdx = bIdx;
+
+        if (iter % 10000 == 0) {
+          t1 = system_clock::now();
+          cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl;
+          t0 = t1;
+        }
+      }
+
+
+      cout << "Split & Join\n";
+
+      t0 = system_clock::now();
+
+      iter = 0;
+
+
+      while (iter++ < 50000)
+      {
+        if (total_size == 0)
+          break;
+
+
+        auto splitIdx = static_cast<int>(round(unit_dist(random_engine) * (total_size - 1)));
+
+
+        if (iter % 10000 == 0) {
+          t1 = system_clock::now();
+          cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl;
+          t0 = t1;
+        }
+
+        auto splitValue = &input[splitIdx];
+
+        auto sizeA = splitIdx;
+        auto sizeB = total_size - sizeA - 1;
+
+
+
+        algo::split_tree(header_a, splitValue, header_b);
+
+
+
+        if (check_validity_naive) {
+          if (!algo::verify(header_a))
+            cout << "{A} INVALID\n";
+
+          if (!algo::verify(header_b))
+            cout << "{B} INVALID\n";
+        }
+
+        algo::join_trees(header_a, splitValue, header_b);
+
+
+
+        if (check_validity_naive)
+          if (!algo::verify(header_a))
+            cout << "{A<>B} INVALID\n";
+      }
+
+
+      cout << "*** final verification: " << algo::verify(header_a) << "***\n";
+    }
+
+    inline void split_join_validity_check_ETNTE_ONLY() {
+      using namespace std;
+      using namespace boost;
+      using namespace chrono;
+
+
+      using node = HW::dynamic_connectivity::etnte_node;
+      using traits = HW::dynamic_connectivity::etnte_traits;
+      using algo = intrusive::avl_extended_augmented_tree_algorithms<traits>;
+      using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
+
+      // using vertex = HW::dynamic_connectivity::vertex;
+      using directed_edge = HW::dynamic_connectivity::directed_edge;
       
        //dpl::graph::et_cyclic_op;
 
@@ -233,7 +379,7 @@ namespace xpm
 
       int total_size = std::distance(words_begin, words_end); // NOLINT(cppcoreguidelines-narrowing-conversions)
 
-      vector<et_node> input(total_size);
+      vector<node> input(total_size);
 
 
       constexpr auto display_output = false;
@@ -241,17 +387,17 @@ namespace xpm
 
       // euler_tour_tree treeA;
       // auto headerA = treeA.header_ptr();
-      et_node header_a_storage;
+      node header_a_storage;
       auto* header_a = &header_a_storage;
-      et_algo::init_header(header_a);
+      algo::init_header(header_a);
 
 
       t0 = system_clock::now();
-      vector<vertex> vertices(total_size);
+      vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        et_traits::set_vertex(&input[i], &vertices[i]);
-        et_algo::push_back(header_a, &input[i]);
+        traits::set_directed_edge(&input[i], &edges[i]);
+        algo::push_back(header_a, &input[i]);
       }
 
       t1 = system_clock::now();
@@ -260,7 +406,7 @@ namespace xpm
       // euler_tour_algorithms::refresh_size(headerA);
       // t1 = system_clock::now();
       // cout << boost::format("iterative: %i ms\n") % duration_cast<milliseconds>(t1 - t0).count();  
-      cout << "*** verification: " << et_algo::verify(header_a) << "***\n";
+      cout << "*** verification: " << algo::verify(header_a) << "***\n";
 
 
       //     { 
@@ -409,7 +555,7 @@ namespace xpm
       //  auto found6 = eti_query::find_before_insert_interval(etiTree.header_ptr(), treeA.header_ptr(), &input[totalSize - 1]);
 
 
-      et_cyclic_op::principal_cut(header_a, &input[0]); // tip: does effectively nothing
+      cyclic_op::principal_cut(header_a, &input[0]); // tip: does effectively nothing
 
 
       //  t0 = system_clock::now();
@@ -434,9 +580,9 @@ namespace xpm
 
       //  euler_tour_tree treeB;    
       //  auto headerB = treeB.header_ptr();
-      et_node headerNodeB;
-      auto headerB = &headerNodeB;
-      et_algo::init_header(headerB);
+      node headerNodeB;
+      auto header_b = &headerNodeB;
+      algo::init_header(header_b);
 
 
       size_t iter = 0;
@@ -493,7 +639,7 @@ namespace xpm
         bIdx = static_cast<int>(round(unit_dist(random_engine) * (total_size - 1)));
 
 
-        if (aIdx != bIdx && aIdx < bIdx != et_algo::less_than(&input[aIdx], &input[bIdx]))
+        if (aIdx != bIdx && aIdx < bIdx != algo::less_than(&input[aIdx], &input[bIdx]))
           cout << "\nINVALID COMPARISON\n";
 
         aIdx = bIdx;
@@ -580,7 +726,7 @@ namespace xpm
         //     cout << "{B} INVALID\n";
 
 
-        et_algo::split_tree(header_a, splitValue, headerB);
+        algo::split_tree(header_a, splitValue, header_b);
 
 
         //  //    auto rootASize = node_traits::get_size(treeA.root().pointed_node());
@@ -597,10 +743,15 @@ namespace xpm
 
 
         if (check_validity_naive) {
-          if (!et_algo::verify(header_a))
+          if (auto* root = traits::get_parent(header_a); !(
+            algo::verify(header_a) &&
+            algo::calculate_subtree_size(root) == traits::get_size(root)))
+
             cout << "{A} INVALID\n";
 
-          if (!et_algo::verify(headerB))
+          if (auto* root = traits::get_parent(header_b); !(
+            algo::verify(header_b) &&
+            algo::calculate_subtree_size(root) == traits::get_size(root)))
             cout << "{B} INVALID\n";
 
           //      auto calcSizeA = treeA.size();            
@@ -660,14 +811,14 @@ namespace xpm
         //   //        cout << "{B} INVALID SIZE\n";
         // }
 
-        et_algo::join_trees(header_a, splitValue, headerB);
+        algo::join_trees(header_a, splitValue, header_b);
 
         //      if (totalSize != euler_tour_node_traits::get_size(euler_tour_node_traits::get_parent(headerA)))
         //        cout << "{A<>B} INVALID SIZE\n";       
 
 
         if (check_validity_naive)
-          if (!et_algo::verify(header_a))
+          if (!algo::verify(header_a))
             cout << "{A<>B} INVALID\n";
 
         // if (display_output) {
@@ -695,7 +846,7 @@ namespace xpm
       }
 
 
-      cout << "*** final verification: " << et_algo::verify(header_a) << "***\n";
+      cout << "*** final verification: " << algo::verify(header_a) << "***\n";
     }
   }
 }

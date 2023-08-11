@@ -7,45 +7,44 @@
 
 
 namespace HW::dynamic_connectivity {
-  struct euler_tour_non_tree_edge_node;
   struct directed_edge;
+  using directed_edge_ptr = directed_edge*;
   struct vertex;
 }
 
 namespace HW { namespace dynamic_connectivity
 { 
-  struct euler_tour_non_tree_edge_node : non_copyable_movable
+  struct etnte_node : non_copyable_movable
   {    
     private:
-      typedef euler_tour_non_tree_edge_node* node_ptr;        
+      friend struct etnte_traits;      
+      friend struct default_avl_lrpb_node_traits<etnte_node>;
 
-//      friend struct smart_pool_traits<euler_tour_non_tree_edge_node>;     
-      friend struct euler_tour_non_tree_edge_node_traits;      
-      friend struct default_avl_lrpb_node_traits<euler_tour_non_tree_edge_node>;
+      /**
+       *  has to be the first field for the smart_pool
+       *
+       *  size_t has to be 8 bytes = 64 bits on a x64 system
+       *
+       *  [61 bits, element pointer]
+       *  [1 bit, EMPTY]
+       *  [2 bits for avl balance]
+       */
+      std::size_t de_and_balance_;
 
-      // has to be the first field for the smart_pool
-      // size_t has to be 8 bytes = 64 bits, x64 system
-      // [61 bits, element pointer] + [1 bit, EMPTY] + [2 bits for avl balance] 
-      size_t de_and_balance_;
-
-      node_ptr parent_, left_, right_;                            
-      size_t size_;                                                                   
+      etnte_node* parent_;
+      etnte_node* left_;
+      etnte_node* right_;                            
+      std::size_t size_;                                                                   
   };
 
-  typedef euler_tour_non_tree_edge_node* euler_tour_non_tree_edge_node_ptr;
+  // typedef euler_tour_non_tree_edge_node* euler_tour_non_tree_edge_node_ptr;
   
   
-  struct euler_tour_non_tree_edge_node_traits : default_avl_lrpb_node_traits<euler_tour_non_tree_edge_node>
+  struct etnte_traits : default_avl_lrpb_node_traits<etnte_node>
   {
-  private:
-    using directed_edge_ptr = HW::dynamic_connectivity::directed_edge*;
-    using et_node_ptr = HW::dynamic_connectivity::et_node*;
-
-  public:
-
-    typedef euler_tour_non_tree_edge_node node;
-    typedef euler_tour_non_tree_edge_node* node_ptr;
-    typedef const euler_tour_non_tree_edge_node* const_node_ptr;            
+    using node = etnte_node;
+    using node_ptr = etnte_node*;
+    using const_node_ptr = const etnte_node*;            
     
     typedef tagged_pointer_as_size_t<balance, 2> compression;
 
@@ -79,8 +78,6 @@ namespace HW { namespace dynamic_connectivity
     static et_node_ptr get_vertex_entry(const directed_edge_ptr& de) {
       // sorted by a pointing-in vertex, the pointing-out works as well        
 //      return de->opposite_->v1_->et_entry_;   
-
-      
       return nullptr; // TODO:         return de->v1->et_entry_;
     }
     
@@ -89,22 +86,20 @@ namespace HW { namespace dynamic_connectivity
     }
 
 
-    
+    using subsize = size_t;
 
-    typedef size_t subsize;
-
-    static subsize get_size(const const_node_ptr& n) {
+    static subsize get_size(const_node_ptr n) {
       return n ? n->size_ : 0;
     }
 
-    static void set_size(const node_ptr& n, subsize s) {
+    static void set_size(node_ptr n, subsize s) {
       n->size_ = s;
     }
     
 
-    static void augment_init(const node_ptr& n) {
-      set_size(n, 0);
-    }
+    // static void augment_init(const node_ptr& n) {
+    //   set_size(n, 0);
+    // }
 
     static void augment_identity(const node_ptr& n) {
       set_size(n, 1);
@@ -122,9 +117,9 @@ namespace HW { namespace dynamic_connectivity
       set_size(n, get_size(c) + 1);
     }
 
-    static void augment_remove_node_propagate(const node_ptr& n) {
-      set_size(n, get_size(n) - 1);
-    }
+    // static void augment_remove_node_propagate(const node_ptr& n) {
+    //   set_size(n, get_size(n) - 1);
+    // }
 
     static void augment_inserted_node(const node_ptr& n, const node_ptr& in) {
       set_size(n, get_size(n) + 1);
@@ -136,70 +131,22 @@ namespace HW { namespace dynamic_connectivity
   };
 
 
+  using etnte_node_ptr = etnte_traits::node_ptr;
+  using etnte_algo = boost::intrusive::avl_extended_augmented_tree_algorithms<etnte_traits>;
 
 
 
-    
   
-  typedef boost::intrusive::avl_extended_augmented_tree_algorithms<euler_tour_non_tree_edge_node_traits> euler_tour_non_tree_edge_algorithm;
-
-
-  using et_node_ptr = HW::dynamic_connectivity::et_node*;
-  using et_nt = HW::dynamic_connectivity::et_traits;
-  using et_algo = boost::intrusive::avltree_algorithms_ext<et_nt>;
-
-  using etnte_node = euler_tour_non_tree_edge_node;
-  using etnte_node_ptr = euler_tour_non_tree_edge_node*;
-
-  using etnte_nt = euler_tour_non_tree_edge_node_traits;
-  using etnte_algo = euler_tour_non_tree_edge_algorithm;
-
-
-  inline pair<size_t, size_t> num_vertices_and_edges(const et_node_ptr header) {    
+  inline pair<size_t, size_t> num_vertices_and_edges(et_traits::const_node_ptr header) {    
     auto etSize = et_algo::size(header); //et_nt::get_size(et_nt::get_parent(header));    
     auto vertexCount = (2 + etSize)/3;    
-    return make_pair(vertexCount, vertexCount - 1 + etnte_nt::get_size(etnte_nt::get_parent(et_nt::get_non_tree_edge_header(header)))/2);      
+    return make_pair(vertexCount, vertexCount - 1 + etnte_traits::get_size(
+      etnte_traits::get_parent(et_traits::get_non_tree_edge_header(header)))/2);      
   }
   
 
 
-//  // An ET has to be cut at least element.
-//  template <class NodeTraits>
-//  struct euler_tour_non_tree_edge_comparator_binary
-//  {
-//    et_node_ptr key;    
-//    et_node_ptr* keyIter;
-//
-//    
-//    typedef et_algo::default_path default_path;
-//
-//    explicit euler_tour_non_tree_edge_comparator_binary(const et_node_ptr& key)
-//      : key(key), keyIter(et_algo::get_path(key, default_path::path0)) { }
-//
-//    bool less_than_node(const etnte_node_ptr& node) const {
-//      auto loopEdge = NodeTraits::get_vertex_entry(node);
-//
-//      if (key == loopEdge)
-//        return false;
-//
-//      return et_algo::less_than(
-//        keyIter,
-//        et_algo::get_path(loopEdge, default_path::path1),
-//        default_path::path0);
-//    }
-//
-//    bool operator()(const etnte_node_ptr& node) const {
-//      return less_than_node(node);
-//    }
-//
-//    bool operator()(const et_node_ptr& /*comparing key*/, const etnte_node_ptr& node) const {
-//      return less_than_node(node);
-//    }
-//
-//    bool operator()(const etnte_node_ptr& /*comparing node*/, const etnte_node_ptr& node) const {
-//      return less_than_node(node);    
-//    }
-//  };    
+
 
 
 
@@ -208,14 +155,14 @@ namespace HW { namespace dynamic_connectivity
   struct euler_tour_pseudo_cut_less_than_comparator // key < x
   {
     et_node_ptr x0_;
-    et_nt::const_node_ptr* x0_it_;
+    et_traits::const_node_ptr* x0_it_;
 
     et_node_ptr x1_;    
-    et_nt::const_node_ptr* x1_it_;
+    et_traits::const_node_ptr* x1_it_;
 
     bool x1Side_;
 
-    using default_path = boost::intrusive::default_path_buffer<et_nt>;
+    using default_path = boost::intrusive::default_path_buffer<et_traits>;
 
     // x0_least - the least entry, representing a pseudo principal cut
     // x1_key - is a entry of interest
@@ -265,14 +212,14 @@ namespace HW { namespace dynamic_connectivity
   struct euler_tour_pseudo_cut_more_than_comparator // x < key
   {
     et_node_ptr x0_;    
-    et_nt::const_node_ptr* x0_it_;
+    et_traits::const_node_ptr* x0_it_;
 
     et_node_ptr x2_;    
-    et_nt::const_node_ptr* x2_it_;
+    et_traits::const_node_ptr* x2_it_;
 
     bool x2Side_;
 
-    using default_path = boost::intrusive::default_path_buffer<et_nt>;
+    using default_path = boost::intrusive::default_path_buffer<et_traits>;
 
     // x0_least - the least entry, representing a pseudo principal cut
     // x1/node - running entry
@@ -350,7 +297,7 @@ namespace HW { namespace dynamic_connectivity
 
 
     static void split(const node_ptr& headerA, const node_ptr& headerB, et_node_ptr et_ab, et_node_ptr et_ba) {                
-      if (!etnte_nt::get_parent(headerA))
+      if (!etnte_traits::get_parent(headerA))
         return;
 
       auto etnteLeast = node_traits::get_left(headerA);            
@@ -396,54 +343,6 @@ namespace HW { namespace dynamic_connectivity
     }
 
     
-//    static void join(const etnte_node_ptr& headerA, const etnte_node_ptr& headerB, const et_node_ptr& etA, const et_node_ptr& etB) {                    
-//      if (node_traits::get_parent(headerA)) {         
-//        auto leastA = lower_bound(headerA, etA);
-//
-//        if (leastA != headerA)
-//          cyclic_op::principal_cut(headerA, leastA);
-//      }      
-//
-//      if (node_traits::get_parent(headerB)) {
-//        auto leastB = lower_bound(headerB, etB);
-//          
-//        if (leastB != headerB)
-//          cyclic_op::principal_cut_least_dropped(headerB, leastB);
-//        else {          
-//          leastB = node_traits::get_left(headerB);
-//          algo::erase(headerB, leastB);
-//        }
-//          
-//        algo::join_trees(headerA, leastB, headerB);
-//      }      
-//    }
-
-//    static void push_to_the_next_level(
-//      const node_ptr& etnteHeaderNext, const et_node_ptr& etInsertBeforeNext,
-//      const node_ptr& etnteSubHeader, const et_node_ptr& n) {                  
-//      auto etnteInsertBeforeNext = lower_bound(etnteHeaderNext, etInsertBeforeNext);           
-//            
-//      auto subLeast = lower_bound(etnteSubHeader, n);
-//
-//      if (subLeast != etnteSubHeader)
-//        cyclic_op::principal_cut_least_dropped(etnteSubHeader, subLeast);
-//      else {
-//        subLeast = node_traits::get_left(etnteSubHeader);
-//        algo::erase(etnteSubHeader, subLeast);
-//      }      
-//          
-//      if (etnteInsertBeforeNext == etnteHeaderNext)
-//        algo::join_trees(etnteHeaderNext, subLeast, etnteSubHeader);
-//      else {      
-//        node etnteTempHeaderNode;
-//        const auto etnteTempHeader = &etnteTempHeaderNode; 
-//        algo::init_header(etnteTempHeader); 
-//
-//        algo::split_tree(etnteHeaderNext, etnteInsertBeforeNext, etnteTempHeader);
-//        algo::join_trees(etnteHeaderNext, subLeast, etnteSubHeader);
-//        algo::join_trees(etnteHeaderNext, etnteInsertBeforeNext, etnteTempHeader);
-//      }
-//    }
   };
 
   
@@ -453,27 +352,4 @@ namespace HW { namespace dynamic_connectivity
   
   typedef euler_tour_non_tree_edge_operations<etnte_algo> etnte_op;
   typedef cyclic_operations<etnte_algo> etnte_cyclic_op;
-//  typedef euler_tour_non_tree_edge_operations<etnte_beta_algo> etnte_beta_op;
-
-
-
-
-
-
-
-//  template<>
-//  struct smart_pool_traits<etnte_node>
-//  {
-//    static etnte_node_ptr get_next(etnte_node_ptr x) {            
-//      return reinterpret_cast<etnte_node_ptr>(x->de_and_balance_);      
-//    }
-//
-//    static void set_next(etnte_node_ptr x, etnte_node_ptr y) {
-//      x->de_and_balance_ = reinterpret_cast<directed_edge_ptr>(y);
-//    }
-//  };
-
-
-
-
 }}
