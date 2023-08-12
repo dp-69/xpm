@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include "xpm/functions.h"
+#include "functions.h"
 
 #include <dpl/units.hpp>
 #include <dpl/hypre/mpi_module.hpp>
@@ -119,8 +119,8 @@ namespace xpm
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
 
-    bool use_cache = true;
-    bool save_cache = true;
+    bool use_cache = false;
+    bool save_cache = false;
 
     
 
@@ -256,7 +256,7 @@ namespace xpm
         std::cout << "=========== pnextract's network extraction begin ===========\n";
 
         /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
-          fmt::format("pnextract.exe \"{}\"", filename).c_str());
+          fmt::format("{} {}", fs::current_path()/"pnextract", filename).c_str());
       
         fs::create_directory(network_dir);
         for (fs::path f : files)
@@ -330,6 +330,8 @@ namespace xpm
       else if (proc_count == 48)
         processors = {4, 4, 3};
 
+      processors = {2, 2, 2};
+
 
       
       auto const_permeability = startup.microporous_perm*0.001*presets::darcy_to_m2;
@@ -360,10 +362,9 @@ namespace xpm
 
       #ifdef _WIN32
         pn.connectivity_flow_summary(startup.solver.tolerance, startup.solver.max_iterations);
-      #elif
-        pn.connectivity_flow_summary_MPI(tolerance, max_iterations);
+      #else
+        pn.connectivity_flow_summary_MPI(startup.solver.tolerance, startup.solver.max_iterations);
       #endif
-
 
       {
         img_.read_image(startup.image.path, startup.image.phases);

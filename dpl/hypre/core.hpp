@@ -182,12 +182,14 @@ namespace dpl::hypre
 
     HYPRE_BoomerAMGSetup(solver, A, b, x);
 
+
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (w_rank == 0)
     //   std::cout << "\nPOS_1\n" << std::flush;
     // MPI_Barrier(MPI_COMM_WORLD);
     
     HYPRE_BoomerAMGSolve(solver, A, b, x);
+    
 
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (w_rank == 0)

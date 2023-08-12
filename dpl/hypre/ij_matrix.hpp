@@ -42,7 +42,7 @@ namespace dpl::hypre
       HYPRE_IJMatrixCreate(mpi::comm, ilower, iupper, ilower, iupper, &m_);
       HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
 
-      auto shift = std::accumulate(ncols, ncols + ilower, 0_uz);
+      auto shift = std::accumulate(ncols, ncols + ilower, static_cast<size_t>(0));
 
       {
         auto diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);

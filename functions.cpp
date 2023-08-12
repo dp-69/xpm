@@ -1,4 +1,4 @@
-#include "xpm/functions.h"
+#include "functions.h"
 
 // #include <vtkCylinderSource.h>
 // #include <vtkFloatArray.h>

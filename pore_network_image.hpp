@@ -60,6 +60,12 @@ namespace xpm
       val = strtoull(ptr, &ptr, 10);
     }
 
+    #ifdef __linux__
+    static void parse_text(char* &ptr, size_t& val) { // for Ubuntu
+      val = strtoull(ptr, &ptr, 10);
+    }
+    #endif
+
     static void parse_text(char* &ptr, double& val) {
       val = strtod(ptr, &ptr);
     }
@@ -463,8 +469,8 @@ namespace xpm
 
       dpl::hypre::mpi::save(input, nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations);
 
-      std::system((boost::format("mpiexec -np 1 \"%s\" -s") // NOLINT(concurrency-mt-unsafe)
-        % dpl::hypre::mpi::mpi_exec.string()).str().c_str());
+      std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
+        dpl::hypre::mpi::mpi_exec).c_str());
 
       connectivity_flow_summary(dpl::hypre::mpi::load_values(nrows));
     }
