@@ -141,18 +141,18 @@ namespace boost
         return base::subtree_size(p);
       }
 
-      static void join_trees(node_ptr header_a, node_ptr x, node_ptr header_b) {
-        node_ptr root_a = nt::get_parent(header_a);
-        node_ptr root_b = nt::get_parent(header_b);
+      static void join_trees(node_ptr hdr_left, node_ptr x, node_ptr hdr_right) {
+        node_ptr root_a = nt::get_parent(hdr_left);
+        node_ptr root_b = nt::get_parent(hdr_right);
 
         if (!root_b) {
-          base::push_back(header_a, x);
+          base::push_back(hdr_left, x);
           return;
         }
 
         if (!root_a) {
-          base::swap_tree(header_a, header_b);            
-          base::push_front(header_a, x);
+          base::swap_tree(hdr_left, hdr_right);            
+          base::push_front(hdr_left, x);
           return;
         }
 
@@ -160,11 +160,11 @@ namespace boost
         auto height_b = node_height(root_b);            
           
         if (std::abs(height_b - height_a) <= 1) {                        
-          nt::set_parent(header_a, x);
-          nt::set_left(header_a, nt::get_left(header_a));
-          nt::set_right(header_a, nt::get_right(header_b));
+          nt::set_parent(hdr_left, x);
+          nt::set_left(hdr_left, nt::get_left(hdr_left));
+          nt::set_right(hdr_left, nt::get_right(hdr_right));
 
-          nt::set_parent(x, header_a);
+          nt::set_parent(x, hdr_left);
 
           nt::set_left(x, root_a);
           nt::set_right(x, root_b);
@@ -178,7 +178,7 @@ namespace boost
             nt::zero()
           );
 
-          init_header(header_b);
+          init_header(hdr_right);
           return;            
         }
           
@@ -207,9 +207,9 @@ namespace boost
 
           nt::set_balance(x, height_b == h ? nt::zero() : nt::negative());
 
-          nt::set_right(header_a, nt::get_right(header_b));
+          nt::set_right(hdr_left, nt::get_right(hdr_right));
     
-          init_header(header_b);
+          init_header(hdr_right);
         }
         else {            
           node_ptr v = root_b;
@@ -236,25 +236,25 @@ namespace boost
 
           nt::set_balance(x, height_a == h ? nt::zero() : nt::positive());
 
-          nt::set_left(header_b, nt::get_left(header_a));
+          nt::set_left(hdr_right, nt::get_left(hdr_left));
     
-          init_header(header_a);
-          base::swap_tree(header_a, header_b);
+          init_header(hdr_left);
+          base::swap_tree(hdr_left, hdr_right);
         }
 
-        base::rebalance_after_insertion_no_balance_assignment(header_a, x);
+        base::rebalance_after_insertion_no_balance_assignment(hdr_left, x);
       }
 
 
-      static void split_tree(node_ptr header_a, node_ptr k, node_ptr header_b) {
-        if (nt::get_right(header_a) == k) {
-          base::erase(header_a, k);
+      static void split_tree(node_ptr hdr_left, node_ptr k, node_ptr hdr_right) {
+        if (nt::get_right(hdr_left) == k) {
+          base::erase(hdr_left, k);
           return;
         }
 
-        if (nt::get_left(header_a) == k) {
-          base::erase(header_a, k);
-          base::swap_tree(header_a, header_b);
+        if (nt::get_left(hdr_left) == k) {
+          base::erase(hdr_left, k);
+          base::swap_tree(hdr_left, hdr_right);
           return;
         }
 
@@ -288,7 +288,7 @@ namespace boost
 
         auto height = k_height;
 
-        while (parent != header_a) {
+        while (parent != hdr_left) {
           if (nt::get_left(parent) == node) {
             if (!right_leftmost)
               right_leftmost = parent;
@@ -368,15 +368,15 @@ namespace boost
                 nt::set_balance(x, l_height == h ? nt::zero() : nt::positive());
               }
 
-              nt::set_parent(header_b, r_node);
-              nt::set_parent(r_node, header_b);
+              nt::set_parent(hdr_right, r_node);
+              nt::set_parent(r_node, hdr_right);
 
-              if (base::rebalance_after_insertion_no_balance_assignment(header_b, x))
+              if (base::rebalance_after_insertion_no_balance_assignment(hdr_right, x))
                 right_tail_height = r_height;
               else
                 right_tail_height = r_height + 1;
 
-              right_tail_node = nt::get_parent(header_b);
+              right_tail_node = nt::get_parent(hdr_right);
             }
           }
           else {
@@ -459,15 +459,15 @@ namespace boost
                 nt::set_balance(x, r_height == h ? nt::zero() : nt::negative());
               }
 
-              nt::set_parent(header_b, l_node);
-              nt::set_parent(l_node, header_b);
+              nt::set_parent(hdr_right, l_node);
+              nt::set_parent(l_node, hdr_right);
 
-              if (base::rebalance_after_insertion_no_balance_assignment(header_b, x))
+              if (base::rebalance_after_insertion_no_balance_assignment(hdr_right, x))
                 left_tail_height = l_height;
               else
                 left_tail_height = l_height + 1;
 
-              left_tail_node = nt::get_parent(header_b);
+              left_tail_node = nt::get_parent(hdr_right);
             }
           }
 
@@ -476,18 +476,18 @@ namespace boost
           grand_parent = nt::get_parent(grand_parent);
         }
 
-        nt::set_parent(header_b, right_tail_node);
-        nt::set_left(header_b, right_leftmost);
-        nt::set_right(header_b, nt::get_right(header_a));
+        nt::set_parent(hdr_right, right_tail_node);
+        nt::set_left(hdr_right, right_leftmost);
+        nt::set_right(hdr_right, nt::get_right(hdr_left));
 
-        nt::set_parent(right_tail_node, header_b);
+        nt::set_parent(right_tail_node, hdr_right);
 
 
-        nt::set_parent(header_a, left_tail_node);
+        nt::set_parent(hdr_left, left_tail_node);
         /* nt::set_left(headerA, nt::get_left(headerA)); */                    
-        nt::set_right(header_a, left_rightmost);
+        nt::set_right(hdr_left, left_rightmost);
 
-        nt::set_parent(left_tail_node, header_a);
+        nt::set_parent(left_tail_node, hdr_left);
 
         init(k);
       }

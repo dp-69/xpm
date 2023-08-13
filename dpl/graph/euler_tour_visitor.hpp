@@ -79,7 +79,7 @@ namespace HW { namespace dynamic_connectivity
   class euler_tour_visitor : public boost::empty_dfs_visitor<dynamic_connectivity_graph>
   {
     using et_node_ptr = et_traits::node_ptr;
-
+    using etnte_node_ptr = etnte_traits::node_ptr;
 
 
 
@@ -95,7 +95,7 @@ namespace HW { namespace dynamic_connectivity
     et_node_ptr* _treeEdgeStackTop;
 
 
-    vector<et_node_ptr>& _components;        
+    std::vector<et_node_ptr>& _components;        
 
     et_node_ptr acquire_zero_level_et_entry() {
 //      auto entry = _etPtr++;
@@ -110,7 +110,7 @@ namespace HW { namespace dynamic_connectivity
     
 
     euler_tour_visitor(
-      smart_pool<et_traits::node>& etPool, smart_pool<etnte_traits::node>& etntePool, et_node_ptr* treeEdgeStack, vector<et_node_ptr>& components)
+      smart_pool<et_traits::node>& etPool, smart_pool<etnte_traits::node>& etntePool, et_node_ptr* treeEdgeStack, std::vector<et_node_ptr>& components)
       : _etPool(etPool),
         _etntePool(etntePool),
         _treeEdgeStackEmpty(treeEdgeStack),
@@ -132,8 +132,8 @@ namespace HW { namespace dynamic_connectivity
       directed_edge::set_non_tree_edge_entry(de, entry); 
       directed_edge::set_non_tree_edge_entry(deOpp, entryOpp);
       
-      etnte_traits::set_directed_edge(entry, de);
-      etnte_traits::set_directed_edge(entryOpp, deOpp);
+      etnte_context::set_directed_edge(entry, de);
+      etnte_context::set_directed_edge(entryOpp, deOpp);
             
       etnte_et_operations::insert(_etnteHeader, entry);
       etnte_et_operations::insert(_etnteHeader, entryOpp);                    
@@ -145,7 +145,7 @@ namespace HW { namespace dynamic_connectivity
         
       _etnteHeader = _etntePool.acquire();
       etnte_algo::init_header(_etnteHeader);      
-      et_context_traits::set_non_tree_edge_header(_etHeader, _etnteHeader);             
+      et_context::set_non_tree_edge_header(_etHeader, _etnteHeader);             
 
       _components.push_back(_etHeader);
     }    
@@ -153,7 +153,7 @@ namespace HW { namespace dynamic_connectivity
     void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
       auto entry = acquire_zero_level_et_entry();        
       
-      et_context_traits::set_vertex(entry, v);
+      et_context::set_vertex(entry, v);
       v->et_entry_ = entry;
 //      vertex_color_property_map::set_et_entry(v, entry);
 
@@ -164,7 +164,7 @@ namespace HW { namespace dynamic_connectivity
     void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
       auto entry = acquire_zero_level_et_entry();
 
-      et_context_traits::set_directed_edge(entry, e);
+      et_context::set_directed_edge(entry, e);
       directed_edge::set_tree_edge_entry(e, entry);
 
       et_algo::push_back(_etHeader, entry);      
@@ -178,8 +178,8 @@ namespace HW { namespace dynamic_connectivity
         
         auto top = *_treeEdgeStackTop--;
 
-        auto top_de_opposite = et_context_traits::get_directed_edge(top)->opposite;
-        et_context_traits::set_directed_edge(entry, top_de_opposite);        
+        auto top_de_opposite = et_context::get_directed_edge(top)->opposite;
+        et_context::set_directed_edge(entry, top_de_opposite);        
         directed_edge::set_tree_edge_entry(top_de_opposite, entry);
 
 //        et_algo_not_augmented::push_back(_etHeader, entry);        
@@ -240,7 +240,7 @@ namespace HW { namespace dynamic_connectivity
       vi->visited = false;
 
     
-    stack<vertex_ptr> vertexStack;    
+    std::stack<vertex_ptr> vertexStack;    
     vertexStack.push(searchVertex);
 
     while (!vertexStack.empty()) {

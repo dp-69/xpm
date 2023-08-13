@@ -2,10 +2,7 @@
 
 #include "pore_network_image.hpp"
 
-#include <dpl/graph/et_node.hpp>
 #include <dpl/graph/etnte_node.hpp>
-#include <dpl/graph/avltree_algorithms_ext.hpp>
-#include <dpl/graph/cyclic_operations.hpp>
 #include <dpl/graph/dynamic_connectivity_graph.hpp>
 
 // #include <dpl/graph/euler_tour_visitor.hpp>
@@ -209,7 +206,7 @@ namespace xpm
       using traits = HW::dynamic_connectivity::et_traits;
       using node = traits::node;
       using algo = HW::dynamic_connectivity::et_algo;
-      using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
+      using cyclic_op = dpl::graph::cyclic<algo>;
 
       using vertex = HW::dynamic_connectivity::vertex;
       
@@ -244,7 +241,7 @@ namespace xpm
       vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        HW::dynamic_connectivity::et_context_traits::set_vertex(&input[i], &vertices[i]);
+        HW::dynamic_connectivity::et_context::set_vertex(&input[i], &vertices[i]);
         algo::push_back(header_a, &input[i]);
       }
 
@@ -354,7 +351,7 @@ namespace xpm
       using traits = HW::dynamic_connectivity::etnte_traits;
       using node = traits::node;
       using algo = intrusive::aug_avltree_algorithms_ext<traits>;
-      using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
+      using cyclic_op = dpl::graph::cyclic<algo>;
 
       // using vertex = HW::dynamic_connectivity::vertex;
       using directed_edge = HW::dynamic_connectivity::directed_edge;
@@ -400,7 +397,7 @@ namespace xpm
       vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        traits::set_directed_edge(&input[i], &edges[i]);
+        HW::dynamic_connectivity::etnte_context::set_directed_edge(&input[i], &edges[i]);
         algo::push_back(header_a, &input[i]);
       }
 

@@ -26,25 +26,11 @@ namespace HW::dynamic_connectivity
 
 namespace HW { namespace dynamic_connectivity
 {
-  // using et_node_ptr = HW::dynamic_connectivity::et_node*;
-  // using etnte_node_ptr = etnte_node*;
-
   using vertex_ptr = vertex*;
   using directed_edge_ptr = directed_edge*;
 
-
-
-
-
-
-
-
-  
-  
-
   
   typedef default_list_node_traits<directed_edge> directed_edge_node_traits;
-
 
 
   typedef inorder_iter<directed_edge_node_traits> out_edge_iterator;
@@ -87,9 +73,18 @@ namespace HW { namespace dynamic_connectivity
 
 
 
+
+
+
+
+
+
     static bool is_tree_edge(const node_ptr& x) {
       return compression::get_bits(x->entry_type_);
     }
+
+
+
 
 
 
@@ -103,7 +98,7 @@ namespace HW { namespace dynamic_connectivity
       compression::set_pointer_and_bits(x->entry_type_, y, true);      
     }
 
-
+    using etnte_node_ptr = etnte_traits::node_ptr;
 
     static etnte_node_ptr get_non_tree_edge_entry(const node_ptr& x) {
       return compression::get_pointer<etnte_node_ptr>(x->entry_type_);      
@@ -138,7 +133,7 @@ namespace HW { namespace dynamic_connectivity
     
     friend void clear_out_edges(vertex_ptr, dynamic_connectivity_graph&);
     friend void add_edge(vertex&, vertex&, directed_edge&, directed_edge&, dynamic_connectivity_graph&);
-    friend pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr, const dynamic_connectivity_graph&);
+    friend std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr, const dynamic_connectivity_graph&);
 
     friend out_edge_iterator out_edges_begin(const vertex_ptr);
     friend out_edge_iterator out_edges_end(const vertex_ptr);
@@ -198,7 +193,7 @@ namespace HW { namespace dynamic_connectivity
 
     friend void add_vertex(vertex_ptr v, dynamic_connectivity_graph& g);
     friend vertices_size_type num_vertices(const dynamic_connectivity_graph& g);
-    friend pair<vertex_iterator, vertex_iterator> vertices(const dynamic_connectivity_graph& g);
+    friend std::pair<vertex_iterator, vertex_iterator> vertices(const dynamic_connectivity_graph& g);
   };
 
   inline void add_vertex(vertex_ptr v, dynamic_connectivity_graph& g) {            
@@ -233,8 +228,8 @@ namespace HW { namespace dynamic_connectivity
     return g.vertices_.size();
   }
 
-  inline pair<vertex_iterator, vertex_iterator> vertices(const dynamic_connectivity_graph& g) {
-	  return make_pair(vertex_iterator(g.vertices_.begin().pointed_node()), vertex_iterator(g.vertices_.end().pointed_node()));
+  inline std::pair<vertex_iterator, vertex_iterator> vertices(const dynamic_connectivity_graph& g) {
+	  return std::make_pair(vertex_iterator(g.vertices_.begin().pointed_node()), vertex_iterator(g.vertices_.end().pointed_node()));
   }    
    
   inline out_edge_iterator out_edges_begin(const vertex_ptr v) {
@@ -261,8 +256,8 @@ namespace HW { namespace dynamic_connectivity
 
 
   // for Boost concept check
-  inline pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr u, const dynamic_connectivity_graph& g) {
-    return make_pair(out_edges_begin(u), out_edges_end(u));
+  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr u, const dynamic_connectivity_graph& g) {
+    return std::make_pair(out_edges_begin(u), out_edges_end(u));
   }
   
   // ReSharper disable once CppFunctionDoesntReturnValue
