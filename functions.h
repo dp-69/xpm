@@ -206,8 +206,8 @@ namespace xpm
       using namespace chrono;
 
 
-      using node = HW::dynamic_connectivity::et_node;
       using traits = HW::dynamic_connectivity::et_traits;
+      using node = traits::node;
       using algo = HW::dynamic_connectivity::et_algo;
       using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
 
@@ -351,8 +351,8 @@ namespace xpm
       using namespace chrono;
 
 
-      using node = HW::dynamic_connectivity::etnte_node;
       using traits = HW::dynamic_connectivity::etnte_traits;
+      using node = traits::node;
       using algo = intrusive::aug_avltree_algorithms_ext<traits>;
       using cyclic_op = HW::dynamic_connectivity::cyclic_operations<algo>;
 

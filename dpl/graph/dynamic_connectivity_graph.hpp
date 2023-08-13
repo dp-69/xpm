@@ -93,6 +93,8 @@ namespace HW { namespace dynamic_connectivity
 
 
 
+    using et_node_ptr = et_traits::node_ptr;
+
     static et_node_ptr get_tree_edge_entry(const node_ptr& x) {
       return compression::get_pointer<et_node_ptr>(x->entry_type_);      
     }
@@ -153,8 +155,8 @@ namespace HW { namespace dynamic_connectivity
     size_t row_idx_ = 0;  // relative index, not unique identifier    
 //    static const size_t invalid_rel_idx = ~size_t(0) >> 2;
 
-        
-    et_node_ptr et_entry_;
+
+    et_traits::node_ptr et_entry_;
     bool visited = false;
 //    bool trapped = false;
   };

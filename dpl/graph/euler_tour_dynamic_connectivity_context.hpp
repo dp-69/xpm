@@ -35,6 +35,8 @@ namespace HW { namespace dynamic_connectivity
 
   class euler_tour_dynamic_connectivity_context : non_copyable_movable
   {
+    using et_node_ptr = et_traits::node_ptr;
+
     const static auto stack_capacity = 256;
 
     using et_nt = et_traits;
@@ -47,8 +49,8 @@ namespace HW { namespace dynamic_connectivity
   vector<dc_stat> dcStatistics;
   #endif 
 
-    smart_pool<et_node> etPool_;
-    smart_pool<etnte_node> etntePool_;    
+    smart_pool<et_traits::node> etPool_;
+    smart_pool<etnte_traits::node> etntePool_;    
 
 
     vector<et_node_ptr> initial_components_;

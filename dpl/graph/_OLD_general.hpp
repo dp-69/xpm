@@ -314,27 +314,27 @@ namespace HW
 
 
 
-  template<class NodeAlgorithms>
+  template<typename Algo>
   class tree_inorder_range
   {   
     struct adjusted_traits
     {
-      typedef typename NodeAlgorithms::node_ptr node_ptr;
+      typedef typename Algo::node_ptr node_ptr;
 
-      static node_ptr get_next(const node_ptr& node) {
-        return NodeAlgorithms::next_node(node);
+      static node_ptr get_next(node_ptr node) {
+        return Algo::next_node(node);
       }
     };
 
 
-    typedef typename NodeAlgorithms::node_traits node_traits;
+    typedef typename Algo::node_traits node_traits;
     typedef typename node_traits::node_ptr node_ptr;
     
     node_ptr header_;
 
 
   public:
-    explicit tree_inorder_range(const node_ptr& header) : header_(header) {}
+    tree_inorder_range(node_ptr header) : header_(header) {}
 
     inorder_iter<adjusted_traits> begin() {
       return inorder_iter<adjusted_traits>(node_traits::get_left(header_));
