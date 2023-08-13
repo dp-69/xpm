@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 
-#include "etnte_node.hpp"
+#include "et_etnte_defs.hpp"
 #include "smart_pool.hpp"
 #include <stack>
 
@@ -10,7 +10,69 @@
 namespace HW { namespace dynamic_connectivity
 {
 
+  class et_context
+  {
+    using et_node_ptr = et_traits::node_ptr;
+    using et_const_node_ptr = et_traits::const_node_ptr;
 
+    using etnte_node = dpl::graph::aug_avl_node;
+
+    using mask = dpl::graph::mask;
+
+  public:
+    static etnte_node* get_non_tree_edge_header(et_const_node_ptr n) {
+      return mask::get_ptr<etnte_node>(n->tag);
+    }
+
+    static void set_non_tree_edge_header(et_node_ptr n, const etnte_node* etnte_header) {
+      mask::set_ptr_balance(n->tag, etnte_header, mask::balance);
+    }
+
+    static directed_edge* get_directed_edge(et_const_node_ptr n) {
+      return mask::get_ptr<directed_edge>(n->tag);
+    }
+
+    static vertex* get_vertex(et_const_node_ptr n) {
+      return mask::get_ptr<vertex>(n->tag);
+    }
+    
+    static void set_directed_edge(et_node_ptr n, const directed_edge* de) {
+      mask::set_ptr(n->tag, de);
+    }
+    
+    static void set_vertex(et_node_ptr n, const vertex* v) {
+      mask::set_ptr_bit(n->tag, v);
+    }                     
+
+    static bool is_loop_edge(et_const_node_ptr n) { // that is 'vertex'
+      return mask::get_bit(n->tag);
+    }
+  };
+
+
+
+
+
+  struct etnte_context
+  {
+    static directed_edge* get_directed_edge(etnte_traits::const_node_ptr n) {
+      return dpl::graph::mask::get_ptr<directed_edge>(n->tag);
+    }
+
+    static void set_directed_edge(etnte_traits::node_ptr n, const directed_edge* de) {
+      dpl::graph::mask::set_ptr(n->tag, de);
+    }
+
+    // ordering of non-tree edges
+    static et_traits::node_ptr get_vertex_entry(const directed_edge* de) {
+      // sorted by a pointing-in vertex, the pointing-out works as well        
+      return de->opposite->v1->et_entry_;   
+    }
+    
+    static et_traits::node_ptr get_vertex_entry(etnte_traits::const_node_ptr n) {
+      return get_vertex_entry(get_directed_edge(n));      
+    }
+  };
 
 
 
@@ -135,8 +197,8 @@ namespace HW { namespace dynamic_connectivity
       etnte_context::set_directed_edge(entry, de);
       etnte_context::set_directed_edge(entryOpp, deOpp);
             
-      etnte_et_operations::insert(_etnteHeader, entry);
-      etnte_et_operations::insert(_etnteHeader, entryOpp);                    
+      etnte_context_operations<etnte_context>::insert(_etnteHeader, entry);
+      etnte_context_operations<etnte_context>::insert(_etnteHeader, entryOpp);                    
     }
 
     void start_vertex(vertex_ptr, const dynamic_connectivity_graph&) {            

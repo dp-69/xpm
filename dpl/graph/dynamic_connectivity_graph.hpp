@@ -9,31 +9,44 @@
 
 #undef max
 
-namespace HW::dynamic_connectivity
-{
-  // struct et_node;
-  // struct etnte_node;
-}
 
 namespace HW::dynamic_connectivity
 {
-  struct dynamic_connectivity_graph;
-
   struct vertex;
+
+  using vertex_node_traits = default_list_node_traits<vertex>;
+  using vertex_iterator = inorder_iter<vertex_node_traits>;
+  using vertex_list = boost::intrusive::list<
+    vertex,
+    boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<vertex_node_traits>>,
+    boost::intrusive::constant_time_size<true>>;
+
+
   struct directed_edge;
+
+  using directed_edge_node_traits = default_list_node_traits<directed_edge>;
+  using out_edge_iterator = inorder_iter<directed_edge_node_traits>;
+  using out_edge_list = boost::intrusive::list<
+    directed_edge,
+    boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<directed_edge_node_traits>>,
+    boost::intrusive::constant_time_size<false>>;
+
+  struct dynamic_connectivity_graph;
 }
 
 
-namespace HW { namespace dynamic_connectivity
+
+
+
+
+
+namespace HW::dynamic_connectivity
 {
   using vertex_ptr = vertex*;
   using directed_edge_ptr = directed_edge*;
 
   
-  typedef default_list_node_traits<directed_edge> directed_edge_node_traits;
-
-
-  typedef inorder_iter<directed_edge_node_traits> out_edge_iterator;
+ 
    
 
   struct directed_edge : non_copyable_movable
@@ -110,10 +123,7 @@ namespace HW { namespace dynamic_connectivity
   };
 
     
-  typedef boost::intrusive::list<
-    directed_edge,
-    boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<directed_edge_node_traits, boost::intrusive::normal_link>>,
-    boost::intrusive::constant_time_size<false>> out_edge_list;
+  
   
 
 
@@ -156,14 +166,7 @@ namespace HW { namespace dynamic_connectivity
 //    bool trapped = false;
   };
 
-  typedef default_list_node_traits<vertex> vertex_node_traits;
- 
-  typedef boost::intrusive::list<
-    vertex,
-    boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<vertex_node_traits, boost::intrusive::normal_link>>,
-    boost::intrusive::constant_time_size<true>> vertex_list;
-
-  typedef inorder_iter<vertex_node_traits> vertex_iterator;
+  
 
 
 
@@ -175,6 +178,75 @@ namespace HW { namespace dynamic_connectivity
   
 
   
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     
@@ -389,7 +461,7 @@ namespace HW { namespace dynamic_connectivity
       return const_cast<vertex_descriptor>(&_NULL_VERTEX);
     }
   };
-}}
+}
 
 
 

@@ -2,10 +2,8 @@
 
 #include "pore_network_image.hpp"
 
-#include <dpl/graph/etnte_node.hpp>
+#include <dpl/graph/et_etnte_defs.hpp>
 #include <dpl/graph/dynamic_connectivity_graph.hpp>
-
-// #include <dpl/graph/euler_tour_visitor.hpp>
 #include <dpl/graph/euler_tour_dynamic_connectivity_context.hpp>
 
 

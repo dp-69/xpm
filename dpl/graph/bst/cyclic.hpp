@@ -20,8 +20,8 @@ namespace dpl::graph
           algo::push_front(header, least);
         }
         else {  // NOLINT(clang-diagnostic-dangling-else)
-          node n;
-          node_ptr hdr_s = &n;
+          node s;
+          node_ptr hdr_s = &s;
           algo::init_header(hdr_s);          
           algo::split_tree(header, least, hdr_s);
           algo::push_front(hdr_s, least);
@@ -37,8 +37,8 @@ namespace dpl::graph
       if (nt::get_right(header) == least || nt::get_left(header) == least)
         algo::erase(header, least);
       else {        
-        node n;
-        auto hdr_s = &n;
+        node s;
+        auto hdr_s = &s;
         algo::init_header(hdr_s);        
         algo::split_tree(header, least, hdr_s);
 

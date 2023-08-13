@@ -85,7 +85,7 @@ namespace HW { namespace dynamic_connectivity
       etnte_algo::init_header(etnteHeaderB);                           
       et_context::set_non_tree_edge_header(etHeaderB, etnteHeaderB);                        
 
-      etnte_et_operations::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
+      etnte_context_operations<etnte_context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
 
       if (et_algo::less_than(etAB, etBA))
         dpl::graph::cyclic<et_algo>::split(etHeaderA, etHeaderB, etAB, etBA);
@@ -153,8 +153,8 @@ namespace HW { namespace dynamic_connectivity
                 
 
         // etnte
-        dpl::graph::cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_et_operations::lower_bound(etnteHeaderA, etRecA));
-        auto leastB = etnte_et_operations::lower_bound(etnteHeaderB, etRecB);
+        dpl::graph::cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_context_operations<etnte_context>::lower_bound(etnteHeaderA, etRecA));
+        auto leastB = etnte_context_operations<etnte_context>::lower_bound(etnteHeaderB, etRecB);
         dpl::graph::cyclic<etnte_algo>::principal_cut_least_dropped(etnteHeaderB, leastB);
         etnte_algo::join_trees(etnteHeaderA, leastB, etnteHeaderB);
 
