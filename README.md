@@ -7,7 +7,7 @@ The latest release can be found at
 
 | Platform                | Files          |
 |-------------------------|----------------|
-| Windows ZIP (portable)  | [TODO]         |
+| Windows ZIP (portable)  | *coming soon*  |
 
 
 
@@ -25,13 +25,13 @@ executable `xpm.exe`.
 #### Windows
 
 All commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of
-Microsoft's Visual Studio toolset). It is assumed that Step 2 is conducted in `C:\` drive.
+Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
 
-- Step 1 - Installing MPI
+- Installing MPI
 
 Download installer from https://www.microsoft.com/en-us/download/details.aspx?id=57467 and run it.
 
-- Step 2 - Installing xpm's dependencies in vcpkg
+- Step 1 - Installing xpm's dependencies in vcpkg
 ```cmd
 > git clone https://github.com/microsoft/vcpkg
 > cd vcpkg
@@ -39,7 +39,7 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 > vcpkg.exe install vtk[qt]:x64-windows hypre:x64-windows boost-interprocess:x64-windows boost-iostreams:x64-windows boost-graph:x64-windows fmt:x64-windows
 ```
 
-- Step 3 - xpm compilation
+- Step 2 - xpm compilation
 ```cmd
 > git clone https://github.com/dp-69/xpm.git
 > cd xpm
@@ -47,10 +47,37 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 > cmake --build --preset=win-rel
 ```
 
-- Step 4 - Executing xpm
+- Step 3 - Executing xpm
 ```cmd
 > cd build/Release/bin
 > xpm.exe
+```
+
+#### Ubuntu
+
+The following instructions assume that vcpkg's repository will be cloned into the user's home folder (`cd ~`), and that all commands are issued from a terminal. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
+
+- Step 1 - Installing xpm's dependencies in vcpkg
+```cmd
+> git clone https://github.com/microsoft/vcpkg
+> cd vcpkg
+> ./bootstrap-vcpkg.sh
+> ./vcpkg install vtk[qt] hypre boost-interprocess boost-iostreams boost-graph fmt
+```
+
+- Step 2 - xpm compilation
+```cmd
+> git clone https://github.com/dp-69/xpm.git
+> cd xpm
+> git checkout ubuntu-compilation
+> cmake --preset=lin-rel-cfg
+> cmake --build --preset=lin-rel-build
+```
+
+- Step 3 - Executing xpm
+```cmd
+> cd build/Release/bin
+> ./xpm
 ```
 
 ## Copyright
