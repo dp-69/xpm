@@ -57,6 +57,23 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 
 The following instructions assume that vcpkg's repository will be cloned into the user's home folder (`cd ~`), and that all commands are issued from a terminal. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
 
+- Required Ubuntu packages (install with `sudo apt install`)
+
+```cmd
+build-essential
+git
+tar curl zip unzip                                                                                                
+pkg-config
+meson
+libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxrandr-dev libxxf86vm-dev
+gfortran
+autoconf autoconf-archive
+libtool
+'^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev
+cmake 
+openmpi-bin
+```
+
 - Step 1 - Installing xpm's dependencies in vcpkg
 ```cmd
 > git clone https://github.com/microsoft/vcpkg
