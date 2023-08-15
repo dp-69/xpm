@@ -12,127 +12,132 @@ namespace HW::dynamic_connectivity
   using etnte_traits = dpl::graph::aug_avl_traits<dpl::graph::aug_avl_node>;
   using etnte_algo = boost::intrusive::aug_avltree_algorithms_ext<etnte_traits>;
 
-  template <typename context>
-  struct etnte_context_operations
+
+  template<typename Context>
+  struct et_relative_less_than_comparator // key < x
   {
-    struct et_relative_less_than_comparator // key < x
-    {
-      using et_node_ptr = et_traits::node_ptr;
-      using etnte_node_ptr = etnte_traits::node_ptr;
-
-      et_node_ptr x0_least;
-      et_traits::const_node_ptr* x0_least_it;
-
-      et_node_ptr x1_key;    
-      et_traits::const_node_ptr* x1_key_it;
-
-      bool x1_side;
-
-      using default_path = boost::intrusive::default_path_buffer<et_traits>;
-
-      /**
-       * x0_least - the least entry, representing a pseudo principal cut
-       * x1_key   - is a entry of interest
-       * x2       - running entry
-       */
-      et_relative_less_than_comparator(et_node_ptr least, et_node_ptr key) {
-        x0_least = least;
-        x0_least_it = et_algo::get_path(x0_least, default_path::path0);
-
-        x1_key = key;
-        x1_key_it = et_algo::get_path(x1_key, default_path::path1);      
-
-        x1_side = x0_least == x1_key || et_algo::less_than(x0_least_it, x1_key_it, default_path::path0);
-      }
-
-      bool key_less_than_node(const etnte_node_ptr& x2_etnte) const {
-        auto x2 = context::get_vertex_entry(x2_etnte);
-
-        if (x1_key == x2)
-          return false;
-
-        auto x2_it = et_algo::get_path(x2, default_path::path2);
-
-        auto x2_side = x0_least == x2 || et_algo::less_than(x0_least_it, x2_it, default_path::path0);
-        return x1_side == x2_side ? et_algo::less_than(x1_key_it, x2_it, default_path::path1) : x1_side;                                    
-      }
-
-      bool operator()(const etnte_node_ptr& x2_etnte) const {
-        return key_less_than_node(x2_etnte);
-      }
-
-      bool operator()(const et_node_ptr& /*comparing key*/, const etnte_node_ptr& x2_etnte) const {
-        return key_less_than_node(x2_etnte);
-      }
-
-      bool operator()(const etnte_node_ptr& /*comparing node*/, const etnte_node_ptr& x2_etnte) const {
-        return key_less_than_node(x2_etnte);    
-      }
-    };
-
-    struct et_relative_more_than_comparator // x < key
-    {
-      using et_node_ptr = et_traits::node_ptr;
-      using etnte_node_ptr = etnte_traits::node_ptr;
-
-      et_node_ptr x0_least;    
-      et_traits::const_node_ptr* x0_least_it;
-
-      et_node_ptr x2_key;    
-      et_traits::const_node_ptr* x2_key_it;
-
-      bool x2_side;
-
-      using default_path = boost::intrusive::default_path_buffer<et_traits>;
-
-      /**
-       * x0_least - the least entry, representing a pseudo principal cut
-       * x1       - running entry
-       * x2_key   - is a entry of interest
-       */
-      explicit et_relative_more_than_comparator(const et_node_ptr& least, const et_node_ptr& key) {
-        x0_least = least;
-        x0_least_it = et_algo::get_path(x0_least, default_path::path0);
-
-        x2_key = key;
-        x2_key_it = et_algo::get_path(x2_key, default_path::path2);
-
-        x2_side = x0_least == x2_key || et_algo::less_than(x0_least_it, x2_key_it, default_path::path0);
-      }
-
-      bool key_more_than_node(const etnte_node_ptr& x1_etnte) const {
-        auto x1 = context::get_vertex_entry(x1_etnte);
-
-        if (x1 == x2_key)
-          return false;
-
-        auto x1_it = et_algo::get_path(x1, default_path::path1);
-
-        auto x1_side = x0_least == x1 || et_algo::less_than(x0_least_it, x1_it, default_path::path0);
-        return x1_side == x2_side ? et_algo::less_than(x1_it, x2_key_it, default_path::path1) : x1_side;                                    
-      }
-
-      bool operator()(const etnte_node_ptr& x1_etnte) const {
-        return key_more_than_node(x1_etnte);
-      }
-
-      bool operator()(const etnte_node_ptr& x1_etnte, const et_node_ptr& /*comparing key*/) const {
-        return key_more_than_node(x1_etnte);
-      }
-
-      bool operator()(const etnte_node_ptr& x1_etnte, const etnte_node_ptr& /*comparing node*/) const {
-        return key_more_than_node(x1_etnte);    
-      }
-    };
-
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
 
-    using less_than = et_relative_less_than_comparator;
-    using more_than = et_relative_more_than_comparator;
+    et_node_ptr x0_least;
+    et_traits::const_node_ptr* x0_least_it;
+
+    et_node_ptr x1_key;    
+    et_traits::const_node_ptr* x1_key_it;
+
+    bool x1_side;
+
+    using default_path = boost::intrusive::default_path_buffer<et_traits>;
+
+    /**
+     * x0_least - the least entry, representing a pseudo principal cut
+     * x1_key   - is a entry of interest
+     * x2       - running entry
+     */
+    et_relative_less_than_comparator(et_node_ptr least, et_node_ptr key) {
+      x0_least = least;
+      x0_least_it = et_algo::get_path(x0_least, default_path::path0);
+
+      x1_key = key;
+      x1_key_it = et_algo::get_path(x1_key, default_path::path1);      
+
+      x1_side = x0_least == x1_key || et_algo::less_than(x0_least_it, x1_key_it, default_path::path0);
+    }
+
+    bool key_less_than_node(const etnte_node_ptr& x2_etnte) const {
+      auto x2 = Context::get_vertex_entry(x2_etnte);
+
+      if (x1_key == x2)
+        return false;
+
+      auto x2_it = et_algo::get_path(x2, default_path::path2);
+
+      auto x2_side = x0_least == x2 || et_algo::less_than(x0_least_it, x2_it, default_path::path0);
+      return x1_side == x2_side ? et_algo::less_than(x1_key_it, x2_it, default_path::path1) : x1_side;                                    
+    }
+
+    bool operator()(const etnte_node_ptr& x2_etnte) const {
+      return key_less_than_node(x2_etnte);
+    }
+
+    bool operator()(const et_node_ptr& /*comparing key*/, const etnte_node_ptr& x2_etnte) const {
+      return key_less_than_node(x2_etnte);
+    }
+
+    bool operator()(const etnte_node_ptr& /*comparing node*/, const etnte_node_ptr& x2_etnte) const {
+      return key_less_than_node(x2_etnte);    
+    }
+  };
+
+
+  template<typename Context>
+  struct et_relative_more_than_comparator // x < key
+  {
+    using et_node_ptr = et_traits::node_ptr;
+    using etnte_node_ptr = etnte_traits::node_ptr;
+
+    et_node_ptr x0_least;    
+    et_traits::const_node_ptr* x0_least_it;
+
+    et_node_ptr x2_key;    
+    et_traits::const_node_ptr* x2_key_it;
+
+    bool x2_side;
+
+    using default_path = boost::intrusive::default_path_buffer<et_traits>;
+
+    /**
+     * x0_least - the least entry, representing a pseudo principal cut
+     * x1       - running entry
+     * x2_key   - is a entry of interest
+     */
+    explicit et_relative_more_than_comparator(const et_node_ptr& least, const et_node_ptr& key) {
+      x0_least = least;
+      x0_least_it = et_algo::get_path(x0_least, default_path::path0);
+
+      x2_key = key;
+      x2_key_it = et_algo::get_path(x2_key, default_path::path2);
+
+      x2_side = x0_least == x2_key || et_algo::less_than(x0_least_it, x2_key_it, default_path::path0);
+    }
+
+    bool key_more_than_node(const etnte_node_ptr& x1_etnte) const {
+      auto x1 = Context::get_vertex_entry(x1_etnte);
+
+      if (x1 == x2_key)
+        return false;
+
+      auto x1_it = et_algo::get_path(x1, default_path::path1);
+
+      auto x1_side = x0_least == x1 || et_algo::less_than(x0_least_it, x1_it, default_path::path0);
+      return x1_side == x2_side ? et_algo::less_than(x1_it, x2_key_it, default_path::path1) : x1_side;                                    
+    }
+
+    bool operator()(const etnte_node_ptr& x1_etnte) const {
+      return key_more_than_node(x1_etnte);
+    }
+
+    bool operator()(const etnte_node_ptr& x1_etnte, const et_node_ptr& /*comparing key*/) const {
+      return key_more_than_node(x1_etnte);
+    }
+
+    bool operator()(const etnte_node_ptr& x1_etnte, const etnte_node_ptr& /*comparing node*/) const {
+      return key_more_than_node(x1_etnte);    
+    }
+  };
+
+
+  template <typename Context>
+  struct etnte_context_operations
+  {
+    using et_node_ptr = et_traits::node_ptr;
+    using etnte_node_ptr = etnte_traits::node_ptr;
+
+    using less_than = et_relative_less_than_comparator<Context>;
+    using more_than = et_relative_more_than_comparator<Context>;
 
     static et_node_ptr get_least_et_entry(const etnte_node_ptr header) {
-      return context::get_vertex_entry(etnte_traits::get_left(header));
+      return Context::get_vertex_entry(etnte_traits::get_left(header));
     }
 
     static etnte_node_ptr lower_bound(etnte_node_ptr header, et_node_ptr vertex_et_entry) {
@@ -142,7 +147,7 @@ namespace HW::dynamic_connectivity
     static void insert(etnte_node_ptr header, etnte_node_ptr inserting_node) {      
       if (etnte_traits::get_parent(header))
         etnte_algo::insert_equal_upper_bound(header, inserting_node,
-          less_than(get_least_et_entry(header), context::get_vertex_entry(inserting_node)));
+          less_than(get_least_et_entry(header), Context::get_vertex_entry(inserting_node)));
 
 //      Equivalent
 //      algo::insert_equal_lower_bound(header, inserting_node,
@@ -157,7 +162,7 @@ namespace HW::dynamic_connectivity
         return;
       
       etnte_node_ptr etnte_least = etnte_traits::get_left(header_a);            
-      et_node_ptr et_least = context::get_vertex_entry(etnte_least);      
+      et_node_ptr et_least = Context::get_vertex_entry(etnte_least);      
 
       etnte_node_ptr etnte_entry_ab = etnte_algo::upper_bound(header_a, less_than(et_least, et_ab));
       etnte_node_ptr etnte_entry_ba = etnte_algo::upper_bound(header_a, less_than(et_least, et_ba));     

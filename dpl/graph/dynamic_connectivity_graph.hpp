@@ -332,11 +332,8 @@ namespace HW::dynamic_connectivity
     return std::make_pair(out_edges_begin(u), out_edges_end(u));
   }
   
-  // ReSharper disable once CppFunctionDoesntReturnValue
   inline vertex_ptr source(const directed_edge_ptr, const dynamic_connectivity_graph&) {}
-  // ReSharper disable once CppFunctionDoesntReturnValue
   inline dynamic_connectivity_graph::degree_size_type out_degree(const vertex_ptr u, const dynamic_connectivity_graph&) {}
-  //////////////////////////
   
  
 
@@ -424,7 +421,7 @@ namespace HW::dynamic_connectivity
 
 
 
-  const vertex _NULL_VERTEX{};
+  static const vertex _NULL_VERTEX = {};
 
   struct _generic_graph_traits {
   

@@ -239,7 +239,7 @@ namespace xpm
       vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        HW::dynamic_connectivity::et_context::set_vertex(&input[i], &vertices[i]);
+        HW::dynamic_connectivity::etnte_context::set_vertex(&input[i], &vertices[i]);
         algo::push_back(header_a, &input[i]);
       }
 

@@ -76,14 +76,14 @@ namespace HW { namespace dynamic_connectivity
       auto etBA = directed_edge::get_tree_edge_entry(ba);
       
       auto etHeaderA = et_algo::get_header(etAB);
-      auto etnteHeaderA = et_context::get_non_tree_edge_header(etHeaderA);
+      auto etnteHeaderA = etnte_context::get_non_tree_edge_header(etHeaderA);
 
       auto etHeaderB = etPool_.acquire();
       et_algo::init_header(etHeaderB);
         
       auto etnteHeaderB = etntePool_.acquire();
       etnte_algo::init_header(etnteHeaderB);                           
-      et_context::set_non_tree_edge_header(etHeaderB, etnteHeaderB);                        
+      etnte_context::set_non_tree_edge_header(etHeaderB, etnteHeaderB);                        
 
       etnte_context_operations<etnte_context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
 
@@ -145,8 +145,8 @@ namespace HW { namespace dynamic_connectivity
         auto etRecA = etnte_context::get_vertex_entry(ab);
         auto etRecB = etnte_context::get_vertex_entry(ba);                                        
 
-        et_context::set_directed_edge(etAB, ab);
-        et_context::set_directed_edge(etBA, ba);
+        etnte_context::set_directed_edge(etAB, ab);
+        etnte_context::set_directed_edge(etBA, ba);
 
         directed_edge::set_tree_edge_entry(ab, etAB);
         directed_edge::set_tree_edge_entry(ba, etBA);
@@ -182,7 +182,7 @@ namespace HW { namespace dynamic_connectivity
 
     template<class Visitor = component_visitor_empty>
     void remove_and_release_component(et_node_ptr header, Visitor& visitor = Visitor()) {            
-      auto etnteHeader = et_context::get_non_tree_edge_header(header);
+      auto etnteHeader = etnte_context::get_non_tree_edge_header(header);
 
       auto etnteNode = etnte_nt::get_left(etnteHeader);
       while (etnteNode != etnteHeader) {
@@ -198,18 +198,18 @@ namespace HW { namespace dynamic_connectivity
 
       auto etNode = et_nt::get_left(header);      
       while (etNode != header) {
-        if (et_context::is_loop_edge(etNode))
-          et_context::get_vertex(etNode)->et_entry_ = nullptr;
+        if (etnte_context::is_loop_edge(etNode))
+          etnte_context::get_vertex(etNode)->et_entry_ = nullptr;
         else
-          directed_edge::set_null_et_entry(et_context::get_directed_edge(etNode));
+          directed_edge::set_null_et_entry(etnte_context::get_directed_edge(etNode));
 
         etNode = et_algo::next_node(etNode);
       }
 
       etNode = et_nt::get_left(header);
       while (etNode != header) {
-        if (et_context::is_loop_edge(etNode))
-          visitor.vertex(et_context::get_vertex(etNode));        
+        if (etnte_context::is_loop_edge(etNode))
+          visitor.vertex(etnte_context::get_vertex(etNode));        
 
         auto prev = etNode;
         etNode = et_algo::next_node(etNode);
