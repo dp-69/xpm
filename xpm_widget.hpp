@@ -320,20 +320,20 @@ namespace xpm
 
       v3i processors{1};
 
-      if (auto proc_count = std::thread::hardware_concurrency();
-        proc_count == 12)
-        processors = {2, 2, 3};
-      else if (proc_count == 24)
-        processors = {4, 3, 2};
-      else if (proc_count == 32)
-        processors = {4, 4, 2};
-      else if (proc_count == 48)
-        processors = {4, 4, 3};
+      if (startup.solver.decomposition)
+        processors = *startup.solver.decomposition;
+      else {
+        if (auto proc_count = std::thread::hardware_concurrency();
+          proc_count == 12)
+          processors = {2, 2, 3};
+        else if (proc_count == 24)
+          processors = {4, 3, 2};
+        else if (proc_count == 32)
+          processors = {4, 4, 2};
+        else if (proc_count == 48)
+          processors = {4, 4, 3};
+      }
 
-      processors = {2, 2, 2};
-
-
-      
       auto const_permeability = startup.microporous_perm*0.001*presets::darcy_to_m2;
 
       
@@ -462,6 +462,7 @@ namespace xpm
 
         std::cout
           << " done"
+          << "\n\ndecomposition: (" << processors << fmt::format(") = {} procs", processors.prod())
           << "\n\nhypre MPI solve...";
         
         auto start = clock::now();

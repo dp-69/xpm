@@ -39,6 +39,7 @@
     }
   },
   "solver" : {
+    "decomposition": [2, 2, 2], /* the product is a number of MPI processes */
     "tolerance" : 1e-9,
     "max_iterations" : 19
   }

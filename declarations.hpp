@@ -274,15 +274,23 @@ namespace xpm
 
     struct
     {
+      std::optional<dpl::vector3i> decomposition;
       HYPRE_Real tolerance = 1.e-20;
       HYPRE_Int max_iterations = 20;
+
+      void load(const nlohmann::json& j) {
+        tolerance = j["tolerance"];
+        max_iterations = j["max_iterations"];
+
+        if (auto d = j.find("decomposition"); d != j.end())
+          decomposition = *d;
+      }
     } solver;
 
     void load(const nlohmann::json& j) {
       image.load(j["image"]);
       microporous_perm = j["properties"]["microporosity"]["permeability"].get<double>();
-      solver.tolerance = j["solver"]["tolerance"];
-      solver.max_iterations = j["solver"]["max_iterations"];
+      solver.load(j["solver"]);
     }
   };
 

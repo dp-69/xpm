@@ -12,20 +12,15 @@ The latest release can be found at
 
 
 
-To run xpm, unpack a zip archive and run the
-executable `xpm.exe`.
+To run xpm, unpack a zip archive and run the executable `xpm.exe`.
 
 
 ## Build instructions
 
 
-
-
-
 #### Windows
 
-All commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of
-Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
+All commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
 
 - Installing MPI
 
@@ -79,7 +74,7 @@ openmpi-bin
 > git clone https://github.com/microsoft/vcpkg
 > cd vcpkg
 > ./bootstrap-vcpkg.sh
-> ./vcpkg install vtk[qt] hypre boost-interprocess boost-iostreams boost-graph fmt
+> ./vcpkg install vtk[qt] hypre boost-interprocess boost-iostreams boost-graph fmt --clean-after-build
 ```
 
 - Step 2 - xpm compilation
