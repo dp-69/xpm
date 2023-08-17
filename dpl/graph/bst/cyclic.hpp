@@ -1,8 +1,31 @@
+/*
+ * This file is part of Dmytro Petrovskyy Library (DPL).
+ *
+ * Copyright (c) 2023
+ *   | Dmytro Petrovskyy, PhD
+ *   | dmytro.petrovsky@gmail.com
+ *   | https://www.linkedin.com/in/dmytro-petrovskyy/
+ *
+ * DPL is free software: you can redistribute it and/or modify              
+ * it under the terms of the GNU General Public License as published by     
+ * the Free Software Foundation, either version 3 of the License, or        
+ * (at your option) any later version.                                      
+ *                                                                         
+ * DPL is distributed in the hope that it will be useful,                   
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of           
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the            
+ * GNU General Public License for more details.                             
+ *                                                                         
+ * You should have received a copy of the GNU General Public License        
+ * along with RRM. If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 #pragma once
 
 namespace dpl::graph
 {
-  template<class Algo>
+  template <typename Algo>
   class cyclic
   {
     using algo = Algo;
@@ -84,7 +107,7 @@ namespace dpl::graph
     
 
     static bool less_than_low_low(const node_ptr& x0, const node_ptr& x1, const node_ptr& x2) {
-      using default_path = boost::intrusive::default_path_buffer<nt>;
+      using default_path = default_path_buffer<nt>;
 
       auto iter0 = algo::get_path(x0, default_path::path0);
       auto iter1 = algo::get_path(x1, default_path::path1);

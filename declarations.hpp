@@ -201,16 +201,16 @@ namespace xpm
     R x_, xy_;
 
   public:
-    template<typename T>
+    template <typename T>
     explicit map_idx3_t(dpl::vector_n<T, 3> dim)
       : x_(dim.x()), xy_(static_cast<R>(dim.x())*dim.y()) {}
 
-    template<typename V>
+    template <typename V>
     R operator()(dpl::vector_n<V, 3> v) const {
       return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
     }
 
-    template<typename V>
+    template <typename V>
     R operator()(V x, V y, V z) const {
       return static_cast<R>(x) + x_*y + xy_*z;
     }
@@ -218,7 +218,7 @@ namespace xpm
     template <typename I>
     auto operator[](std::integral_constant<I, 0>) { return 1; }
      
-    template<typename I>
+    template <typename I>
     auto operator[](std::integral_constant<I, 1>) { return x_; }
 
     template <typename I>

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "core.hpp"
+// #include "core.hpp"
 
 namespace dpl::graph
 {
@@ -91,22 +91,22 @@ namespace dpl::graph
       tag = (tag & ~balance) | b;
     }
 
-    template<class T> 
+    template <typename T> 
     static T* get_ptr(std::size_t tag) {
       return reinterpret_cast<T*>(tag & ptr);  // NOLINT(performance-no-int-to-ptr)
     }
 
-    template<class T> 
+    template <typename T> 
     static void set_ptr(std::size_t& tag, const T* pointer) {
       tag = reinterpret_cast<size_t>(pointer) | (tag & balance);
     }
 
-    template<class T> 
+    template <typename T> 
     static void set_ptr_bit(std::size_t& tag, const T* p) {
       tag = reinterpret_cast<size_t>(p) | bit | (tag & balance);
     }
 
-    template<class T> 
+    template <typename T> 
     static void set_ptr_balance(std::size_t& tag, const T* p, std::size_t b) {
       tag = reinterpret_cast<size_t>(p) | b;
     }

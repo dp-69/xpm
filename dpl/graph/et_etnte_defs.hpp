@@ -1,4 +1,27 @@
-﻿#pragma once
+﻿/*
+ * This file is part of Dmytro Petrovskyy Library (DPL).
+ *
+ * Copyright (c) 2023
+ *   | Dmytro Petrovskyy, PhD
+ *   | dmytro.petrovsky@gmail.com
+ *   | https://www.linkedin.com/in/dmytro-petrovskyy/
+ *
+ * DPL is free software: you can redistribute it and/or modify              
+ * it under the terms of the GNU General Public License as published by     
+ * the Free Software Foundation, either version 3 of the License, or        
+ * (at your option) any later version.                                      
+ *                                                                         
+ * DPL is distributed in the hope that it will be useful,                   
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of           
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the            
+ * GNU General Public License for more details.                             
+ *                                                                         
+ * You should have received a copy of the GNU General Public License        
+ * along with RRM. If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#pragma once
 
 #include "bst/avl_defs.hpp"
 #include "bst/aug_avltree_algorithms_ext.hpp"
@@ -7,13 +30,14 @@
 namespace HW::dynamic_connectivity
 {
   using et_traits = dpl::graph::avl_traits<dpl::graph::avl_node>;
-  using et_algo = boost::intrusive::avltree_algorithms_ext<et_traits>;
+  using et_algo = dpl::graph::avltree_algorithms_ext<et_traits>;
+
 
   using etnte_traits = dpl::graph::aug_avl_traits<dpl::graph::aug_avl_node>;
-  using etnte_algo = boost::intrusive::aug_avltree_algorithms_ext<etnte_traits>;
+  using etnte_algo = dpl::graph::aug_avltree_algorithms_ext<etnte_traits>;
 
 
-  template<typename Context>
+  template <typename Context>
   struct et_relative_less_than_comparator // key < x
   {
     using et_node_ptr = et_traits::node_ptr;
@@ -27,7 +51,7 @@ namespace HW::dynamic_connectivity
 
     bool x1_side;
 
-    using default_path = boost::intrusive::default_path_buffer<et_traits>;
+    using default_path = dpl::graph::default_path_buffer<et_traits>;
 
     /**
      * x0_least - the least entry, representing a pseudo principal cut
@@ -70,7 +94,7 @@ namespace HW::dynamic_connectivity
   };
 
 
-  template<typename Context>
+  template <typename Context>
   struct et_relative_more_than_comparator // x < key
   {
     using et_node_ptr = et_traits::node_ptr;
@@ -84,7 +108,7 @@ namespace HW::dynamic_connectivity
 
     bool x2_side;
 
-    using default_path = boost::intrusive::default_path_buffer<et_traits>;
+    using default_path = dpl::graph::default_path_buffer<et_traits>;
 
     /**
      * x0_least - the least entry, representing a pseudo principal cut

@@ -1,11 +1,106 @@
 #pragma once
 
 
+#include <boost/graph/depth_first_search.hpp>
+
 #include "core.hpp"
 
 
 // #include <chrono>
 
+
+namespace boost {
+  
+
+  template <class Graph>
+  class empty_dfs_visitor : public default_dfs_visitor
+  {      
+    typedef Graph g;
+    typedef typename graph_traits<Graph>::vertex_descriptor v;
+    typedef typename graph_traits<Graph>::edge_descriptor e;
+
+  public:      
+    void initialize_vertex(v, const g&) {}
+    void start_vertex(v, const g&) {}
+    void discover_vertex(v, const g&) {}
+    void finish_vertex(v, const g&) {}
+
+    void examine_edge(e, const g&) {}
+    void tree_edge(e, const g&) {}
+    void back_edge(e, const g&) {}
+    void forward_or_cross_edge(e, const g&) {}
+  };         
+
+
+  template <class Visitor1, class Visitor2>
+  class merged_dfs_visitor 
+  {      
+    Visitor1 _v1;
+    Visitor2 _v2;
+
+  public:
+    merged_dfs_visitor(Visitor1& v1, Visitor2& v2)
+      : _v1(v1), _v2(v2) {}
+
+    template<class Vertex, class Graph>
+    void initialize_vertex(Vertex v, const Graph& g) {
+      _v1.initialize_vertex(v, g);
+      _v2.initialize_vertex(v, g);
+    }
+
+    template<class Vertex, class Graph>
+    void start_vertex(Vertex v, const Graph& g) {
+      _v1.start_vertex(v, g);
+      _v2.start_vertex(v, g);  
+    }
+
+    template<class Vertex, class Graph>
+    void discover_vertex(Vertex v, const Graph& g) {
+      _v1.discover_vertex(v, g);
+      _v2.discover_vertex(v, g);
+    }
+
+    template<class Vertex, class Graph>
+    void finish_vertex(Vertex v, const Graph& g) {
+      _v1.finish_vertex(v, g);
+      _v2.finish_vertex(v, g);
+    }
+
+    template<class Edge, class Graph>
+    void examine_edge(Edge e, const Graph& g) {
+      _v1.examine_edge(e, g);
+      _v2.examine_edge(e, g);
+    }
+
+    template<class Edge, class Graph>
+    void tree_edge(Edge e, const Graph& g) {
+      _v1.tree_edge(e, g);
+      _v2.tree_edge(e, g);
+    }
+
+    template<class Edge, class Graph>
+    void back_edge(Edge e, const Graph& g) {
+      _v1.back_edge(e, g);
+      _v2.back_edge(e, g);
+    }
+
+    template<class Edge, class Graph>
+    void forward_or_cross_edge(Edge e, const Graph& g) {
+      _v1.forward_or_cross_edge(e, g);
+      _v2.forward_or_cross_edge(e, g);
+    }
+  };         
+
+  template<class Visitor1, class Visitor2>
+  merged_dfs_visitor<Visitor1, Visitor2> merge_visitors(Visitor1 v1, Visitor2 v2) {
+    return merged_dfs_visitor<Visitor1, Visitor2>(v1, v2);
+  }
+
+
+
+
+  
+}
 
 namespace HW
 {

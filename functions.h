@@ -348,7 +348,7 @@ namespace xpm
 
       using traits = HW::dynamic_connectivity::etnte_traits;
       using node = traits::node;
-      using algo = intrusive::aug_avltree_algorithms_ext<traits>;
+      using algo = dpl::graph::aug_avltree_algorithms_ext<traits>;
       using cyclic_op = dpl::graph::cyclic<algo>;
 
       // using vertex = HW::dynamic_connectivity::vertex;

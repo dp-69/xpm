@@ -23,11 +23,39 @@
 
 #pragma once
 
-namespace HW::dynamic_connectivity
+#include <boost/pool/object_pool.hpp>
+
+namespace dpl::graph
 {
-  
+  template <class T,
+    typename = std::enable_if_t<sizeof(T) >= sizeof(std::size_t)>>
+  class smart_pool
+  { 
+    static T* get_next(T* x) {       
+      return *reinterpret_cast<T**>(x);
+    }
 
-  
+    static void set_next(T* x, T* next) {
+      *reinterpret_cast<T**>(x) = next;
+    }
 
-  
+    boost::object_pool<T> pool_;
+    T* released_stack_top_ = nullptr;
+
+  public:
+    T* acquire() {
+      if (released_stack_top_) {
+        auto result = released_stack_top_;        
+        released_stack_top_ = get_next(released_stack_top_);       
+        return result;
+      }      
+
+      return pool_.malloc();
+    }
+
+    void release(T* x) {
+      set_next(x, released_stack_top_);
+      released_stack_top_ = x;
+    }
+  };
 }

@@ -49,8 +49,8 @@ namespace HW { namespace dynamic_connectivity
   vector<dc_stat> dcStatistics;
   #endif 
 
-    smart_pool<et_traits::node> etPool_;
-    smart_pool<etnte_traits::node> etntePool_;
+    dpl::graph::smart_pool<et_traits::node> etPool_;
+    dpl::graph::smart_pool<etnte_traits::node> etntePool_;
 
 
     std::vector<et_node_ptr> initial_components_;

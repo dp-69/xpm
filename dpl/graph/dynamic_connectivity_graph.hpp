@@ -423,132 +423,37 @@ namespace HW::dynamic_connectivity
 
   static const vertex _NULL_VERTEX = {};
 
-  struct _generic_graph_traits {
-  
-  private:    
-    struct traversal_tag :
-      virtual boost::incidence_graph_tag
-//      , virtual vertex_list_graph_tag
-//      , virtual adjacency_graph_tag
-//      , virtual edge_list_graph_tag
-//      , virtual bidirectional_graph_tag 
-    
-    {};
-
-  public:
-    typedef vertex_ptr vertex_descriptor;
-    typedef directed_edge_ptr edge_descriptor;
-    
-    typedef vertex_iterator vertex_iterator;
-    typedef out_edge_iterator out_edge_iterator;
-    
-    
-    typedef traversal_tag traversal_category;
-    typedef boost::undirected_tag directed_category;
-
-//    typedef allow_parallel_edge_tag edge_parallel_category;
-    typedef boost::disallow_parallel_edge_tag edge_parallel_category;
-
-    typedef dynamic_connectivity_graph::vertices_size_type vertices_size_type;
-    typedef dynamic_connectivity_graph::vertices_size_type edges_size_type;
-    typedef dynamic_connectivity_graph::degree_size_type degree_size_type;
-        
-
-    static vertex_descriptor null_vertex() {
-      return const_cast<vertex_descriptor>(&_NULL_VERTEX);
-    }
-  };
 }
 
 
-
-namespace boost {      
-  template <class Graph>
-  class empty_dfs_visitor : public default_dfs_visitor
-  {      
-    typedef Graph g;
-    typedef typename graph_traits<Graph>::vertex_descriptor v;
-    typedef typename graph_traits<Graph>::edge_descriptor e;
-
-  public:      
-    void initialize_vertex(v, const g&) {}
-    void start_vertex(v, const g&) {}
-    void discover_vertex(v, const g&) {}
-    void finish_vertex(v, const g&) {}
-
-    void examine_edge(e, const g&) {}
-    void tree_edge(e, const g&) {}
-    void back_edge(e, const g&) {}
-    void forward_or_cross_edge(e, const g&) {}
-  };         
-
-
-  template <class Visitor1, class Visitor2>
-  class merged_dfs_visitor 
-  {      
-    Visitor1 _v1;
-    Visitor2 _v2;
+namespace boost
+{
+  template <>
+  struct graph_traits<HW::dynamic_connectivity::dynamic_connectivity_graph>
+  {
+  private:
+    struct traversal_tag : virtual boost::incidence_graph_tag {};
 
   public:
-    merged_dfs_visitor(Visitor1& v1, Visitor2& v2)
-      : _v1(v1), _v2(v2) {}
+    using vertex_descriptor = HW::dynamic_connectivity::vertex_ptr;
+    using edge_descriptor = HW::dynamic_connectivity::directed_edge_ptr;
 
-    template<class Vertex, class Graph>
-    void initialize_vertex(Vertex v, const Graph& g) {
-      _v1.initialize_vertex(v, g);
-      _v2.initialize_vertex(v, g);
+    using vertex_iterator = HW::dynamic_connectivity::vertex_iterator;
+    using out_edge_iterator = HW::dynamic_connectivity::out_edge_iterator;
+
+
+    using traversal_category = traversal_tag;
+    using directed_category = boost::undirected_tag;
+
+    //    typedef allow_parallel_edge_tag edge_parallel_category;
+    using edge_parallel_category = boost::disallow_parallel_edge_tag;
+
+    using vertices_size_type = HW::dynamic_connectivity::dynamic_connectivity_graph::vertices_size_type;
+    using edges_size_type = HW::dynamic_connectivity::dynamic_connectivity_graph::vertices_size_type;
+    using degree_size_type = HW::dynamic_connectivity::dynamic_connectivity_graph::degree_size_type;
+
+    static vertex_descriptor null_vertex() {
+      return const_cast<vertex_descriptor>(&HW::dynamic_connectivity::_NULL_VERTEX);
     }
-
-    template<class Vertex, class Graph>
-    void start_vertex(Vertex v, const Graph& g) {
-      _v1.start_vertex(v, g);
-      _v2.start_vertex(v, g);  
-    }
-
-    template<class Vertex, class Graph>
-    void discover_vertex(Vertex v, const Graph& g) {
-      _v1.discover_vertex(v, g);
-      _v2.discover_vertex(v, g);
-    }
-
-    template<class Vertex, class Graph>
-    void finish_vertex(Vertex v, const Graph& g) {
-      _v1.finish_vertex(v, g);
-      _v2.finish_vertex(v, g);
-    }
-
-    template<class Edge, class Graph>
-    void examine_edge(Edge e, const Graph& g) {
-      _v1.examine_edge(e, g);
-      _v2.examine_edge(e, g);
-    }
-
-    template<class Edge, class Graph>
-    void tree_edge(Edge e, const Graph& g) {
-      _v1.tree_edge(e, g);
-      _v2.tree_edge(e, g);
-    }
-
-    template<class Edge, class Graph>
-    void back_edge(Edge e, const Graph& g) {
-      _v1.back_edge(e, g);
-      _v2.back_edge(e, g);
-    }
-
-    template<class Edge, class Graph>
-    void forward_or_cross_edge(Edge e, const Graph& g) {
-      _v1.forward_or_cross_edge(e, g);
-      _v2.forward_or_cross_edge(e, g);
-    }
-  };         
-
-  template<class Visitor1, class Visitor2>
-  merged_dfs_visitor<Visitor1, Visitor2> merge_visitors(Visitor1 v1, Visitor2 v2) {
-    return merged_dfs_visitor<Visitor1, Visitor2>(v1, v2);
-  }
-
-
-  template<>
-  struct graph_traits<HW::dynamic_connectivity::dynamic_connectivity_graph> :
-           HW::dynamic_connectivity::_generic_graph_traits {};
+  };
 }

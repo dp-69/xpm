@@ -2,7 +2,6 @@
 
 
 #include "et_etnte_defs.hpp"
-#include "smart_pool.hpp"
 #include <stack>
 
 namespace HW { namespace dynamic_connectivity
@@ -146,8 +145,8 @@ namespace HW { namespace dynamic_connectivity
 //    et_node_ptr _etPtr;
 //    etnte_node_ptr _etntePtr;
 
-    smart_pool<et_traits::node>& _etPool;
-    smart_pool<etnte_traits::node>& _etntePool;
+    dpl::graph::smart_pool<et_traits::node>& _etPool;
+    dpl::graph::smart_pool<etnte_traits::node>& _etntePool;
 
     et_node_ptr* _treeEdgeStackEmpty;
     et_node_ptr* _treeEdgeStackTop;
@@ -168,7 +167,7 @@ namespace HW { namespace dynamic_connectivity
     
 
     euler_tour_visitor(
-      smart_pool<et_traits::node>& etPool, smart_pool<etnte_traits::node>& etntePool, et_node_ptr* treeEdgeStack, std::vector<et_node_ptr>& components)
+      dpl::graph::smart_pool<et_traits::node>& etPool, dpl::graph::smart_pool<etnte_traits::node>& etntePool, et_node_ptr* treeEdgeStack, std::vector<et_node_ptr>& components)
       : _etPool(etPool),
         _etntePool(etntePool),
         _treeEdgeStackEmpty(treeEdgeStack),
