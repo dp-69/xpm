@@ -5,8 +5,6 @@
 
 namespace HW { namespace dynamic_connectivity
 {      
-  using namespace boost;
-
   struct component_visitor_empty
   {
     void vertex(vertex_ptr) {}
@@ -52,8 +50,7 @@ namespace HW { namespace dynamic_connectivity
     dpl::graph::smart_pool<et_traits::node> etPool_;
     dpl::graph::smart_pool<etnte_traits::node> etntePool_;
 
-
-    std::vector<et_node_ptr> initial_components_;
+    // std::vector<et_node_ptr> initial_components_;
    
     template<class Visitor>
     void init(const dynamic_connectivity_graph& g, vertex_ptr rootVertex, Visitor v) {            
@@ -61,11 +58,11 @@ namespace HW { namespace dynamic_connectivity
       auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
           
       execute_dfs(g, rootVertex,              
-        merge_visitors(euler_tour_visitor(etPool_, etntePool_, treeEdgeStack.data(), initial_components_), v));
+        merge_visitors(euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/), v));
     }
     
     void init(const dynamic_connectivity_graph& g, vertex_ptr rootVertex) {           
-      init(g, rootVertex, empty_dfs_visitor<dynamic_connectivity_graph>());
+      init(g, rootVertex, boost::default_dfs_visitor());
     }
 
     // Returns true if reconnected.
@@ -142,8 +139,8 @@ namespace HW { namespace dynamic_connectivity
         ba = ab->opposite;        
         auto replacementBA = directed_edge::get_non_tree_edge_entry(ba);
 
-        auto etRecA = etnte_context::get_vertex_entry(ab);
-        auto etRecB = etnte_context::get_vertex_entry(ba);                                        
+        auto etRecA = etnte_context::get_ordering_vertex_entry(ab);
+        auto etRecB = etnte_context::get_ordering_vertex_entry(ba);                                        
 
         etnte_context::set_directed_edge(etAB, ab);
         etnte_context::set_directed_edge(etBA, ba);

@@ -57,13 +57,13 @@ namespace HW { namespace dynamic_connectivity
     }
 
     // ordering of non-tree edges
-    static et_node_ptr get_vertex_entry(const directed_edge_ptr de) {
+    static et_node_ptr get_ordering_vertex_entry(const directed_edge_ptr de) {
       // sorted by a pointing-in vertex, the pointing-out works as well        
       return de->opposite->v1->et_entry_;   
     }
     
-    static et_node_ptr get_vertex_entry(etnte_const_node_ptr n) {
-      return get_vertex_entry(get_directed_edge(n));      
+    static et_node_ptr get_ordering_vertex_entry(etnte_const_node_ptr n) {
+      return get_ordering_vertex_entry(get_directed_edge(n));      
     }
   };
 
@@ -99,148 +99,107 @@ namespace HW { namespace dynamic_connectivity
 
 
 
-
-
-
-//  struct component_description
-//  {
-//    et_node_ptr header,
-//    size_t vertexCount,
-//    size_t
-//  };
-
-//  using two_phase_flow::phase_tag;
-
-//  class isolated_visitor : public boost::empty_dfs_visitor<decremental_connectivity_graph>
-//  {
-//    vector<phase_tag>& _edgeConductance;
-//    const graph_storage& _storage;
-//
-//  public:
-//    isolated_visitor(vector<phase_tag>& edgeConductance, const graph_storage& storage)
-//      : _edgeConductance(edgeConductance),
-//        _storage(storage) {}
-//
-//    void forward_or_cross_edge(directed_edge_ptr e, const decremental_connectivity_graph&) {
-//      _edgeConductance[_storage.edge_idx(e)] = phase_tag::water;
-//    }
-//
-//    void tree_edge(directed_edge_ptr e, const decremental_connectivity_graph&) {
-//      _edgeConductance[_storage.edge_idx(e)] = phase_tag::water;
-//    }
-//  };
-
   
 
   
-  class euler_tour_visitor : public boost::empty_dfs_visitor<dynamic_connectivity_graph>
+  class euler_tour_visitor : public boost::default_dfs_visitor
   {
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
 
+    et_node_ptr et_hdr_;
+    etnte_node_ptr etnte_hdr_;
 
+    dpl::graph::smart_pool<et_traits::node>* et_pool_;
+    dpl::graph::smart_pool<etnte_traits::node>* etnte_pool_;
 
-    et_node_ptr _etHeader;
-    etnte_node_ptr _etnteHeader;
-//    et_node_ptr _etPtr;
-//    etnte_node_ptr _etntePtr;
+    et_node_ptr* tree_edge_stack_empty_;
+    et_node_ptr* tree_edge_stack_top_;
 
-    dpl::graph::smart_pool<et_traits::node>& _etPool;
-    dpl::graph::smart_pool<etnte_traits::node>& _etntePool;
+    // std::vector<et_node_ptr>& components_;        
 
-    et_node_ptr* _treeEdgeStackEmpty;
-    et_node_ptr* _treeEdgeStackTop;
-
-
-    std::vector<et_node_ptr>& _components;        
-
-    et_node_ptr acquire_zero_level_et_entry() {
-//      auto entry = _etPtr++;
-      auto entry = _etPool.acquire();
-//      et_traits::set_next_level_entry(entry, nullptr);                
-      
-//      et_traits::augment_identity(entry);
-      return entry;
-    }    
     
   public:
-    
-
     euler_tour_visitor(
-      dpl::graph::smart_pool<et_traits::node>& etPool, dpl::graph::smart_pool<etnte_traits::node>& etntePool, et_node_ptr* treeEdgeStack, std::vector<et_node_ptr>& components)
-      : _etPool(etPool),
-        _etntePool(etntePool),
-        _treeEdgeStackEmpty(treeEdgeStack),
-        _treeEdgeStackTop(treeEdgeStack),
-        _components(components)    
+      dpl::graph::smart_pool<et_traits::node>* et_pool
+    , dpl::graph::smart_pool<etnte_traits::node>* etnte_pool
+    , et_node_ptr* tree_edge_stack
+    // , std::vector<et_node_ptr>& components
+    )
+      : et_pool_(et_pool)
+      , etnte_pool_(etnte_pool)
+      , tree_edge_stack_empty_(tree_edge_stack)
+      , tree_edge_stack_top_(tree_edge_stack)
+      // , components_(components)
     {}
-    
-    
+
+
+    void start_vertex(vertex_ptr, const dynamic_connectivity_graph&) {            
+      et_hdr_ = et_pool_->acquire();
+      et_algo::init_header(et_hdr_);      
+        
+      etnte_hdr_ = etnte_pool_->acquire();
+      etnte_algo::init_header(etnte_hdr_);      
+      etnte_context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
+
+      // components_.push_back(et_hdr_);
+    }
 
 
 
     // non-tree edge    
     void forward_or_cross_edge(directed_edge_ptr de, const dynamic_connectivity_graph&) {
-      auto entry = _etntePool.acquire();
-      auto entryOpp = _etntePool.acquire();
+      etnte_node_ptr entry = etnte_pool_->acquire();
+      etnte_node_ptr entry_opp = etnte_pool_->acquire();
       
-      auto deOpp = de->opposite;
+      directed_edge_ptr de_opp = de->opposite;
 
       directed_edge::set_non_tree_edge_entry(de, entry); 
-      directed_edge::set_non_tree_edge_entry(deOpp, entryOpp);
+      directed_edge::set_non_tree_edge_entry(de_opp, entry_opp);
       
       etnte_context::set_directed_edge(entry, de);
-      etnte_context::set_directed_edge(entryOpp, deOpp);
+      etnte_context::set_directed_edge(entry_opp, de_opp);
             
-      etnte_context_operations<etnte_context>::insert(_etnteHeader, entry);
-      etnte_context_operations<etnte_context>::insert(_etnteHeader, entryOpp);                    
+      etnte_context_operations<etnte_context>::insert(etnte_hdr_, entry);
+      etnte_context_operations<etnte_context>::insert(etnte_hdr_, entry_opp);                    
     }
 
-    void start_vertex(vertex_ptr, const dynamic_connectivity_graph&) {            
-      _etHeader = _etPool.acquire();
-      et_algo::init_header(_etHeader);      
         
-      _etnteHeader = _etntePool.acquire();
-      etnte_algo::init_header(_etnteHeader);      
-      etnte_context::set_non_tree_edge_header(_etHeader, _etnteHeader);             
-
-      _components.push_back(_etHeader);
-    }    
 
     void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
-      auto entry = acquire_zero_level_et_entry();        
+      auto entry = et_pool_->acquire();        
       
       etnte_context::set_vertex(entry, v);
       v->et_entry_ = entry;
 //      vertex_color_property_map::set_et_entry(v, entry);
 
 //      et_algo_not_augmented::push_back(_etHeader, entry);            
-      et_algo::push_back(_etHeader, entry);            
+      et_algo::push_back(et_hdr_, entry);            
     }
 
     void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
-      auto entry = acquire_zero_level_et_entry();
+      auto entry = et_pool_->acquire();
 
       etnte_context::set_directed_edge(entry, e);
       directed_edge::set_tree_edge_entry(e, entry);
 
-      et_algo::push_back(_etHeader, entry);      
+      et_algo::push_back(et_hdr_, entry);      
 
-      *++_treeEdgeStackTop = entry;
+      *++tree_edge_stack_top_ = entry;
     }
 
     void finish_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {
-      if (_treeEdgeStackTop != _treeEdgeStackEmpty) {
-        auto entry = acquire_zero_level_et_entry();
+      if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
+        auto entry = et_pool_->acquire();
         
-        auto top = *_treeEdgeStackTop--;
+        auto top = *tree_edge_stack_top_--;
 
         auto top_de_opposite = etnte_context::get_directed_edge(top)->opposite;
         etnte_context::set_directed_edge(entry, top_de_opposite);        
         directed_edge::set_tree_edge_entry(top_de_opposite, entry);
 
 //        et_algo_not_augmented::push_back(_etHeader, entry);        
-        et_algo::push_back(_etHeader, entry);        
+        et_algo::push_back(et_hdr_, entry);        
       }
 //      else
 //        et_algo::refresh_size(_etHeader);
@@ -332,6 +291,9 @@ namespace HW { namespace dynamic_connectivity
 
 
     return false;
+  }
+}}
+
 
 
 //    boost::depth_first_visit(g, searchVertex, connectivity_visitor(outletVertex), vertex_color_property_map());
@@ -481,6 +443,3 @@ namespace HW { namespace dynamic_connectivity
 
 
 //    return found;
-  }
-
-}}

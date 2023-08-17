@@ -69,7 +69,7 @@ namespace HW::dynamic_connectivity
     }
 
     bool key_less_than_node(const etnte_node_ptr& x2_etnte) const {
-      auto x2 = Context::get_vertex_entry(x2_etnte);
+      auto x2 = Context::get_ordering_vertex_entry(x2_etnte);
 
       if (x1_key == x2)
         return false;
@@ -126,7 +126,7 @@ namespace HW::dynamic_connectivity
     }
 
     bool key_more_than_node(const etnte_node_ptr& x1_etnte) const {
-      auto x1 = Context::get_vertex_entry(x1_etnte);
+      auto x1 = Context::get_ordering_vertex_entry(x1_etnte);
 
       if (x1 == x2_key)
         return false;
@@ -160,24 +160,26 @@ namespace HW::dynamic_connectivity
     using less_than = et_relative_less_than_comparator<Context>;
     using more_than = et_relative_more_than_comparator<Context>;
 
-    static et_node_ptr get_least_et_entry(const etnte_node_ptr header) {
-      return Context::get_vertex_entry(etnte_traits::get_left(header));
+    static etnte_node_ptr lower_bound(etnte_node_ptr hdr, et_node_ptr vertex_et_entry) {
+      return etnte_algo::lower_bound(hdr, more_than{
+        Context::get_ordering_vertex_entry(etnte_traits::get_left(hdr)),
+        vertex_et_entry
+      });
     }
 
-    static etnte_node_ptr lower_bound(etnte_node_ptr header, et_node_ptr vertex_et_entry) {
-      return etnte_algo::lower_bound(header, more_than(get_least_et_entry(header), vertex_et_entry));
-    }
-
-    static void insert(etnte_node_ptr header, etnte_node_ptr inserting_node) {      
-      if (etnte_traits::get_parent(header))
-        etnte_algo::insert_equal_upper_bound(header, inserting_node,
-          less_than(get_least_et_entry(header), Context::get_vertex_entry(inserting_node)));
+    static void insert(etnte_node_ptr hdr, etnte_node_ptr inserting_node) {      
+      if (etnte_traits::get_parent(hdr))
+        etnte_algo::insert_equal_upper_bound(hdr, inserting_node,
+          less_than{
+            Context::get_ordering_vertex_entry(etnte_traits::get_left(hdr)),
+            Context::get_ordering_vertex_entry(inserting_node)
+          });
 
 //      Equivalent
 //      algo::insert_equal_lower_bound(header, inserting_node,
 //        more_than_comparator(get_least_et_entry(header), node_traits::get_vertex_entry(inserting_node)));
       else
-        etnte_algo::push_back(header, inserting_node);
+        etnte_algo::push_back(hdr, inserting_node);
     }
 
 
@@ -186,10 +188,10 @@ namespace HW::dynamic_connectivity
         return;
       
       etnte_node_ptr etnte_least = etnte_traits::get_left(header_a);            
-      et_node_ptr et_least = Context::get_vertex_entry(etnte_least);      
+      et_node_ptr et_least = Context::get_ordering_vertex_entry(etnte_least);      
 
-      etnte_node_ptr etnte_entry_ab = etnte_algo::upper_bound(header_a, less_than(et_least, et_ab));
-      etnte_node_ptr etnte_entry_ba = etnte_algo::upper_bound(header_a, less_than(et_least, et_ba));     
+      etnte_node_ptr etnte_entry_ab = etnte_algo::upper_bound(header_a, less_than{et_least, et_ab});
+      etnte_node_ptr etnte_entry_ba = etnte_algo::upper_bound(header_a, less_than{et_least, et_ba});     
 
 //      Equivalent
 //      auto etnteEntryAB = algo::lower_bound(headerA, more_than_comparator(etLeast, et_ab));

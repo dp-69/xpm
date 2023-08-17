@@ -12,24 +12,24 @@
 namespace boost {
   
 
-  template <class Graph>
-  class empty_dfs_visitor : public default_dfs_visitor
-  {      
-    typedef Graph g;
-    typedef typename graph_traits<Graph>::vertex_descriptor v;
-    typedef typename graph_traits<Graph>::edge_descriptor e;
-
-  public:      
-    void initialize_vertex(v, const g&) {}
-    void start_vertex(v, const g&) {}
-    void discover_vertex(v, const g&) {}
-    void finish_vertex(v, const g&) {}
-
-    void examine_edge(e, const g&) {}
-    void tree_edge(e, const g&) {}
-    void back_edge(e, const g&) {}
-    void forward_or_cross_edge(e, const g&) {}
-  };         
+  // template <class Graph>
+  // class empty_dfs_visitor : public default_dfs_visitor
+  // {      
+  //   typedef Graph g;
+  //   typedef typename graph_traits<Graph>::vertex_descriptor v;
+  //   typedef typename graph_traits<Graph>::edge_descriptor e;
+  //
+  // public:      
+  //   void initialize_vertex(v, const g&) {}
+  //   void start_vertex(v, const g&) {}
+  //   void discover_vertex(v, const g&) {}
+  //   void finish_vertex(v, const g&) {}
+  //
+  //   void examine_edge(e, const g&) {}
+  //   void tree_edge(e, const g&) {}
+  //   void back_edge(e, const g&) {}
+  //   void forward_or_cross_edge(e, const g&) {}
+  // };         
 
 
   template <class Visitor1, class Visitor2>

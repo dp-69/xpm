@@ -51,15 +51,12 @@ namespace HW::dynamic_connectivity
 
   struct directed_edge : non_copyable_movable
   {
-    typedef directed_edge* node_ptr;    
-//    typedef const directed_edge* const_node_ptr;
-
   private:
     friend struct default_list_node_traits<directed_edge>;
 
     // entry for the list of out edges from v0 pointing to v1
-    node_ptr prev_;
-    node_ptr next_;
+    directed_edge_ptr prev_;
+    directed_edge_ptr next_;
 
 
 
@@ -73,14 +70,14 @@ namespace HW::dynamic_connectivity
   public:
     vertex_ptr v1;  // pointing-in vertex  
 
-    node_ptr opposite;
+    directed_edge_ptr opposite;
 
     
-    static void set_null_et_entry(const node_ptr& x) {
+    static void set_null_et_entry(const directed_edge_ptr& x) {
       x->entry_type_ = 0;
     }
 
-    static bool is_null_et_entry(const node_ptr& x) {
+    static bool is_null_et_entry(const directed_edge_ptr& x) {
       return !x->entry_type_;
     }    
 
@@ -92,7 +89,7 @@ namespace HW::dynamic_connectivity
 
 
 
-    static bool is_tree_edge(const node_ptr& x) {
+    static bool is_tree_edge(const directed_edge_ptr& x) {
       return compression::get_bits(x->entry_type_);
     }
 
@@ -103,21 +100,21 @@ namespace HW::dynamic_connectivity
 
     using et_node_ptr = et_traits::node_ptr;
 
-    static et_node_ptr get_tree_edge_entry(const node_ptr& x) {
+    static et_node_ptr get_tree_edge_entry(const directed_edge_ptr& x) {
       return compression::get_pointer<et_node_ptr>(x->entry_type_);      
     }
 
-    static void set_tree_edge_entry(const node_ptr& x, const et_node_ptr& y) {
+    static void set_tree_edge_entry(const directed_edge_ptr& x, const et_node_ptr& y) {
       compression::set_pointer_and_bits(x->entry_type_, y, true);      
     }
 
     using etnte_node_ptr = etnte_traits::node_ptr;
 
-    static etnte_node_ptr get_non_tree_edge_entry(const node_ptr& x) {
+    static etnte_node_ptr get_non_tree_edge_entry(const directed_edge_ptr& x) {
       return compression::get_pointer<etnte_node_ptr>(x->entry_type_);      
     }
 
-    static void set_non_tree_edge_entry(const node_ptr& x, const etnte_node_ptr& y) {
+    static void set_non_tree_edge_entry(const directed_edge_ptr& x, const etnte_node_ptr& y) {
       compression::set_pointer_and_bits(x->entry_type_, y, false);      
     }    
   };
