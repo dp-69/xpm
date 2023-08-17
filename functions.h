@@ -3,8 +3,8 @@
 #include "pore_network_image.hpp"
 
 #include <dpl/graph/et_etnte_defs.hpp>
-#include <dpl/graph/dynamic_connectivity_graph.hpp>
-#include <dpl/graph/euler_tour_dynamic_connectivity_context.hpp>
+#include <dpl/graph/dc_graph.hpp>
+#include <dpl/graph/et_dc_context.hpp>
 
 
 
@@ -197,7 +197,7 @@ namespace xpm
   {
     inline void DFS_CHECK() {
       using vertex = HW::dynamic_connectivity::vertex;
-      using graph = HW::dynamic_connectivity::dynamic_connectivity_graph;
+      using graph = HW::dynamic_connectivity::dc_graph;
       using directed_edge = HW::dynamic_connectivity::directed_edge;
       using et_algo = HW::dynamic_connectivity::et_algo;
       using et_traits = HW::dynamic_connectivity::et_traits;
@@ -232,7 +232,7 @@ namespace xpm
         add_edge(vertices[l], vertices[r], d0, d1, g);
       }
 
-      HW::dynamic_connectivity::euler_tour_dynamic_connectivity_context<HW::dynamic_connectivity::etnte_context> etdc_context;
+      HW::dynamic_connectivity::et_dc_context<HW::dynamic_connectivity::etnte_context> etdc_context;
 
       etdc_context.init(g/*, &vertices[1]*/);
 

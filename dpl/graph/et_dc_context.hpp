@@ -1,6 +1,7 @@
 #pragma once
 
 #include "euler_tour_visitor.hpp"
+// #include "dynamic_connectivity_graph.hpp"
 // #include "HW/pore_network_modelling/row_idx_populate_visitor.h" //TODO
 
 namespace HW { namespace dynamic_connectivity
@@ -32,7 +33,7 @@ namespace HW { namespace dynamic_connectivity
   };
 
   template <typename Context>
-  class euler_tour_dynamic_connectivity_context
+  class et_dc_context
   {
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
@@ -69,7 +70,7 @@ namespace HW { namespace dynamic_connectivity
     //   execute_dfs(g, rootVertex, euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
     // }
 
-    void init(const dynamic_connectivity_graph& g) {           
+    void init(const dc_graph& g) {           
       auto vertexCount = num_vertices(g);                 
       auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
           
@@ -80,20 +81,20 @@ namespace HW { namespace dynamic_connectivity
     bool split_and_reconnect_tree_edge(directed_edge_ptr ab) {
       auto ba = ab->opposite;
 
-      auto etAB = directed_edge::get_tree_edge_entry(ab);
-      auto etBA = directed_edge::get_tree_edge_entry(ba);
+      auto etAB = Context::get_tree_edge_entry(ab);
+      auto etBA = Context::get_tree_edge_entry(ba);
       
       auto etHeaderA = et_algo::get_header(etAB);
-      auto etnteHeaderA = etnte_context::get_non_tree_edge_header(etHeaderA);
+      auto etnteHeaderA = Context::get_non_tree_edge_header(etHeaderA);
 
       auto etHeaderB = etPool_.acquire();
       et_algo::init_header(etHeaderB);
         
       auto etnteHeaderB = etntePool_.acquire();
       etnte_algo::init_header(etnteHeaderB);                           
-      etnte_context::set_non_tree_edge_header(etHeaderB, etnteHeaderB);                        
+      Context::set_non_tree_edge_header(etHeaderB, etnteHeaderB);                        
 
-      etnte_context_operations<etnte_context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
+      etnte_context_operations<Context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
 
       if (et_algo::less_than(etAB, etBA))
         dpl::graph::cyclic<et_algo>::split(etHeaderA, etHeaderB, etAB, etBA);
@@ -138,7 +139,7 @@ namespace HW { namespace dynamic_connectivity
        
       #else
       for (const auto& etnte : tree_inorder_range<etnte_algo>(etnteHeaderA))
-        if (etnte_algo::get_header(directed_edge::get_non_tree_edge_entry(etnte_context::get_directed_edge(etnte)->opposite)) == etnteHeaderB) {
+        if (etnte_algo::get_header(Context::get_non_tree_edge_entry(Context::get_directed_edge(etnte)->opposite)) == etnteHeaderB) {
           replacementAB = etnte;
           break;
         }
@@ -146,23 +147,23 @@ namespace HW { namespace dynamic_connectivity
 
      
       if (replacementAB) {                                
-        ab = etnte_context::get_directed_edge(replacementAB);
+        ab = Context::get_directed_edge(replacementAB);
         ba = ab->opposite;        
-        auto replacementBA = directed_edge::get_non_tree_edge_entry(ba);
+        auto replacementBA = Context::get_non_tree_edge_entry(ba);
 
-        auto etRecA = etnte_context::get_ordering_vertex_entry(ab);
-        auto etRecB = etnte_context::get_ordering_vertex_entry(ba);                                        
+        auto etRecA = Context::get_ordering_vertex_entry(ab);
+        auto etRecB = Context::get_ordering_vertex_entry(ba);                                        
 
-        etnte_context::set_directed_edge(etAB, ab);
-        etnte_context::set_directed_edge(etBA, ba);
+        Context::set_directed_edge(etAB, ab);
+        Context::set_directed_edge(etBA, ba);
 
-        directed_edge::set_tree_edge_entry(ab, etAB);
-        directed_edge::set_tree_edge_entry(ba, etBA);
+        Context::set_tree_edge_entry(ab, etAB);
+        Context::set_tree_edge_entry(ba, etBA);
                 
 
         // etnte
-        dpl::graph::cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_context_operations<etnte_context>::lower_bound(etnteHeaderA, etRecA));
-        auto leastB = etnte_context_operations<etnte_context>::lower_bound(etnteHeaderB, etRecB);
+        dpl::graph::cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_context_operations<Context>::lower_bound(etnteHeaderA, etRecA));
+        auto leastB = etnte_context_operations<Context>::lower_bound(etnteHeaderB, etRecB);
         dpl::graph::cyclic<etnte_algo>::principal_cut_least_dropped(etnteHeaderB, leastB);
         etnte_algo::join_trees(etnteHeaderA, leastB, etnteHeaderB);
 
@@ -190,11 +191,11 @@ namespace HW { namespace dynamic_connectivity
 
     template<class Visitor = component_visitor_empty>
     void remove_and_release_component(et_node_ptr header, Visitor& visitor = Visitor()) {            
-      auto etnteHeader = etnte_context::get_non_tree_edge_header(header);
+      auto etnteHeader = Context::get_non_tree_edge_header(header);
 
       auto etnteNode = etnte_nt::get_left(etnteHeader);
       while (etnteNode != etnteHeader) {
-        auto de = etnte_context::get_directed_edge(etnteNode);
+        auto de = Context::get_directed_edge(etnteNode);
         directed_edge::set_null_et_entry(de);
         auto prev = etnteNode;
         etnteNode = etnte_algo::next_node(etnteNode);
@@ -206,18 +207,18 @@ namespace HW { namespace dynamic_connectivity
 
       auto etNode = et_nt::get_left(header);      
       while (etNode != header) {
-        if (etnte_context::is_loop_edge(etNode))
-          etnte_context::get_vertex(etNode)->et_entry_ = nullptr;
+        if (Context::is_loop_edge(etNode))
+          Context::set_entry(Context::get_vertex(etNode), nullptr);
         else
-          directed_edge::set_null_et_entry(etnte_context::get_directed_edge(etNode));
+          directed_edge::set_null_et_entry(Context::get_directed_edge(etNode));
 
         etNode = et_algo::next_node(etNode);
       }
 
       etNode = et_nt::get_left(header);
       while (etNode != header) {
-        if (etnte_context::is_loop_edge(etNode))
-          visitor.vertex(etnte_context::get_vertex(etNode));        
+        if (Context::is_loop_edge(etNode))
+          visitor.vertex(Context::get_vertex(etNode));        
 
         auto prev = etNode;
         etNode = et_algo::next_node(etNode);
@@ -230,8 +231,8 @@ namespace HW { namespace dynamic_connectivity
 
     void remove_non_tree_edge(directed_edge_ptr ab) {
       auto ba = ab->opposite;
-      auto etnteAB = directed_edge::get_non_tree_edge_entry(ab);
-      auto etnteBA = directed_edge::get_non_tree_edge_entry(ba);
+      auto etnteAB = Context::get_non_tree_edge_entry(ab);
+      auto etnteBA = Context::get_non_tree_edge_entry(ba);
       auto etnteHeader = etnte_algo::get_header(etnteAB);
       
       etnte_algo::erase(etnteHeader, etnteAB);

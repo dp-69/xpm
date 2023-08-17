@@ -169,7 +169,7 @@ namespace HW::dynamic_connectivity
     {}
 
 
-    void start_vertex(vertex_ptr, const dynamic_connectivity_graph&) {            
+    void start_vertex(vertex_ptr, const dc_graph&) {            
       et_hdr_ = et_pool_->acquire();
       et_algo::init_header(et_hdr_);      
       etnte_hdr_ = etnte_pool_->acquire();
@@ -177,14 +177,14 @@ namespace HW::dynamic_connectivity
       Context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
     }
 
-    void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
+    void discover_vertex(vertex_ptr v, const dc_graph&) {     
       et_node_ptr entry = et_pool_->acquire();        
       Context::set_vertex(entry, v);
       Context::set_entry(v, entry);
       et_algo::push_back(et_hdr_, entry);            
     }
 
-    void finish_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {
+    void finish_vertex(vertex_ptr v, const dc_graph&) {
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_node_ptr entry = et_pool_->acquire();
         et_node_ptr top = *tree_edge_stack_top_--;
@@ -195,7 +195,7 @@ namespace HW::dynamic_connectivity
       }
     }    
 
-    void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
+    void tree_edge(directed_edge_ptr e, const dc_graph&) {
       et_node_ptr entry = et_pool_->acquire();
       Context::set_directed_edge(entry, e);
       Context::set_tree_edge_entry(e, entry);
@@ -204,7 +204,7 @@ namespace HW::dynamic_connectivity
     }
 
     // non-tree edge    
-    void forward_or_cross_edge(directed_edge_ptr de, const dynamic_connectivity_graph&) {
+    void forward_or_cross_edge(directed_edge_ptr de, const dc_graph&) {
       etnte_node_ptr entry = etnte_pool_->acquire();
       etnte_node_ptr entry_opp = etnte_pool_->acquire();
       
@@ -236,7 +236,7 @@ namespace HW::dynamic_connectivity
   // }
 
   template <typename Context>
-  static void execute_dfs(const dynamic_connectivity_graph& g, euler_tour_visitor<Context> visitor) {
+  static void execute_dfs(const dc_graph& g, euler_tour_visitor<Context> visitor) {
     vertex_iterator vi, vi_start, vi_end;
     boost::tie(vi_start, vi_end) = vertices(g);
             

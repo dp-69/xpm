@@ -31,7 +31,7 @@ namespace HW::dynamic_connectivity
     boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<directed_edge_node_traits>>,
     boost::intrusive::constant_time_size<false>>;
 
-  struct dynamic_connectivity_graph;
+  struct dc_graph;
 }
 
 
@@ -92,9 +92,9 @@ namespace HW::dynamic_connectivity
     out_edge_list out_edges_;
 
     
-    friend void clear_out_edges(vertex_ptr, dynamic_connectivity_graph&);
-    friend void add_edge(vertex&, vertex&, directed_edge&, directed_edge&, dynamic_connectivity_graph&);
-    friend std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr, const dynamic_connectivity_graph&);
+    friend void clear_out_edges(vertex_ptr, dc_graph&);
+    friend void add_edge(vertex&, vertex&, directed_edge&, directed_edge&, dc_graph&);
+    friend std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr, const dc_graph&);
 
     friend out_edge_iterator out_edges_begin(const vertex_ptr);
     friend out_edge_iterator out_edges_end(const vertex_ptr);
@@ -193,7 +193,7 @@ namespace HW::dynamic_connectivity
 
     
 
-  struct dynamic_connectivity_graph
+  struct dc_graph
   {
     typedef size_t vertices_size_type;
     typedef size_t edges_size_type;
@@ -202,24 +202,24 @@ namespace HW::dynamic_connectivity
   private:
     vertex_list vertices_;
 
-    friend void add_vertex(vertex_ptr v, dynamic_connectivity_graph& g);
-    friend vertices_size_type num_vertices(const dynamic_connectivity_graph& g);
-    friend std::pair<vertex_iterator, vertex_iterator> vertices(const dynamic_connectivity_graph& g);
+    friend void add_vertex(vertex_ptr v, dc_graph& g);
+    friend vertices_size_type num_vertices(const dc_graph& g);
+    friend std::pair<vertex_iterator, vertex_iterator> vertices(const dc_graph& g);
   };
 
-  inline void add_vertex(vertex_ptr v, dynamic_connectivity_graph& g) {            
+  inline void add_vertex(vertex_ptr v, dc_graph& g) {            
     g.vertices_.push_back(*v);    
   }
 
-  inline void remove_vertex(vertex_ptr v, dynamic_connectivity_graph&) {
+  inline void remove_vertex(vertex_ptr v, dc_graph&) {
     vertex_list::node_algorithms::unlink(v);            
   }
 
-  inline void clear_out_edges(vertex_ptr v, dynamic_connectivity_graph&) {
+  inline void clear_out_edges(vertex_ptr v, dc_graph&) {
     v->out_edges_.clear();
   }
 
-  inline void add_edge(vertex& v, vertex& u, directed_edge& vu, directed_edge& uv, dynamic_connectivity_graph&) {            
+  inline void add_edge(vertex& v, vertex& u, directed_edge& vu, directed_edge& uv, dc_graph&) {            
     vu.v1 = &u;
     v.out_edges_.push_back(vu);
     
@@ -230,16 +230,16 @@ namespace HW::dynamic_connectivity
     uv.opposite = &vu;
   }
 
-  inline void remove_edge(const directed_edge_ptr& vu, dynamic_connectivity_graph&) {        
+  inline void remove_edge(const directed_edge_ptr& vu, dc_graph&) {        
     out_edge_list::node_algorithms::unlink(vu->opposite);
     out_edge_list::node_algorithms::unlink(vu);
   }
 
-  inline dynamic_connectivity_graph::vertices_size_type num_vertices(const dynamic_connectivity_graph& g) {    
+  inline dc_graph::vertices_size_type num_vertices(const dc_graph& g) {    
     return g.vertices_.size();
   }
 
-  inline std::pair<vertex_iterator, vertex_iterator> vertices(const dynamic_connectivity_graph& g) {
+  inline std::pair<vertex_iterator, vertex_iterator> vertices(const dc_graph& g) {
 	  return std::make_pair(vertex_iterator(g.vertices_.begin().pointed_node()), vertex_iterator(g.vertices_.end().pointed_node()));
   }    
    
@@ -260,19 +260,19 @@ namespace HW::dynamic_connectivity
   };
 
   
-  inline vertex_ptr target(const directed_edge_ptr e, const dynamic_connectivity_graph&) {
+  inline vertex_ptr target(const directed_edge_ptr e, const dc_graph&) {
     return e->v1;
   }
 
 
 
   // for Boost concept check
-  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr u, const dynamic_connectivity_graph& g) {
+  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr u, const dc_graph& g) {
     return std::make_pair(out_edges_begin(u), out_edges_end(u));
   }
   
-  inline vertex_ptr source(const directed_edge_ptr, const dynamic_connectivity_graph&) {}
-  inline dynamic_connectivity_graph::degree_size_type out_degree(const vertex_ptr u, const dynamic_connectivity_graph&) {}
+  inline vertex_ptr source(const directed_edge_ptr, const dc_graph&) {}
+  inline dc_graph::degree_size_type out_degree(const vertex_ptr u, const dc_graph&) {}
   
  
 
@@ -362,7 +362,7 @@ namespace HW::dynamic_connectivity
 namespace boost
 {
   template <>
-  struct graph_traits<HW::dynamic_connectivity::dynamic_connectivity_graph>
+  struct graph_traits<HW::dynamic_connectivity::dc_graph>
   {
   private:
     struct traversal_tag : virtual boost::incidence_graph_tag {};
@@ -379,9 +379,9 @@ namespace boost
     //    typedef allow_parallel_edge_tag edge_parallel_category;
     using edge_parallel_category = boost::disallow_parallel_edge_tag;
 
-    using vertices_size_type = HW::dynamic_connectivity::dynamic_connectivity_graph::vertices_size_type;
-    using edges_size_type = HW::dynamic_connectivity::dynamic_connectivity_graph::vertices_size_type;
-    using degree_size_type = HW::dynamic_connectivity::dynamic_connectivity_graph::degree_size_type;
+    using vertices_size_type = HW::dynamic_connectivity::dc_graph::vertices_size_type;
+    using edges_size_type = HW::dynamic_connectivity::dc_graph::vertices_size_type;
+    using degree_size_type = HW::dynamic_connectivity::dc_graph::degree_size_type;
 
     static vertex_descriptor null_vertex() {
       return const_cast<vertex_descriptor>(&HW::dynamic_connectivity::_NULL_VERTEX);
