@@ -49,23 +49,17 @@ namespace HW::dynamic_connectivity
  
    
 
-  struct directed_edge : non_copyable_movable
+  struct directed_edge
   {
   private:
     friend struct default_list_node_traits<directed_edge>;
+    friend class etnte_context;
 
     // entry for the list of out edges from v0 pointing to v1
     directed_edge_ptr prev_;
     directed_edge_ptr next_;
 
-
-
-//    typedef pointer_plus_aligned_least_significant_bits<void*, bool, 1> compression;
-    typedef tagged_pointer_as_size_t<bool, 1> compression;
-
     size_t entry_type_; 
-
-    
 
   public:
     vertex_ptr v1;  // pointing-in vertex  
@@ -80,56 +74,16 @@ namespace HW::dynamic_connectivity
     static bool is_null_et_entry(const directed_edge_ptr& x) {
       return !x->entry_type_;
     }    
-
-
-
-
-
-
-
-
-
-    static bool is_tree_edge(const directed_edge_ptr& x) {
-      return compression::get_bits(x->entry_type_);
-    }
-
-
-
-
-
-
-    using et_node_ptr = et_traits::node_ptr;
-
-    static et_node_ptr get_tree_edge_entry(const directed_edge_ptr& x) {
-      return compression::get_pointer<et_node_ptr>(x->entry_type_);      
-    }
-
-    static void set_tree_edge_entry(const directed_edge_ptr& x, const et_node_ptr& y) {
-      compression::set_pointer_and_bits(x->entry_type_, y, true);      
-    }
-
-    using etnte_node_ptr = etnte_traits::node_ptr;
-
-    static etnte_node_ptr get_non_tree_edge_entry(const directed_edge_ptr& x) {
-      return compression::get_pointer<etnte_node_ptr>(x->entry_type_);      
-    }
-
-    static void set_non_tree_edge_entry(const directed_edge_ptr& x, const etnte_node_ptr& y) {
-      compression::set_pointer_and_bits(x->entry_type_, y, false);      
-    }    
   };
 
-    
-  
-  
-
-
-  struct vertex : non_copyable_movable
+  struct vertex
   {
     typedef vertex* node_ptr;
 
   private:    
     friend struct default_list_node_traits<vertex>;
+    friend class etnte_context;
+
 
     // intrusive list of graph vertices
     node_ptr prev_;
@@ -145,25 +99,10 @@ namespace HW::dynamic_connectivity
     friend out_edge_iterator out_edges_begin(const vertex_ptr);
     friend out_edge_iterator out_edges_end(const vertex_ptr);
 
-//    friend class euler_tour_dynamic_connectivity_context;
-//    friend struct euler_tour_non_tree_edge_node_traits;
-//    friend class euler_tour_visitor;
-//    friend class pnm_et_dc_context;
-    
-
-//    friend out_edge_iterator out_edges_begin(const vertex_ptr, const dc_graph&);
-//    friend out_edge_iterator out_edges_end(const vertex_ptr, const dc_graph&);
-  public:    
-    size_t row_idx_ = 0;  // relative index, not unique identifier
-
-//    static const size_t invalid_rel_idx = ~size_t(0) >> 2;
-
-
     et_traits::node_ptr et_entry_;
 
-
-    // bool visited = false;
-//    bool trapped = false;
+  public:    
+    size_t row_idx_ = 0;  // relative index, not unique identifier
   };
 
   

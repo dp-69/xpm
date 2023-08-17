@@ -48,6 +48,8 @@ namespace HW::dynamic_connectivity
 
     // ---------------
 
+
+
     static directed_edge_ptr get_directed_edge(etnte_const_node_ptr n) {
       return mask::get_ptr<directed_edge>(n->tag);
     }
@@ -65,6 +67,41 @@ namespace HW::dynamic_connectivity
     static et_node_ptr get_ordering_vertex_entry(etnte_const_node_ptr n) {
       return get_ordering_vertex_entry(get_directed_edge(n));      
     }
+
+    // ---------------
+
+    static et_node_ptr get_entry(vertex_ptr v) {
+      return v->et_entry_;
+    }
+
+    static void set_entry(vertex_ptr v, et_node_ptr et) {
+      v->et_entry_ = et;
+    }
+
+
+    // ---------------
+
+    typedef tagged_pointer_as_size_t<bool, 1> compression;
+
+    static bool is_tree_edge(const directed_edge_ptr& x) {
+      return compression::get_bits(x->entry_type_);
+    }
+
+    static et_node_ptr get_tree_edge_entry(const directed_edge_ptr& x) {
+      return compression::get_pointer<et_node_ptr>(x->entry_type_);      
+    }
+
+    static void set_tree_edge_entry(const directed_edge_ptr& x, const et_node_ptr& y) {
+      compression::set_pointer_and_bits(x->entry_type_, y, true);      
+    }
+
+    static etnte_node_ptr get_non_tree_edge_entry(const directed_edge_ptr& x) {
+      return compression::get_pointer<etnte_node_ptr>(x->entry_type_);      
+    }
+
+    static void set_non_tree_edge_entry(const directed_edge_ptr& x, const etnte_node_ptr& y) {
+      compression::set_pointer_and_bits(x->entry_type_, y, false);      
+    }    
   };
 
 
@@ -101,7 +138,7 @@ namespace HW::dynamic_connectivity
 
   
 
-  
+  template <typename Context>
   class euler_tour_visitor : public boost::default_dfs_visitor
   {
     using et_node_ptr = et_traits::node_ptr;
@@ -137,15 +174,13 @@ namespace HW::dynamic_connectivity
       et_algo::init_header(et_hdr_);      
       etnte_hdr_ = etnte_pool_->acquire();
       etnte_algo::init_header(etnte_hdr_);      
-      etnte_context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
+      Context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
     }
 
     void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
       et_node_ptr entry = et_pool_->acquire();        
-      etnte_context::set_vertex(entry, v);
-      auto lul = etnte_context::get_vertex(entry);
-
-      v->et_entry_ = entry;
+      Context::set_vertex(entry, v);
+      Context::set_entry(v, entry);
       et_algo::push_back(et_hdr_, entry);            
     }
 
@@ -153,17 +188,17 @@ namespace HW::dynamic_connectivity
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_node_ptr entry = et_pool_->acquire();
         et_node_ptr top = *tree_edge_stack_top_--;
-        directed_edge_ptr top_de_opposite = etnte_context::get_directed_edge(top)->opposite;
-        etnte_context::set_directed_edge(entry, top_de_opposite);        
-        directed_edge::set_tree_edge_entry(top_de_opposite, entry);
+        directed_edge_ptr top_de_opposite = Context::get_directed_edge(top)->opposite;
+        Context::set_directed_edge(entry, top_de_opposite);        
+        Context::set_tree_edge_entry(top_de_opposite, entry);
         et_algo::push_back(et_hdr_, entry);        
       }
     }    
 
     void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
       et_node_ptr entry = et_pool_->acquire();
-      etnte_context::set_directed_edge(entry, e);
-      directed_edge::set_tree_edge_entry(e, entry);
+      Context::set_directed_edge(entry, e);
+      Context::set_tree_edge_entry(e, entry);
       et_algo::push_back(et_hdr_, entry);      
       *++tree_edge_stack_top_ = entry;
     }
@@ -175,14 +210,14 @@ namespace HW::dynamic_connectivity
       
       directed_edge_ptr de_opp = de->opposite;
 
-      directed_edge::set_non_tree_edge_entry(de, entry); 
-      directed_edge::set_non_tree_edge_entry(de_opp, entry_opp);
+      Context::set_non_tree_edge_entry(de, entry); 
+      Context::set_non_tree_edge_entry(de_opp, entry_opp);
       
-      etnte_context::set_directed_edge(entry, de);
-      etnte_context::set_directed_edge(entry_opp, de_opp);
+      Context::set_directed_edge(entry, de);
+      Context::set_directed_edge(entry_opp, de_opp);
             
-      etnte_context_operations<etnte_context>::insert(etnte_hdr_, entry);
-      etnte_context_operations<etnte_context>::insert(etnte_hdr_, entry_opp);                    
+      etnte_context_operations<Context>::insert(etnte_hdr_, entry);
+      etnte_context_operations<Context>::insert(etnte_hdr_, entry_opp);                    
     }
   }; 
   
@@ -200,7 +235,8 @@ namespace HW::dynamic_connectivity
   //     vertex_color_property_map::decompress_and_finish(*vi);
   // }
 
-  static void execute_dfs(const dynamic_connectivity_graph& g, euler_tour_visitor visitor) {
+  template <typename Context>
+  static void execute_dfs(const dynamic_connectivity_graph& g, euler_tour_visitor<Context> visitor) {
     vertex_iterator vi, vi_start, vi_end;
     boost::tie(vi_start, vi_end) = vertices(g);
             

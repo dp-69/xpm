@@ -31,7 +31,8 @@ namespace HW { namespace dynamic_connectivity
     size_t nteReconnectingFirst;
   };
 
-  class euler_tour_dynamic_connectivity_context : non_copyable_movable
+  template <typename Context>
+  class euler_tour_dynamic_connectivity_context
   {
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
@@ -72,7 +73,7 @@ namespace HW { namespace dynamic_connectivity
       auto vertexCount = num_vertices(g);                 
       auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
           
-      execute_dfs(g, euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
+      execute_dfs(g, euler_tour_visitor<Context>(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
     }
 
     // Returns true if reconnected.

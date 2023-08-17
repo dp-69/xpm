@@ -120,15 +120,15 @@ namespace HW
 
   // using namespace std;
 
-  class non_copyable_movable
-  {
-  protected:
-    non_copyable_movable() = default;
-    non_copyable_movable(const non_copyable_movable& other) = delete;
-    non_copyable_movable(non_copyable_movable&& other) = delete;
-    non_copyable_movable& operator=(const non_copyable_movable& other) = delete;
-    non_copyable_movable& operator=(non_copyable_movable&& other) = delete;
-  };
+  // class non_copyable_movable
+  // {
+  // protected:
+  //   non_copyable_movable() = default;
+  //   non_copyable_movable(const non_copyable_movable& other) = delete;
+  //   non_copyable_movable(non_copyable_movable&& other) = delete;
+  //   non_copyable_movable& operator=(const non_copyable_movable& other) = delete;
+  //   non_copyable_movable& operator=(non_copyable_movable&& other) = delete;
+  // };
 
   
 

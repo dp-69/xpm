@@ -232,14 +232,15 @@ namespace xpm
         add_edge(vertices[l], vertices[r], d0, d1, g);
       }
 
-      HW::dynamic_connectivity::euler_tour_dynamic_connectivity_context etdc_context;
+      HW::dynamic_connectivity::euler_tour_dynamic_connectivity_context<HW::dynamic_connectivity::etnte_context> etdc_context;
 
       etdc_context.init(g/*, &vertices[1]*/);
 
       for (int i = 0; i < vertex_count; ++i) {
         auto* v = &vertices[i];
 
-        auto* hdr = HW::dynamic_connectivity::et_algo::get_header(v->et_entry_);
+        
+        auto* hdr = HW::dynamic_connectivity::et_algo::get_header(HW::dynamic_connectivity::etnte_context::get_entry(v));
         auto* v_et_ref = et_traits::get_left(hdr);
 
         if (HW::dynamic_connectivity::etnte_context::is_loop_edge(v_et_ref)) {
