@@ -1,6 +1,7 @@
 #pragma once
 
-#include "euler_tour_visitor.hpp"
+#include "dc_graph.hpp"
+#include "etnte_context.hpp"
 // #include "dynamic_connectivity_graph.hpp"
 // #include "HW/pore_network_modelling/row_idx_populate_visitor.h" //TODO
 
@@ -33,7 +34,7 @@ namespace HW { namespace dynamic_connectivity
   };
 
   template <typename Context>
-  class et_dc_context
+  class dc_context
   {
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
@@ -42,7 +43,25 @@ namespace HW { namespace dynamic_connectivity
 
     using et_nt = et_traits;
     using etnte_nt = etnte_traits;
-    
+
+
+    static void execute_dfs(const dc_graph& g, euler_tour_visitor<dc_graph, Context> visitor) {
+      vertex_iterator vi, vi_start, vi_end;
+      boost::tie(vi_start, vi_end) = vertices(g);
+              
+      for (vi = vi_start; vi != vi_end; ++vi)
+        vertex_color_property_map::compress_and_init(*vi);
+
+      for (vi = vi_start; vi != vi_end; ++vi) {
+        if (vertex_color_property_map::get_color(*vi) != boost::two_bit_color_type::two_bit_black)
+          depth_first_visit(g, *vi, visitor, vertex_color_property_map());
+      }
+
+      for (vi = vi_start; vi != vi_end; ++vi)
+        vertex_color_property_map::decompress_and_finish(*vi);
+    }
+
+
   public:    
   
   #ifdef CONNECTIVITY_DIAGNOSTICS
@@ -74,7 +93,7 @@ namespace HW { namespace dynamic_connectivity
       auto vertexCount = num_vertices(g);                 
       auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
           
-      execute_dfs(g, euler_tour_visitor<Context>(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
+      execute_dfs(g, euler_tour_visitor<dc_graph, Context>(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
     }
 
     // Returns true if reconnected.

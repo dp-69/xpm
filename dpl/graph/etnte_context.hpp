@@ -115,111 +115,9 @@ namespace HW::dynamic_connectivity
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   
 
-  template <typename Context>
-  class euler_tour_visitor : public boost::default_dfs_visitor
-  {
-    using et_node_ptr = et_traits::node_ptr;
-    using etnte_node_ptr = etnte_traits::node_ptr;
-
-    et_node_ptr et_hdr_;
-    etnte_node_ptr etnte_hdr_;
-
-    dpl::graph::smart_pool<et_traits::node>* et_pool_;
-    dpl::graph::smart_pool<etnte_traits::node>* etnte_pool_;
-
-    et_node_ptr* tree_edge_stack_empty_;
-    et_node_ptr* tree_edge_stack_top_;
-
-    // std::vector<et_node_ptr>& components_;        
-
-    
-  public:
-    euler_tour_visitor(
-      dpl::graph::smart_pool<et_traits::node>* et_pool
-    , dpl::graph::smart_pool<etnte_traits::node>* etnte_pool
-    , et_node_ptr* tree_edge_stack
-    )
-      : et_pool_(et_pool)
-      , etnte_pool_(etnte_pool)
-      , tree_edge_stack_empty_(tree_edge_stack)
-      , tree_edge_stack_top_(tree_edge_stack)
-    {}
-
-
-    void start_vertex(vertex_ptr, const dc_graph&) {            
-      et_hdr_ = et_pool_->acquire();
-      et_algo::init_header(et_hdr_);      
-      etnte_hdr_ = etnte_pool_->acquire();
-      etnte_algo::init_header(etnte_hdr_);      
-      Context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
-    }
-
-    void discover_vertex(vertex_ptr v, const dc_graph&) {     
-      et_node_ptr entry = et_pool_->acquire();        
-      Context::set_vertex(entry, v);
-      Context::set_entry(v, entry);
-      et_algo::push_back(et_hdr_, entry);            
-    }
-
-    void finish_vertex(vertex_ptr v, const dc_graph&) {
-      if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
-        et_node_ptr entry = et_pool_->acquire();
-        et_node_ptr top = *tree_edge_stack_top_--;
-        directed_edge_ptr top_de_opposite = Context::get_directed_edge(top)->opposite;
-        Context::set_directed_edge(entry, top_de_opposite);        
-        Context::set_tree_edge_entry(top_de_opposite, entry);
-        et_algo::push_back(et_hdr_, entry);        
-      }
-    }    
-
-    void tree_edge(directed_edge_ptr e, const dc_graph&) {
-      et_node_ptr entry = et_pool_->acquire();
-      Context::set_directed_edge(entry, e);
-      Context::set_tree_edge_entry(e, entry);
-      et_algo::push_back(et_hdr_, entry);      
-      *++tree_edge_stack_top_ = entry;
-    }
-
-    // non-tree edge    
-    void forward_or_cross_edge(directed_edge_ptr de, const dc_graph&) {
-      etnte_node_ptr entry = etnte_pool_->acquire();
-      etnte_node_ptr entry_opp = etnte_pool_->acquire();
-      
-      directed_edge_ptr de_opp = de->opposite;
-
-      Context::set_non_tree_edge_entry(de, entry); 
-      Context::set_non_tree_edge_entry(de_opp, entry_opp);
-      
-      Context::set_directed_edge(entry, de);
-      Context::set_directed_edge(entry_opp, de_opp);
-            
-      etnte_context_operations<Context>::insert(etnte_hdr_, entry);
-      etnte_context_operations<Context>::insert(etnte_hdr_, entry_opp);                    
-    }
-  }; 
+  
   
   // ReSharper disable once CppPassValueParameterByConstReference
   // static void execute_dfs(const dynamic_connectivity_graph& g, vertex_ptr root, euler_tour_visitor visitor) {
@@ -235,22 +133,7 @@ namespace HW::dynamic_connectivity
   //     vertex_color_property_map::decompress_and_finish(*vi);
   // }
 
-  template <typename Context>
-  static void execute_dfs(const dc_graph& g, euler_tour_visitor<Context> visitor) {
-    vertex_iterator vi, vi_start, vi_end;
-    boost::tie(vi_start, vi_end) = vertices(g);
-            
-    for (vi = vi_start; vi != vi_end; ++vi)
-      vertex_color_property_map::compress_and_init(*vi);
-
-    for (vi = vi_start; vi != vi_end; ++vi) {
-      if (vertex_color_property_map::get_color(*vi) != boost::two_bit_color_type::two_bit_black)
-        depth_first_visit(g, *vi, visitor, vertex_color_property_map());
-    }
-
-    for (vi = vi_start; vi != vi_end; ++vi)
-      vertex_color_property_map::decompress_and_finish(*vi);
-  }
+  
 }
 
 

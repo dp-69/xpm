@@ -4,7 +4,7 @@
 
 #include <dpl/graph/et_etnte_defs.hpp>
 #include <dpl/graph/dc_graph.hpp>
-#include <dpl/graph/et_dc_context.hpp>
+#include <dpl/graph/dc_context.hpp>
 
 
 
@@ -232,7 +232,7 @@ namespace xpm
         add_edge(vertices[l], vertices[r], d0, d1, g);
       }
 
-      HW::dynamic_connectivity::et_dc_context<HW::dynamic_connectivity::etnte_context> etdc_context;
+      HW::dynamic_connectivity::dc_context<HW::dynamic_connectivity::etnte_context> etdc_context;
 
       etdc_context.init(g/*, &vertices[1]*/);
 
