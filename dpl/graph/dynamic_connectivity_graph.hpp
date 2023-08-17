@@ -154,12 +154,15 @@ namespace HW::dynamic_connectivity
 //    friend out_edge_iterator out_edges_begin(const vertex_ptr, const dc_graph&);
 //    friend out_edge_iterator out_edges_end(const vertex_ptr, const dc_graph&);
   public:    
-    size_t row_idx_ = 0;  // relative index, not unique identifier    
+    size_t row_idx_ = 0;  // relative index, not unique identifier
+
 //    static const size_t invalid_rel_idx = ~size_t(0) >> 2;
 
 
     et_traits::node_ptr et_entry_;
-    bool visited = false;
+
+
+    // bool visited = false;
 //    bool trapped = false;
   };
 
@@ -341,11 +344,11 @@ namespace HW::dynamic_connectivity
 
 
   struct vertex_color_property_map
-  {       
-    typedef boost::read_write_property_map_tag category;
-    typedef boost::two_bit_color_type value_type; 
-    typedef value_type& reference;
-    typedef vertex_ptr key_type;
+  {
+    using category = boost::read_write_property_map_tag;
+    using value_type = boost::two_bit_color_type;
+    using reference = value_type&;
+    using key_type = vertex_ptr;
     
 
 //  private:
@@ -355,8 +358,8 @@ namespace HW::dynamic_connectivity
     static size_t& field(const vertex_ptr v) { return v->row_idx_; }
 
   public:                
-    static void compress_and_init(const vertex_ptr v) {      
-      set_value(v, field(v));
+    static void compress_and_init(const vertex_ptr v) {
+      compression::set_value(field(v), field(v));
       set_color(v, boost::color_traits<value_type>::white());
     }
 
@@ -365,19 +368,13 @@ namespace HW::dynamic_connectivity
     }
 
     static value_type get_color(const vertex_ptr v) {
+      // return v->color;
       return compression::get_bits(field(v));   
     }
 
     static void set_color(const vertex_ptr v, value_type color) {
+      // v->color = color;
       return compression::set_bits(field(v), color);   
-    }
-
-    static size_t get_value(const vertex_ptr v) {
-      return compression::get_value(field(v));
-    }
-
-    static void set_value(const vertex_ptr v, size_t value) {
-      compression::set_value(field(v), value);
     }
   };
 
@@ -435,9 +432,7 @@ namespace boost
     using vertex_descriptor = HW::dynamic_connectivity::vertex_ptr;
     using edge_descriptor = HW::dynamic_connectivity::directed_edge_ptr;
 
-    using vertex_iterator = HW::dynamic_connectivity::vertex_iterator;
     using out_edge_iterator = HW::dynamic_connectivity::out_edge_iterator;
-
 
     using traversal_category = traversal_tag;
     using directed_category = boost::undirected_tag;

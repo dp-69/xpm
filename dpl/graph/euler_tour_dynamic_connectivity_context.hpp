@@ -52,17 +52,27 @@ namespace HW { namespace dynamic_connectivity
 
     // std::vector<et_node_ptr> initial_components_;
    
-    template<class Visitor>
-    void init(const dynamic_connectivity_graph& g, vertex_ptr rootVertex, Visitor v) {            
+    // template<class Visitor>
+    // void init(const dynamic_connectivity_graph& g, vertex_ptr rootVertex, Visitor v) {            
+    //   auto vertexCount = num_vertices(g);                 
+    //   auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
+    //       
+    //   execute_dfs(g, rootVertex,              
+    //     merge_visitors(euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/), v));
+    // }
+    
+    // void init(const dynamic_connectivity_graph& g, vertex_ptr rootVertex) {           
+    //   auto vertexCount = num_vertices(g);                 
+    //   auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
+    //       
+    //   execute_dfs(g, rootVertex, euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
+    // }
+
+    void init(const dynamic_connectivity_graph& g) {           
       auto vertexCount = num_vertices(g);                 
       auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
           
-      execute_dfs(g, rootVertex,              
-        merge_visitors(euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/), v));
-    }
-    
-    void init(const dynamic_connectivity_graph& g, vertex_ptr rootVertex) {           
-      init(g, rootVertex, boost::default_dfs_visitor());
+      execute_dfs(g, euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
     }
 
     // Returns true if reconnected.

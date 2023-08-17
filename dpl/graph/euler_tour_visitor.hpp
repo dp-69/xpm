@@ -4,7 +4,7 @@
 #include "et_etnte_defs.hpp"
 #include <stack>
 
-namespace HW { namespace dynamic_connectivity
+namespace HW::dynamic_connectivity
 {
   class etnte_context
   {
@@ -124,28 +124,49 @@ namespace HW { namespace dynamic_connectivity
       dpl::graph::smart_pool<et_traits::node>* et_pool
     , dpl::graph::smart_pool<etnte_traits::node>* etnte_pool
     , et_node_ptr* tree_edge_stack
-    // , std::vector<et_node_ptr>& components
     )
       : et_pool_(et_pool)
       , etnte_pool_(etnte_pool)
       , tree_edge_stack_empty_(tree_edge_stack)
       , tree_edge_stack_top_(tree_edge_stack)
-      // , components_(components)
     {}
 
 
     void start_vertex(vertex_ptr, const dynamic_connectivity_graph&) {            
       et_hdr_ = et_pool_->acquire();
       et_algo::init_header(et_hdr_);      
-        
       etnte_hdr_ = etnte_pool_->acquire();
       etnte_algo::init_header(etnte_hdr_);      
       etnte_context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
-
-      // components_.push_back(et_hdr_);
     }
 
+    void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
+      et_node_ptr entry = et_pool_->acquire();        
+      etnte_context::set_vertex(entry, v);
+      auto lul = etnte_context::get_vertex(entry);
 
+      v->et_entry_ = entry;
+      et_algo::push_back(et_hdr_, entry);            
+    }
+
+    void finish_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {
+      if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
+        et_node_ptr entry = et_pool_->acquire();
+        et_node_ptr top = *tree_edge_stack_top_--;
+        directed_edge_ptr top_de_opposite = etnte_context::get_directed_edge(top)->opposite;
+        etnte_context::set_directed_edge(entry, top_de_opposite);        
+        directed_edge::set_tree_edge_entry(top_de_opposite, entry);
+        et_algo::push_back(et_hdr_, entry);        
+      }
+    }    
+
+    void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
+      et_node_ptr entry = et_pool_->acquire();
+      etnte_context::set_directed_edge(entry, e);
+      directed_edge::set_tree_edge_entry(e, entry);
+      et_algo::push_back(et_hdr_, entry);      
+      *++tree_edge_stack_top_ = entry;
+    }
 
     // non-tree edge    
     void forward_or_cross_edge(directed_edge_ptr de, const dynamic_connectivity_graph&) {
@@ -163,66 +184,91 @@ namespace HW { namespace dynamic_connectivity
       etnte_context_operations<etnte_context>::insert(etnte_hdr_, entry);
       etnte_context_operations<etnte_context>::insert(etnte_hdr_, entry_opp);                    
     }
-
-        
-
-    void discover_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {     
-      auto entry = et_pool_->acquire();        
-      
-      etnte_context::set_vertex(entry, v);
-      v->et_entry_ = entry;
-//      vertex_color_property_map::set_et_entry(v, entry);
-
-//      et_algo_not_augmented::push_back(_etHeader, entry);            
-      et_algo::push_back(et_hdr_, entry);            
-    }
-
-    void tree_edge(directed_edge_ptr e, const dynamic_connectivity_graph&) {
-      auto entry = et_pool_->acquire();
-
-      etnte_context::set_directed_edge(entry, e);
-      directed_edge::set_tree_edge_entry(e, entry);
-
-      et_algo::push_back(et_hdr_, entry);      
-
-      *++tree_edge_stack_top_ = entry;
-    }
-
-    void finish_vertex(vertex_ptr v, const dynamic_connectivity_graph&) {
-      if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
-        auto entry = et_pool_->acquire();
-        
-        auto top = *tree_edge_stack_top_--;
-
-        auto top_de_opposite = etnte_context::get_directed_edge(top)->opposite;
-        etnte_context::set_directed_edge(entry, top_de_opposite);        
-        directed_edge::set_tree_edge_entry(top_de_opposite, entry);
-
-//        et_algo_not_augmented::push_back(_etHeader, entry);        
-        et_algo::push_back(et_hdr_, entry);        
-      }
-//      else
-//        et_algo::refresh_size(_etHeader);
-    }    
   }; 
   
-  template<class DFSVisitor>
-  static void execute_dfs(const dynamic_connectivity_graph& g, vertex_ptr rootVertex, DFSVisitor visitor) {
-    boost::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
+  // ReSharper disable once CppPassValueParameterByConstReference
+  // static void execute_dfs(const dynamic_connectivity_graph& g, vertex_ptr root, euler_tour_visitor visitor) {
+  //   boost::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
+  //   boost::tie(vi_start, vi_end) = vertices(g);
+  //           
+  //   for (vi = vi_start; vi != vi_end; ++vi)
+  //     vertex_color_property_map::compress_and_init(*vi);
+  //
+  //   depth_first_visit(g, root, visitor, vertex_color_property_map());
+  //
+  //   for (vi = vi_start; vi != vi_end; ++vi)
+  //     vertex_color_property_map::decompress_and_finish(*vi);
+  // }
+
+  static void execute_dfs(const dynamic_connectivity_graph& g, euler_tour_visitor visitor) {
+    vertex_iterator vi, vi_start, vi_end;
     boost::tie(vi_start, vi_end) = vertices(g);
             
     for (vi = vi_start; vi != vi_end; ++vi)
       vertex_color_property_map::compress_and_init(*vi);
 
-    depth_first_visit(g, rootVertex, visitor, vertex_color_property_map());
-
-//      depth_first_search(g,
-//        visitor(euler_tour_visitor(etPool, etntePool, treeEdgeStack.data(), components))
-//          .color_map(vertex_color_property_map())/*.root_vertex(rootVertex)*/);
+    for (vi = vi_start; vi != vi_end; ++vi) {
+      if (vertex_color_property_map::get_color(*vi) != boost::two_bit_color_type::two_bit_black)
+        depth_first_visit(g, *vi, visitor, vertex_color_property_map());
+    }
 
     for (vi = vi_start; vi != vi_end; ++vi)
       vertex_color_property_map::decompress_and_finish(*vi);
   }
+}
+
+
+
+
+
+// static bool execute_connectivity_dfs(dynamic_connectivity_graph& g, vertex_ptr searchVertex, vertex_ptr outletVertex) {    
+// //    if (searchVertex->trapped)
+// //      return false;
+//     
+//
+//     boost::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
+//     boost::tie(vi_start, vi_end) = vertices(g);
+//             
+//     for (vi = vi_start; vi != vi_end; ++vi)
+//       vi->visited = false;
+//
+//     
+//     std::stack<vertex_ptr> vertexStack;    
+//     vertexStack.push(searchVertex);
+//
+//     while (!vertexStack.empty()) {
+//       const auto u = vertexStack.top();
+//       vertexStack.pop();
+//       if (!u->visited) {
+//         u->visited = true;
+//
+//         // Discovery        
+//         if (u == outletVertex)
+//            return true;
+//         
+//
+//         for (const auto& de : out_edges_range(u))
+//           if (!de->v1->visited)
+//             vertexStack.push(de->v1);
+//       }
+//     }
+//
+//
+//     
+//
+//     for (vi = vi_start; vi != vi_end; ) {
+//       auto prev_v = *vi;
+//       ++vi;
+//       if (prev_v->visited) {        
+// //        clear_out_edges(prev_v, g);
+//         remove_vertex(prev_v, g);      
+//       }
+//     }
+//
+//
+//
+//     return false;
+//   }
 
 
 
@@ -241,58 +287,12 @@ namespace HW { namespace dynamic_connectivity
 
 
 
-  
-
-
-  static bool execute_connectivity_dfs(dynamic_connectivity_graph& g, vertex_ptr searchVertex, vertex_ptr outletVertex) {    
-//    if (searchVertex->trapped)
-//      return false;
-    
-
-    boost::graph_traits<dynamic_connectivity_graph>::vertex_iterator vi, vi_start, vi_end;
-    boost::tie(vi_start, vi_end) = vertices(g);
-            
-    for (vi = vi_start; vi != vi_end; ++vi)
-      vi->visited = false;
-
-    
-    std::stack<vertex_ptr> vertexStack;    
-    vertexStack.push(searchVertex);
-
-    while (!vertexStack.empty()) {
-      const auto u = vertexStack.top();
-      vertexStack.pop();
-      if (!u->visited) {
-        u->visited = true;
-
-        // Discovery        
-        if (u == outletVertex)
-           return true;
-        
-
-        for (const auto& de : out_edges_range(u))
-          if (!de->v1->visited)
-            vertexStack.push(de->v1);
-      }
-    }
-
-
-    
-
-    for (vi = vi_start; vi != vi_end; ) {
-      auto prev_v = *vi;
-      ++vi;
-      if (prev_v->visited) {        
-//        clear_out_edges(prev_v, g);
-        remove_vertex(prev_v, g);      
-      }
-    }
 
 
 
-    return false;
-  }
-}}
+
+
+
 
 
 

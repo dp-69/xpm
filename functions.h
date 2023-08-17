@@ -195,6 +195,77 @@ namespace xpm
 
   namespace test
   {
+    inline void DFS_CHECK() {
+      using vertex = HW::dynamic_connectivity::vertex;
+      using graph = HW::dynamic_connectivity::dynamic_connectivity_graph;
+      using directed_edge = HW::dynamic_connectivity::directed_edge;
+      using et_algo = HW::dynamic_connectivity::et_algo;
+      using et_traits = HW::dynamic_connectivity::et_traits;
+
+      graph g;
+
+      int vertex_count = 6;
+
+      std::vector<vertex> vertices(vertex_count);
+
+      for (int i = 0; i < vertex_count; ++i) {
+        auto* v = &vertices[i];
+        v->row_idx_ = i;
+        add_vertex(v, g);
+      }
+
+      std::pair<int, int> edges[] = {
+        {0, 1}, {1, 2}, {2, 0},
+        {3, 4}, {5, 2}
+      };
+
+      int edge_count = sizeof(edges)/sizeof(std::pair<int, int>);
+
+      std::vector<directed_edge> de_buffer(edge_count*2);
+
+
+      auto de_ptr = de_buffer.data();
+      for (auto [l, r] : edges) {
+        auto& d0 = *de_ptr++;
+        auto& d1 = *de_ptr++;
+
+        add_edge(vertices[l], vertices[r], d0, d1, g);
+      }
+
+      HW::dynamic_connectivity::euler_tour_dynamic_connectivity_context etdc_context;
+
+      etdc_context.init(g/*, &vertices[1]*/);
+
+      for (int i = 0; i < vertex_count; ++i) {
+        auto* v = &vertices[i];
+
+        auto* hdr = HW::dynamic_connectivity::et_algo::get_header(v->et_entry_);
+        auto* v_et_ref = et_traits::get_left(hdr);
+
+        if (HW::dynamic_connectivity::etnte_context::is_loop_edge(v_et_ref)) {
+          int p = 3;
+        }
+        else {
+          int k = 3;
+        }
+
+        auto* v_ref = HW::dynamic_connectivity::etnte_context::get_vertex(v_et_ref);
+        
+        std::cout << fmt::format("vertex {} : root {}\n", v->row_idx_,  v_ref->row_idx_);
+      }
+
+
+
+
+      int p = 3;
+
+
+
+
+
+
+    }
+
     inline void split_join_validity_check_ET_ONLY() {
       using namespace std;
       using namespace boost;
