@@ -271,7 +271,7 @@ namespace dpl::graph
       et_algo::init_header(et_hdr_);      
       etnte_hdr_ = etnte_pool_->acquire();
       etnte_algo::init_header(etnte_hdr_);      
-      Context::set_non_tree_edge_header(et_hdr_, etnte_hdr_);             
+      Context::set_etnte_header(et_hdr_, etnte_hdr_);             
     }
 
     void discover_vertex(vertex_desc v, const Graph&) {     

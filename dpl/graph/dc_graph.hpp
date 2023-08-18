@@ -1,11 +1,8 @@
 ﻿#pragma once
 
 #include "_OLD_general.hpp"
-#include <boost/graph/two_bit_color_map.hpp>
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/trivial_value_traits.hpp>
-
-#undef max
 
 namespace dpl::graph
 {
@@ -17,7 +14,6 @@ namespace dpl::graph
     vertex,
     boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<vertex_node_traits>>,
     boost::intrusive::constant_time_size<true>>;
-
 
   struct directed_edge;
 
@@ -33,19 +29,8 @@ namespace dpl::graph
 
 
 
-
-
-
-
 namespace dpl::graph
 {
-  using vertex_ptr = vertex*;
-  using directed_edge_ptr = directed_edge*;
-
-  
- 
-   
-
   struct directed_edge
   {
   private:
@@ -53,140 +38,49 @@ namespace dpl::graph
     friend class etnte_context;
 
     // entry for the list of out edges from v0 pointing to v1
-    directed_edge_ptr prev_;
-    directed_edge_ptr next_;
+    directed_edge* prev_;
+    directed_edge* next_;
 
     size_t entry_type_; 
 
   public:
-    vertex_ptr v1;  // pointing-in vertex  
+    vertex* v1;  // pointing-in vertex  
 
-    directed_edge_ptr opposite;
+    directed_edge* opposite;
 
-    
-    static void set_null_et_entry(const directed_edge_ptr& x) {
+    static void set_null_et_entry(directed_edge* x) {
       x->entry_type_ = 0;
     }
 
-    static bool is_null_et_entry(const directed_edge_ptr& x) {
+    static bool is_null_et_entry(const directed_edge* x) {
       return !x->entry_type_;
     }    
   };
 
   struct vertex
   {
-    using node_ptr = vertex*;
-
   private:    
     friend struct HW::default_list_node_traits<vertex>;
     friend class etnte_context;
 
-
     // intrusive list of graph vertices
-    node_ptr prev_;
-    node_ptr next_;          
+    vertex* prev_;
+    vertex* next_;          
     
     out_edge_list out_edges_;
-
     
-    friend void clear_out_edges(vertex_ptr, dc_graph&);
+    friend void clear_out_edges(vertex*, dc_graph&);
     friend void add_edge(vertex&, vertex&, directed_edge&, directed_edge&, dc_graph&);
-    friend std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr, const dc_graph&);
+    friend std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex*, const dc_graph&);
 
-    friend out_edge_iterator out_edges_begin(const vertex_ptr);
-    friend out_edge_iterator out_edges_end(const vertex_ptr);
+    friend out_edge_iterator out_edges_begin(const vertex*);
+    friend out_edge_iterator out_edges_end(const vertex*);
 
     et_traits::node_ptr et_entry_;
 
   public:    
     size_t row_idx_ = 0;  // relative index, not unique identifier
   };
-
-  
-
-
-
-
-
-
-
-    
-  
-
-  
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-  
 
     
 
@@ -199,7 +93,7 @@ namespace dpl::graph
   private:
     vertex_list vertices_;
 
-    friend void add_vertex(vertex_ptr v, dc_graph& g);
+    friend void add_vertex(vertex* v, dc_graph& g);
     friend vertices_size_type num_vertices(const dc_graph& g);
 
 
@@ -207,15 +101,15 @@ namespace dpl::graph
     friend vertex_iterator end(const dc_graph& g);
   };
 
-  inline void add_vertex(vertex_ptr v, dc_graph& g) {            
+  inline void add_vertex(vertex* v, dc_graph& g) {            
     g.vertices_.push_back(*v);    
   }
 
-  inline void remove_vertex(vertex_ptr v, dc_graph&) {
+  inline void remove_vertex(vertex* v, dc_graph&) {
     vertex_list::node_algorithms::unlink(v);            
   }
 
-  inline void clear_out_edges(vertex_ptr v, dc_graph&) {
+  inline void clear_out_edges(vertex* v, dc_graph&) {
     v->out_edges_.clear();
   }
 
@@ -230,7 +124,7 @@ namespace dpl::graph
     uv.opposite = &vu;
   }
 
-  inline void remove_edge(const directed_edge_ptr& vu, dc_graph&) {        
+  inline void remove_edge(directed_edge* vu, dc_graph&) {        
     out_edge_list::node_algorithms::unlink(vu->opposite);
     out_edge_list::node_algorithms::unlink(vu);
   }
@@ -255,11 +149,11 @@ namespace dpl::graph
     return std::ranges::subrange{begin(g), end(g)};
   }    
    
-  inline out_edge_iterator out_edges_begin(const vertex_ptr v) {
+  inline out_edge_iterator out_edges_begin(const vertex* v) {
     return out_edge_iterator(v->out_edges_.begin().pointed_node());    
   }
 
-  inline out_edge_iterator out_edges_end(const vertex_ptr v) {
+  inline out_edge_iterator out_edges_end(const vertex* v) {
     return out_edge_iterator(v->out_edges_.end().pointed_node());    
   }
 
@@ -272,19 +166,19 @@ namespace dpl::graph
   // };
 
   
-  inline vertex_ptr target(const directed_edge_ptr e, const dc_graph&) {
+  inline vertex* target(const directed_edge* e, const dc_graph&) {
     return e->v1;
   }
 
 
 
   // for Boost concept check
-  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex_ptr u, const dc_graph& g) {
+  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex* u, const dc_graph& g) {
     return std::make_pair(out_edges_begin(u), out_edges_end(u));
   }
   
-  inline vertex_ptr source(const directed_edge_ptr, const dc_graph&) {}
-  inline dc_graph::degree_size_type out_degree(const vertex_ptr u, const dc_graph&) {}
+  inline vertex* source(const directed_edge*, const dc_graph&) {}
+  inline dc_graph::degree_size_type out_degree(const vertex* u, const dc_graph&) {}
   
  
 
@@ -374,8 +268,8 @@ private:
   struct traversal_tag : virtual incidence_graph_tag {};
 
 public:
-  using vertex_descriptor = dpl::graph::vertex_ptr;
-  using edge_descriptor = dpl::graph::directed_edge_ptr;
+  using vertex_descriptor = dpl::graph::vertex*;
+  using edge_descriptor = dpl::graph::directed_edge*;
 
   using out_edge_iterator = dpl::graph::out_edge_iterator;
 

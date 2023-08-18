@@ -2,17 +2,16 @@
 
 #include "dc_graph.hpp"
 #include "etnte_context.hpp"
-// #include "dynamic_connectivity_graph.hpp"
-// #include "HW/pore_network_modelling/row_idx_populate_visitor.h" //TODO
 
+#include <boost/graph/two_bit_color_map.hpp>
 #include <boost/property_map/function_property_map.hpp>
 
 namespace dpl::graph
 {      
   struct component_visitor_empty
   {
-    void vertex(vertex_ptr) {}
-    void directed_edge(directed_edge_ptr) {}
+    void vertex(vertex*) {}
+    void directed_edge(directed_edge*) {}
   };
     
   struct component_visitor_count
@@ -20,8 +19,8 @@ namespace dpl::graph
     size_t _vertices = 0;
     size_t _directedEdges = 0;
 
-    void vertex(vertex_ptr) { ++_vertices; }
-    void directed_edge(directed_edge_ptr) { ++_directedEdges; }
+    void vertex(vertex*) { ++_vertices; }
+    void directed_edge(directed_edge*) { ++_directedEdges; }
 
     size_t vertices() { return _vertices; }
     size_t edges() { return _directedEdges/2; }
@@ -34,13 +33,6 @@ namespace dpl::graph
     size_t nteCountActive;
     size_t nteReconnectingFirst;
   };
-
-  // struct some_class
-  // {
-  //   size_t operator()(vertex_ptr v) {
-  //     return v->row_idx_;
-  //   }
-  // };
 
   template <typename Context>
   class dc_context
@@ -87,34 +79,34 @@ namespace dpl::graph
       auto color_uptr = std::make_unique<color_t[]>(vertex_count);
       boost::iterator_property_map color_map{
         color_uptr.get(),
-        boost::make_function_property_map<vertex_ptr>(
-          [](vertex_ptr v) { return v->row_idx_; })
+        boost::make_function_property_map<vertex*>(
+          [](vertex* v) { return v->row_idx_; })
       };
 
       auto tree_edge_stack = std::vector<et_node_ptr>(vertex_count + 1);     
       euler_tour_visitor<dc_graph, Context> visitor{&etPool_, &etntePool_, tree_edge_stack.data()};
 
-      for (vertex_ptr v : range(g))
+      for (vertex* v : range(g))
         if (color_map[v] != color_t::two_bit_black)
           boost::depth_first_visit(g, v, visitor, color_map);
     }
 
     // Returns true if reconnected.
-    bool split_and_reconnect_tree_edge(directed_edge_ptr ab) {
+    bool split_and_reconnect_tree_edge(directed_edge* ab) {
       auto ba = ab->opposite;
 
       auto etAB = Context::get_tree_edge_entry(ab);
       auto etBA = Context::get_tree_edge_entry(ba);
       
       auto etHeaderA = et_algo::get_header(etAB);
-      auto etnteHeaderA = Context::get_non_tree_edge_header(etHeaderA);
+      auto etnteHeaderA = Context::get_etnte_header(etHeaderA);
 
       auto etHeaderB = etPool_.acquire();
       et_algo::init_header(etHeaderB);
         
       auto etnteHeaderB = etntePool_.acquire();
       etnte_algo::init_header(etnteHeaderB);                           
-      Context::set_non_tree_edge_header(etHeaderB, etnteHeaderB);                        
+      Context::set_etnte_header(etHeaderB, etnteHeaderB);                        
 
       etnte_context_operations<Context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
 
@@ -213,7 +205,7 @@ namespace dpl::graph
 
     template<class Visitor = component_visitor_empty>
     void remove_and_release_component(et_node_ptr header, Visitor& visitor = Visitor()) {            
-      auto etnteHeader = Context::get_non_tree_edge_header(header);
+      auto etnteHeader = Context::get_etnte_header(header);
 
       auto etnteNode = etnte_nt::get_left(etnteHeader);
       while (etnteNode != etnteHeader) {
@@ -251,7 +243,7 @@ namespace dpl::graph
     }
 
 
-    void remove_non_tree_edge(directed_edge_ptr ab) {
+    void remove_non_tree_edge(directed_edge* ab) {
       auto ba = ab->opposite;
       auto etnteAB = Context::get_non_tree_edge_entry(ab);
       auto etnteBA = Context::get_non_tree_edge_entry(ba);

@@ -118,17 +118,7 @@ namespace HW
   };
 
 
-  // using namespace std;
-
-  // class non_copyable_movable
-  // {
-  // protected:
-  //   non_copyable_movable() = default;
-  //   non_copyable_movable(const non_copyable_movable& other) = delete;
-  //   non_copyable_movable(non_copyable_movable&& other) = delete;
-  //   non_copyable_movable& operator=(const non_copyable_movable& other) = delete;
-  //   non_copyable_movable& operator=(non_copyable_movable&& other) = delete;
-  // };
+  
 
   
 
@@ -240,35 +230,6 @@ namespace HW
 
 
   
-  template <class Integral, class BitType, size_t NumBits>
-  struct intergral_plus_shifted_least_significant_bits
-  {
-    static const auto BitMap = (Integral(1u) << NumBits) - 1;
-
-    static Integral get_value(Integral n) {
-      return n >> NumBits;
-    }
-
-    static void set_value(Integral& n, Integral p) {
-      n = (p << NumBits) | get_bits(n);
-    }
-
-    static BitType get_bits(Integral n) {
-      return static_cast<BitType>(n & BitMap);
-    }
-
-    static void set_bits(Integral& n, BitType c) {
-      n = (n & ~BitMap) | static_cast<Integral>(c);
-    }
-
-//    static void compress_value(Integral& n) {
-//      set_value(n, n);
-//    }
-//
-//    static void decompress_value(Integral& n) {
-//      n = get_value(n);
-//    }
-  };
 
 
 
@@ -310,6 +271,37 @@ namespace HW
 
 
 
+
+
+//   template <class Integral, class BitType, size_t NumBits>
+//   struct intergral_plus_shifted_least_significant_bits
+//   {
+//     static const auto BitMap = (Integral(1u) << NumBits) - 1;
+//
+//     static Integral get_value(Integral n) {
+//       return n >> NumBits;
+//     }
+//
+//     static void set_value(Integral& n, Integral p) {
+//       n = (p << NumBits) | get_bits(n);
+//     }
+//
+//     static BitType get_bits(Integral n) {
+//       return static_cast<BitType>(n & BitMap);
+//     }
+//
+//     static void set_bits(Integral& n, BitType c) {
+//       n = (n & ~BitMap) | static_cast<Integral>(c);
+//     }
+//
+// //    static void compress_value(Integral& n) {
+// //      set_value(n, n);
+// //    }
+// //
+// //    static void decompress_value(Integral& n) {
+// //      n = get_value(n);
+// //    }
+//   };
 
 
 //  template<typename Integral>
