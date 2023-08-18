@@ -31,14 +31,14 @@
 
 #include <boost/graph/depth_first_search.hpp>
 
-namespace HW::dynamic_connectivity
+namespace dpl::graph
 {
-  using et_traits = dpl::graph::avl_traits<dpl::graph::avl_node>;
-  using et_algo = dpl::graph::avltree_algorithms_ext<et_traits>;
+  using et_traits = avl_traits<avl_node>;
+  using et_algo = avltree_algorithms_ext<et_traits>;
 
 
-  using etnte_traits = dpl::graph::aug_avl_traits<dpl::graph::aug_avl_node>;
-  using etnte_algo = dpl::graph::aug_avltree_algorithms_ext<etnte_traits>;
+  using etnte_traits = aug_avl_traits<aug_avl_node>;
+  using etnte_algo = aug_avltree_algorithms_ext<etnte_traits>;
 
 
   template <typename Context>
@@ -55,7 +55,7 @@ namespace HW::dynamic_connectivity
 
     bool x1_side;
 
-    using default_path = dpl::graph::default_path_buffer<et_traits>;
+    using default_path = default_path_buffer<et_traits>;
 
     /**
      * x0_least - the least entry, representing a pseudo principal cut
@@ -112,7 +112,7 @@ namespace HW::dynamic_connectivity
 
     bool x2_side;
 
-    using default_path = dpl::graph::default_path_buffer<et_traits>;
+    using default_path = default_path_buffer<et_traits>;
 
     /**
      * x0_least - the least entry, representing a pseudo principal cut
@@ -210,13 +210,13 @@ namespace HW::dynamic_connectivity
 
       if (etnte_entry_ab != etnte_entry_ba) {
         if (etnte_algo::less_than(etnte_entry_ab, etnte_entry_ba)) {
-          dpl::graph::cyclic<etnte_algo>::split(header_a, header_b, etnte_entry_ab, etnte_entry_ba);
+          cyclic<etnte_algo>::split(header_a, header_b, etnte_entry_ab, etnte_entry_ba);
           
           etnte_algo::push_front(header_b, etnte_entry_ab);
           etnte_algo::push_front(header_a, etnte_entry_ba);
         }
         else {
-          dpl::graph::cyclic<etnte_algo>::split(header_a, header_b, etnte_entry_ba, etnte_entry_ab);
+          cyclic<etnte_algo>::split(header_a, header_b, etnte_entry_ba, etnte_entry_ab);
           
           etnte_algo::push_front(header_b, etnte_entry_ba);
           etnte_algo::push_front(header_a, etnte_entry_ab);
@@ -225,7 +225,7 @@ namespace HW::dynamic_connectivity
         }
       }
       else {
-        if (dpl::graph::cyclic<et_algo>::less_than_low_low(et_least, et_ab, et_ba)) {
+        if (cyclic<et_algo>::less_than_low_low(et_least, et_ab, et_ba)) {
           // B is empty                             
         }
         else 
@@ -247,19 +247,16 @@ namespace HW::dynamic_connectivity
     et_node_ptr et_hdr_;
     etnte_node_ptr etnte_hdr_;
 
-    dpl::graph::smart_pool<et_traits::node>* et_pool_;
-    dpl::graph::smart_pool<etnte_traits::node>* etnte_pool_;
+    smart_pool<et_traits::node>* et_pool_;
+    smart_pool<etnte_traits::node>* etnte_pool_;
 
     et_node_ptr* tree_edge_stack_empty_;
     et_node_ptr* tree_edge_stack_top_;
-
-    // std::vector<et_node_ptr>& components_;        
-
     
   public:
     euler_tour_visitor(
-      dpl::graph::smart_pool<et_traits::node>* et_pool
-    , dpl::graph::smart_pool<etnte_traits::node>* etnte_pool
+      smart_pool<et_traits::node>* et_pool
+    , smart_pool<etnte_traits::node>* etnte_pool
     , et_node_ptr* tree_edge_stack
     )
       : et_pool_(et_pool)

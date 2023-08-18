@@ -7,12 +7,12 @@
 
 #undef max
 
-namespace HW::dynamic_connectivity
+namespace dpl::graph
 {
   struct vertex;
 
-  using vertex_node_traits = default_list_node_traits<vertex>;
-  using vertex_iterator = inorder_iter<vertex_node_traits>;
+  using vertex_node_traits = HW::default_list_node_traits<vertex>;
+  using vertex_iterator = HW::inorder_iter<vertex_node_traits>;
   using vertex_list = boost::intrusive::list<
     vertex,
     boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<vertex_node_traits>>,
@@ -21,8 +21,8 @@ namespace HW::dynamic_connectivity
 
   struct directed_edge;
 
-  using directed_edge_node_traits = default_list_node_traits<directed_edge>;
-  using out_edge_iterator = inorder_iter<directed_edge_node_traits>;
+  using directed_edge_node_traits = HW::default_list_node_traits<directed_edge>;
+  using out_edge_iterator = HW::inorder_iter<directed_edge_node_traits>;
   using out_edge_list = boost::intrusive::list<
     directed_edge,
     boost::intrusive::value_traits<boost::intrusive::trivial_value_traits<directed_edge_node_traits>>,
@@ -37,7 +37,7 @@ namespace HW::dynamic_connectivity
 
 
 
-namespace HW::dynamic_connectivity
+namespace dpl::graph
 {
   using vertex_ptr = vertex*;
   using directed_edge_ptr = directed_edge*;
@@ -49,7 +49,7 @@ namespace HW::dynamic_connectivity
   struct directed_edge
   {
   private:
-    friend struct default_list_node_traits<directed_edge>;
+    friend struct HW::default_list_node_traits<directed_edge>;
     friend class etnte_context;
 
     // entry for the list of out edges from v0 pointing to v1
@@ -75,10 +75,10 @@ namespace HW::dynamic_connectivity
 
   struct vertex
   {
-    typedef vertex* node_ptr;
+    using node_ptr = vertex*;
 
   private:    
-    friend struct default_list_node_traits<vertex>;
+    friend struct HW::default_list_node_traits<vertex>;
     friend class etnte_context;
 
 
@@ -192,9 +192,9 @@ namespace HW::dynamic_connectivity
 
   struct dc_graph
   {
-    typedef size_t vertices_size_type;
-    typedef size_t edges_size_type;
-    typedef size_t degree_size_type;
+    using vertices_size_type = size_t;
+    using edges_size_type = size_t;
+    using degree_size_type = size_t;
 
   private:
     vertex_list vertices_;
@@ -286,14 +286,10 @@ namespace HW::dynamic_connectivity
     using reference = value_type&;
     using key_type = vertex_ptr;
     
-
-//  private:
-//    typedef pointer_plus_aligned_least_significant_bits<euler_tour_node_ptr, value_type, 2> compression;
-    typedef intergral_plus_shifted_least_significant_bits<size_t, value_type, 2> compression;
+    using compression = HW::intergral_plus_shifted_least_significant_bits<size_t, value_type, 2>;
 
     static size_t& field(const vertex_ptr v) { return v->row_idx_; }
 
-  public:                
     static void compress_and_init(const vertex_ptr v) {
       compression::set_value(field(v), field(v));
       set_color(v, boost::color_traits<value_type>::white());
@@ -359,16 +355,16 @@ namespace HW::dynamic_connectivity
 namespace boost
 {
   template <>
-  struct graph_traits<HW::dynamic_connectivity::dc_graph>
+  struct graph_traits<dpl::graph::dc_graph>
   {
   private:
     struct traversal_tag : virtual boost::incidence_graph_tag {};
 
   public:
-    using vertex_descriptor = HW::dynamic_connectivity::vertex_ptr;
-    using edge_descriptor = HW::dynamic_connectivity::directed_edge_ptr;
+    using vertex_descriptor = dpl::graph::vertex_ptr;
+    using edge_descriptor = dpl::graph::directed_edge_ptr;
 
-    using out_edge_iterator = HW::dynamic_connectivity::out_edge_iterator;
+    using out_edge_iterator = dpl::graph::out_edge_iterator;
 
     using traversal_category = traversal_tag;
     using directed_category = boost::undirected_tag;
@@ -376,12 +372,12 @@ namespace boost
     //    typedef allow_parallel_edge_tag edge_parallel_category;
     using edge_parallel_category = boost::disallow_parallel_edge_tag;
 
-    using vertices_size_type = HW::dynamic_connectivity::dc_graph::vertices_size_type;
-    using edges_size_type = HW::dynamic_connectivity::dc_graph::vertices_size_type;
-    using degree_size_type = HW::dynamic_connectivity::dc_graph::degree_size_type;
+    using vertices_size_type = dpl::graph::dc_graph::vertices_size_type;
+    using edges_size_type = dpl::graph::dc_graph::vertices_size_type;
+    using degree_size_type = dpl::graph::dc_graph::degree_size_type;
 
     static vertex_descriptor null_vertex() {
-      return const_cast<vertex_descriptor>(&HW::dynamic_connectivity::_NULL_VERTEX);
+      return const_cast<vertex_descriptor>(&dpl::graph::_NULL_VERTEX);
     }
   };
 }

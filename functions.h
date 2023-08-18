@@ -196,11 +196,11 @@ namespace xpm
   namespace test
   {
     inline void DFS_CHECK() {
-      using vertex = HW::dynamic_connectivity::vertex;
-      using graph = HW::dynamic_connectivity::dc_graph;
-      using directed_edge = HW::dynamic_connectivity::directed_edge;
-      using et_algo = HW::dynamic_connectivity::et_algo;
-      using et_traits = HW::dynamic_connectivity::et_traits;
+      using vertex = dpl::graph::vertex;
+      using graph = dpl::graph::dc_graph;
+      using directed_edge = dpl::graph::directed_edge;
+      using et_algo = dpl::graph::et_algo;
+      using et_traits = dpl::graph::et_traits;
 
       graph g;
 
@@ -232,7 +232,7 @@ namespace xpm
         add_edge(vertices[l], vertices[r], d0, d1, g);
       }
 
-      HW::dynamic_connectivity::dc_context<HW::dynamic_connectivity::etnte_context> etdc_context;
+      dpl::graph::dc_context<dpl::graph::etnte_context> etdc_context;
 
       etdc_context.init(g/*, &vertices[1]*/);
 
@@ -240,17 +240,17 @@ namespace xpm
         auto* v = &vertices[i];
 
         
-        auto* hdr = HW::dynamic_connectivity::et_algo::get_header(HW::dynamic_connectivity::etnte_context::get_entry(v));
+        auto* hdr = dpl::graph::et_algo::get_header(dpl::graph::etnte_context::get_entry(v));
         auto* v_et_ref = et_traits::get_left(hdr);
 
-        if (HW::dynamic_connectivity::etnte_context::is_loop_edge(v_et_ref)) {
+        if (dpl::graph::etnte_context::is_loop_edge(v_et_ref)) {
           int p = 3;
         }
         else {
           int k = 3;
         }
 
-        auto* v_ref = HW::dynamic_connectivity::etnte_context::get_vertex(v_et_ref);
+        auto* v_ref = dpl::graph::etnte_context::get_vertex(v_et_ref);
         
         std::cout << fmt::format("vertex {} : root {}\n", v->row_idx_,  v_ref->row_idx_);
       }
@@ -273,12 +273,12 @@ namespace xpm
       using namespace chrono;
 
 
-      using traits = HW::dynamic_connectivity::et_traits;
+      using traits = dpl::graph::et_traits;
       using node = traits::node;
-      using algo = HW::dynamic_connectivity::et_algo;
+      using algo = dpl::graph::et_algo;
       using cyclic_op = dpl::graph::cyclic<algo>;
 
-      using vertex = HW::dynamic_connectivity::vertex;
+      using vertex = dpl::graph::vertex;
       
       random_device rand_seed;
       auto random_engine = default_random_engine(rand_seed());
@@ -311,7 +311,7 @@ namespace xpm
       vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        HW::dynamic_connectivity::etnte_context::set_vertex(&input[i], &vertices[i]);
+        dpl::graph::etnte_context::set_vertex(&input[i], &vertices[i]);
         algo::push_back(header_a, &input[i]);
       }
 
@@ -418,13 +418,13 @@ namespace xpm
       using namespace chrono;
 
 
-      using traits = HW::dynamic_connectivity::etnte_traits;
+      using traits = dpl::graph::etnte_traits;
       using node = traits::node;
       using algo = dpl::graph::aug_avltree_algorithms_ext<traits>;
       using cyclic_op = dpl::graph::cyclic<algo>;
 
-      // using vertex = HW::dynamic_connectivity::vertex;
-      using directed_edge = HW::dynamic_connectivity::directed_edge;
+      // using vertex = dpl::graph::vertex;
+      using directed_edge = dpl::graph::directed_edge;
       
        //dpl::graph::et_cyclic_op;
 
@@ -467,7 +467,7 @@ namespace xpm
       vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        HW::dynamic_connectivity::etnte_context::set_directed_edge(&input[i], &edges[i]);
+        dpl::graph::etnte_context::set_directed_edge(&input[i], &edges[i]);
         algo::push_back(header_a, &input[i]);
       }
 

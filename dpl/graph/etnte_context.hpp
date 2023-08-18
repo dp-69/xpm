@@ -4,7 +4,7 @@
 #include "et_etnte_defs.hpp"
 #include <stack>
 
-namespace HW::dynamic_connectivity
+namespace dpl::graph
 {
   class etnte_context
   {
@@ -14,8 +14,6 @@ namespace HW::dynamic_connectivity
     using etnte_node = etnte_traits::node;
     using etnte_node_ptr = etnte_traits::node_ptr;
     using etnte_const_node_ptr = etnte_traits::const_node_ptr;
-
-    using mask = dpl::graph::mask;
 
   public:
     static etnte_node_ptr get_non_tree_edge_header(et_const_node_ptr n) {
@@ -81,7 +79,7 @@ namespace HW::dynamic_connectivity
 
     // ---------------
 
-    typedef tagged_pointer_as_size_t<bool, 1> compression;
+    using compression = HW::tagged_pointer_as_size_t<bool, 1>;
 
     static bool is_tree_edge(const directed_edge_ptr& x) {
       return compression::get_bits(x->entry_type_);

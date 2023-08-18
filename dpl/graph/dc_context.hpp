@@ -5,7 +5,7 @@
 // #include "dynamic_connectivity_graph.hpp"
 // #include "HW/pore_network_modelling/row_idx_populate_visitor.h" //TODO
 
-namespace HW { namespace dynamic_connectivity
+namespace dpl::graph
 {      
   struct component_visitor_empty
   {
@@ -68,8 +68,8 @@ namespace HW { namespace dynamic_connectivity
   vector<dc_stat> dcStatistics;
   #endif 
 
-    dpl::graph::smart_pool<et_traits::node> etPool_;
-    dpl::graph::smart_pool<etnte_traits::node> etntePool_;
+    smart_pool<et_traits::node> etPool_;
+    smart_pool<etnte_traits::node> etntePool_;
 
     // std::vector<et_node_ptr> initial_components_;
    
@@ -116,9 +116,9 @@ namespace HW { namespace dynamic_connectivity
       etnte_context_operations<Context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
 
       if (et_algo::less_than(etAB, etBA))
-        dpl::graph::cyclic<et_algo>::split(etHeaderA, etHeaderB, etAB, etBA);
+        cyclic<et_algo>::split(etHeaderA, etHeaderB, etAB, etBA);
       else {
-        dpl::graph::cyclic<et_algo>::split(etHeaderA, etHeaderB, etBA, etAB);
+        cyclic<et_algo>::split(etHeaderA, etHeaderB, etBA, etAB);
         et_algo::swap_tree(etHeaderA, etHeaderB);        
       }      
       
@@ -181,9 +181,9 @@ namespace HW { namespace dynamic_connectivity
                 
 
         // etnte
-        dpl::graph::cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_context_operations<Context>::lower_bound(etnteHeaderA, etRecA));
+        cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_context_operations<Context>::lower_bound(etnteHeaderA, etRecA));
         auto leastB = etnte_context_operations<Context>::lower_bound(etnteHeaderB, etRecB);
-        dpl::graph::cyclic<etnte_algo>::principal_cut_least_dropped(etnteHeaderB, leastB);
+        cyclic<etnte_algo>::principal_cut_least_dropped(etnteHeaderB, leastB);
         etnte_algo::join_trees(etnteHeaderA, leastB, etnteHeaderB);
 
         etnte_algo::erase(etnteHeaderA, replacementAB);
@@ -191,8 +191,8 @@ namespace HW { namespace dynamic_connectivity
 
 
         // et
-        dpl::graph::cyclic<et_algo>::principal_cut(etHeaderA, etRecA);
-        dpl::graph::cyclic<et_algo>::principal_cut(etHeaderB, etRecB);                
+        cyclic<et_algo>::principal_cut(etHeaderA, etRecA);
+        cyclic<et_algo>::principal_cut(etHeaderB, etRecB);                
                   
         et_algo::join_trees(etHeaderA, etAB, etHeaderB);        
         et_algo::push_back(etHeaderA, etBA);                       
@@ -264,4 +264,4 @@ namespace HW { namespace dynamic_connectivity
       etntePool_.release(etnteBA);
     }    
   };  
-}}
+}

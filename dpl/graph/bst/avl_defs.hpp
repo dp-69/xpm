@@ -132,7 +132,7 @@ namespace dpl::graph
     using node_ptr = node*;
     using const_node_ptr = const node*;
 
-    typedef avl_balance balance;
+    using balance = avl_balance;
 
     static node_ptr get_left(const_node_ptr n) { return n->left; }
     static node_ptr get_right(const_node_ptr n) { return n->right; }
