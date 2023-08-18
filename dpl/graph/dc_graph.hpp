@@ -201,7 +201,10 @@ namespace dpl::graph
 
     friend void add_vertex(vertex_ptr v, dc_graph& g);
     friend vertices_size_type num_vertices(const dc_graph& g);
-    friend std::pair<vertex_iterator, vertex_iterator> vertices(const dc_graph& g);
+
+
+    friend vertex_iterator begin(const dc_graph& g);
+    friend vertex_iterator end(const dc_graph& g);
   };
 
   inline void add_vertex(vertex_ptr v, dc_graph& g) {            
@@ -236,8 +239,20 @@ namespace dpl::graph
     return g.vertices_.size();
   }
 
+  inline vertex_iterator begin(const dc_graph& g) {
+	  return vertex_iterator(g.vertices_.begin().pointed_node());
+  }
+
+  inline vertex_iterator end(const dc_graph& g) {
+	  return vertex_iterator(g.vertices_.end().pointed_node());
+  }
+
   inline std::pair<vertex_iterator, vertex_iterator> vertices(const dc_graph& g) {
-	  return std::make_pair(vertex_iterator(g.vertices_.begin().pointed_node()), vertex_iterator(g.vertices_.end().pointed_node()));
+	  return std::make_pair(begin(g), end(g));
+  }
+
+  inline auto range(const dc_graph& g) {
+    return std::ranges::subrange{begin(g), end(g)};
   }    
    
   inline out_edge_iterator out_edges_begin(const vertex_ptr v) {
@@ -248,13 +263,13 @@ namespace dpl::graph
     return out_edge_iterator(v->out_edges_.end().pointed_node());    
   }
 
-  struct out_edges_range
-  {
-    const vertex_ptr v;
-    explicit out_edges_range(const vertex_ptr v) : v(v) {}
-    out_edge_iterator begin() const { return out_edges_begin(v); }
-    out_edge_iterator end() const { return out_edges_end(v); }
-  };
+  // struct out_edges_range
+  // {
+  //   const vertex_ptr v;
+  //   explicit out_edges_range(const vertex_ptr v) : v(v) {}
+  //   out_edge_iterator begin() const { return out_edges_begin(v); }
+  //   out_edge_iterator end() const { return out_edges_end(v); }
+  // };
 
   
   inline vertex_ptr target(const directed_edge_ptr e, const dc_graph&) {
@@ -279,44 +294,44 @@ namespace dpl::graph
 
 
 
-  struct vertex_color_property_map
-  {
-    using category = boost::read_write_property_map_tag;
-    using value_type = boost::two_bit_color_type;
-    using reference = value_type&;
-    using key_type = vertex_ptr;
-    
-    using compression = HW::intergral_plus_shifted_least_significant_bits<size_t, value_type, 2>;
-
-    static size_t& field(const vertex_ptr v) { return v->row_idx_; }
-
-    static void compress_and_init(const vertex_ptr v) {
-      compression::set_value(field(v), field(v));
-      set_color(v, boost::color_traits<value_type>::white());
-    }
-
-    static void decompress_and_finish(const vertex_ptr v) {
-      field(v) = compression::get_value(field(v));
-    }
-
-    static value_type get_color(const vertex_ptr v) {
-      // return v->color;
-      return compression::get_bits(field(v));   
-    }
-
-    static void set_color(const vertex_ptr v, value_type color) {
-      // v->color = color;
-      return compression::set_bits(field(v), color);   
-    }
-  };
-
-  inline vertex_color_property_map::value_type get(const vertex_color_property_map&, const vertex_ptr v) {
-    return vertex_color_property_map::get_color(v);    
-  }
-
-  inline void put(const vertex_color_property_map&, const vertex_ptr v, vertex_color_property_map::value_type color) {
-    vertex_color_property_map::set_color(v, color);      
-  }
+  // struct vertex_color_property_map
+  // {
+  //   using category = boost::read_write_property_map_tag;
+  //   using value_type = boost::two_bit_color_type;
+  //   using reference = value_type&;
+  //   using key_type = vertex_ptr;
+  //   
+  //   using compression = HW::intergral_plus_shifted_least_significant_bits<size_t, value_type, 2>;
+  //
+  //   static size_t& field(const vertex_ptr v) { return v->row_idx_; }
+  //
+  //   static void compress_and_init(const vertex_ptr v) {
+  //     compression::set_value(field(v), field(v));
+  //     set_color(v, boost::color_traits<value_type>::white());
+  //   }
+  //
+  //   static void decompress_and_finish(const vertex_ptr v) {
+  //     field(v) = compression::get_value(field(v));
+  //   }
+  //
+  //   static value_type get_color(const vertex_ptr v) {
+  //     // return v->color;
+  //     return compression::get_bits(field(v));   
+  //   }
+  //
+  //   static void set_color(const vertex_ptr v, value_type color) {
+  //     // v->color = color;
+  //     return compression::set_bits(field(v), color);   
+  //   }
+  // };
+  //
+  // inline vertex_color_property_map::value_type get(const vertex_color_property_map&, const vertex_ptr v) {
+  //   return vertex_color_property_map::get_color(v);    
+  // }
+  //
+  // inline void put(const vertex_color_property_map&, const vertex_ptr v, vertex_color_property_map::value_type color) {
+  //   vertex_color_property_map::set_color(v, color);      
+  // }
 
 
 
@@ -352,32 +367,28 @@ namespace dpl::graph
 }
 
 
-namespace boost
+template <>
+struct boost::graph_traits<dpl::graph::dc_graph>
 {
-  template <>
-  struct graph_traits<dpl::graph::dc_graph>
-  {
-  private:
-    struct traversal_tag : virtual boost::incidence_graph_tag {};
+private:
+  struct traversal_tag : virtual incidence_graph_tag {};
 
-  public:
-    using vertex_descriptor = dpl::graph::vertex_ptr;
-    using edge_descriptor = dpl::graph::directed_edge_ptr;
+public:
+  using vertex_descriptor = dpl::graph::vertex_ptr;
+  using edge_descriptor = dpl::graph::directed_edge_ptr;
 
-    using out_edge_iterator = dpl::graph::out_edge_iterator;
+  using out_edge_iterator = dpl::graph::out_edge_iterator;
 
-    using traversal_category = traversal_tag;
-    using directed_category = boost::undirected_tag;
+  using traversal_category = traversal_tag;
+  using directed_category = undirected_tag;
 
-    //    typedef allow_parallel_edge_tag edge_parallel_category;
-    using edge_parallel_category = boost::disallow_parallel_edge_tag;
+  using edge_parallel_category = disallow_parallel_edge_tag;
 
-    using vertices_size_type = dpl::graph::dc_graph::vertices_size_type;
-    using edges_size_type = dpl::graph::dc_graph::vertices_size_type;
-    using degree_size_type = dpl::graph::dc_graph::degree_size_type;
+  using vertices_size_type = dpl::graph::dc_graph::vertices_size_type;
+  using edges_size_type = dpl::graph::dc_graph::vertices_size_type;
+  using degree_size_type = dpl::graph::dc_graph::degree_size_type;
 
-    static vertex_descriptor null_vertex() {
-      return const_cast<vertex_descriptor>(&dpl::graph::_NULL_VERTEX);
-    }
-  };
-}
+  static vertex_descriptor null_vertex() {
+    return const_cast<vertex_descriptor>(&dpl::graph::_NULL_VERTEX);
+  }
+};

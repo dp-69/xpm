@@ -5,6 +5,8 @@
 // #include "dynamic_connectivity_graph.hpp"
 // #include "HW/pore_network_modelling/row_idx_populate_visitor.h" //TODO
 
+#include <boost/property_map/function_property_map.hpp>
+
 namespace dpl::graph
 {      
   struct component_visitor_empty
@@ -33,34 +35,23 @@ namespace dpl::graph
     size_t nteReconnectingFirst;
   };
 
+  // struct some_class
+  // {
+  //   size_t operator()(vertex_ptr v) {
+  //     return v->row_idx_;
+  //   }
+  // };
+
   template <typename Context>
   class dc_context
   {
+    static constexpr auto stack_capacity = 256;
+
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
 
-    const static auto stack_capacity = 256;
-
     using et_nt = et_traits;
     using etnte_nt = etnte_traits;
-
-
-    static void execute_dfs(const dc_graph& g, euler_tour_visitor<dc_graph, Context> visitor) {
-      vertex_iterator vi, vi_start, vi_end;
-      boost::tie(vi_start, vi_end) = vertices(g);
-              
-      for (vi = vi_start; vi != vi_end; ++vi)
-        vertex_color_property_map::compress_and_init(*vi);
-
-      for (vi = vi_start; vi != vi_end; ++vi) {
-        if (vertex_color_property_map::get_color(*vi) != boost::two_bit_color_type::two_bit_black)
-          depth_first_visit(g, *vi, visitor, vertex_color_property_map());
-      }
-
-      for (vi = vi_start; vi != vi_end; ++vi)
-        vertex_color_property_map::decompress_and_finish(*vi);
-    }
-
 
   public:    
   
@@ -90,10 +81,22 @@ namespace dpl::graph
     // }
 
     void init(const dc_graph& g) {           
-      auto vertexCount = num_vertices(g);                 
-      auto treeEdgeStack = std::vector<et_node_ptr>(vertexCount + 1);     
-          
-      execute_dfs(g, euler_tour_visitor<dc_graph, Context>(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
+      auto vertex_count = num_vertices(g);                 
+
+      using color_t = boost::two_bit_color_type;
+      auto color_uptr = std::make_unique<color_t[]>(vertex_count);
+      boost::iterator_property_map color_map{
+        color_uptr.get(),
+        boost::make_function_property_map<vertex_ptr>(
+          [](vertex_ptr v) { return v->row_idx_; })
+      };
+
+      auto tree_edge_stack = std::vector<et_node_ptr>(vertex_count + 1);     
+      euler_tour_visitor<dc_graph, Context> visitor{&etPool_, &etntePool_, tree_edge_stack.data()};
+
+      for (vertex_ptr v : range(g))
+        if (color_map[v] != color_t::two_bit_black)
+          boost::depth_first_visit(g, v, visitor, color_map);
     }
 
     // Returns true if reconnected.
