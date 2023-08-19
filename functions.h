@@ -197,22 +197,18 @@ namespace xpm
   {
     inline void DFS_CHECK() {
       using vertex = dpl::graph::vertex;
-      using graph = dpl::graph::dc_graph;
       using directed_edge = dpl::graph::directed_edge;
       using et_algo = dpl::graph::et_algo;
       using et_traits = dpl::graph::et_traits;
 
-      graph g;
+      dpl::graph::dc_graph g;
+      dpl::graph::etnte_context context{g};
 
       int vertex_count = 6;
 
-      std::vector<vertex> vertices(vertex_count);
+      auto& vertices = g.vertices();
 
-      for (int i = 0; i < vertex_count; ++i) {
-        auto* v = &vertices[i];
-        v->row_idx_ = i;
-        add_vertex(v, g);
-      }
+      vertices.resize(vertex_count);
 
       std::pair<int, int> edges[] = {
         {0, 1}, {1, 2}, {2, 0},
@@ -223,8 +219,7 @@ namespace xpm
 
       std::vector<directed_edge> de_buffer(edge_count*2);
 
-
-      auto de_ptr = de_buffer.data();
+      auto* de_ptr = de_buffer.data();
       for (auto [l, r] : edges) {
         auto& d0 = *de_ptr++;
         auto& d1 = *de_ptr++;
@@ -234,7 +229,16 @@ namespace xpm
 
       dpl::graph::dc_context<dpl::graph::etnte_context> etdc_context;
 
-      etdc_context.init(g/*, &vertices[1]*/);
+      etdc_context.init(g, context/*, &vertices[1]*/);
+
+
+
+      // auto* de_for_split = &de_buffer[4*2];
+      // if (dpl::graph::etnte_context::is_tree_edge(de_for_split))
+      //   etdc_context.split_and_reconnect_tree_edge(de_for_split);
+      // else
+      //   etdc_context.remove_non_tree_edge(de_for_split);
+
 
       for (int i = 0; i < vertex_count; ++i) {
         auto* v = &vertices[i];
@@ -251,8 +255,10 @@ namespace xpm
         }
 
         auto* v_ref = dpl::graph::etnte_context::get_vertex(v_et_ref);
+
         
-        std::cout << fmt::format("vertex {} : root {}\n", v->row_idx_,  v_ref->row_idx_);
+
+        std::cout << fmt::format("vertex {} : root {}\n", context.get_idx(v), context.get_idx(v_ref));
       }
 
 

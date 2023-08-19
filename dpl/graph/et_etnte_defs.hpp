@@ -241,8 +241,8 @@ namespace dpl::graph
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
 
-    using vertex_desc = typename boost::graph_traits<Graph>::vertex_descriptor;
-    using edge_desc = typename boost::graph_traits<Graph>::edge_descriptor;
+    using v_desc = typename boost::graph_traits<Graph>::vertex_descriptor;
+    using e_desc = typename boost::graph_traits<Graph>::edge_descriptor;
 
     et_node_ptr et_hdr_;
     etnte_node_ptr etnte_hdr_;
@@ -266,7 +266,7 @@ namespace dpl::graph
     {}
 
 
-    void start_vertex(vertex_desc, const Graph&) {            
+    void start_vertex(v_desc, const Graph&) {            
       et_hdr_ = et_pool_->acquire();
       et_algo::init_header(et_hdr_);      
       etnte_hdr_ = etnte_pool_->acquire();
@@ -274,25 +274,25 @@ namespace dpl::graph
       Context::set_etnte_header(et_hdr_, etnte_hdr_);             
     }
 
-    void discover_vertex(vertex_desc v, const Graph&) {     
+    void discover_vertex(v_desc v, const Graph&) {     
       et_node_ptr entry = et_pool_->acquire();        
       Context::set_vertex(entry, v);
       Context::set_entry(v, entry);
       et_algo::push_back(et_hdr_, entry);            
     }
 
-    void finish_vertex(vertex_desc v, const Graph&) {
+    void finish_vertex(v_desc v, const Graph&) {
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_node_ptr entry = et_pool_->acquire();
         et_node_ptr top = *tree_edge_stack_top_--;
-        edge_desc top_de_opposite = Context::get_directed_edge(top)->opposite;
+        e_desc top_de_opposite = Context::get_opposite(Context::get_directed_edge(top));
         Context::set_directed_edge(entry, top_de_opposite);        
         Context::set_tree_edge_entry(top_de_opposite, entry);
         et_algo::push_back(et_hdr_, entry);        
       }
     }    
 
-    void tree_edge(edge_desc e, const Graph&) {
+    void tree_edge(e_desc e, const Graph&) {
       et_node_ptr entry = et_pool_->acquire();
       Context::set_directed_edge(entry, e);
       Context::set_tree_edge_entry(e, entry);
@@ -301,11 +301,11 @@ namespace dpl::graph
     }
 
     // non-tree edge    
-    void forward_or_cross_edge(edge_desc de, const Graph&) {
+    void forward_or_cross_edge(e_desc de, const Graph&) {
       etnte_node_ptr entry = etnte_pool_->acquire();
       etnte_node_ptr entry_opp = etnte_pool_->acquire();
       
-      edge_desc de_opp = de->opposite;
+      e_desc de_opp = Context::get_opposite(de);
 
       Context::set_non_tree_edge_entry(de, entry); 
       Context::set_non_tree_edge_entry(de_opp, entry_opp);

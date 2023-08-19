@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "et_etnte_defs.hpp"
+#include "dc_graph.hpp"
 
 namespace dpl::graph
 {
@@ -13,88 +14,65 @@ namespace dpl::graph
     using etnte_ptr = etnte_traits::node_ptr;
     using etnte_cptr = etnte_traits::const_node_ptr;
 
+
+    dc_graph* graph_;
+    // vertex* 
+
   public:
-    static etnte_ptr get_etnte_header(et_cptr n) {
-      return mask::get_ptr<etnte>(n->tag);
-    }
+    explicit etnte_context(dc_graph& graph)
+      : graph_(&graph) {}
 
-    static void set_etnte_header(et_ptr n, etnte_cptr etnte_header) {
-      mask::set_ptr_balance(n->tag, etnte_header, mask::balance);
-    }
 
-    static directed_edge* get_directed_edge(et_cptr n) {
-      return mask::get_ptr<directed_edge>(n->tag);
-    }
+    static etnte_ptr get_etnte_header(et_cptr n) { return mask::get_ptr<etnte>(n->tag); }
+    static void set_etnte_header(et_ptr n, etnte_cptr etnte_header) { mask::set_ptr_balance(n->tag, etnte_header, mask::balance); }
 
-    static void set_directed_edge(et_ptr n, const directed_edge* de) {
-      mask::set_ptr(n->tag, de);
-    }
+    static directed_edge* get_directed_edge(et_cptr n) { return mask::get_ptr<directed_edge>(n->tag); }
+    static void set_directed_edge(et_ptr n, const directed_edge* de) { mask::set_ptr(n->tag, de); }
 
-    static vertex* get_vertex(et_cptr n) {
-      return mask::get_ptr<vertex>(n->tag);
-    }
-    
-    static void set_vertex(et_ptr n, const vertex* v) {
-      mask::set_ptr_bit(n->tag, v);
-    }                     
+    static vertex* get_vertex(et_cptr n) { return mask::get_ptr<vertex>(n->tag); }
+    static void set_vertex(et_ptr n, const vertex* v) { mask::set_ptr_bit(n->tag, v); }                     
 
-    static bool is_loop_edge(et_cptr n) { // that is 'vertex'
-      return mask::get_bit(n->tag);
-    }
+    /**
+     * \brief checks if n is a vertex-type et entry
+     */
+    static bool is_loop_edge(et_cptr n) { return mask::get_bit(n->tag); }
 
     // ---------------
 
-    static directed_edge* get_directed_edge(etnte_cptr n) {
-      return mask::get_ptr<directed_edge>(n->tag);
-    }
+    static directed_edge* get_directed_edge(etnte_cptr n) { return mask::get_ptr<directed_edge>(n->tag); }
+    static void set_directed_edge(etnte_ptr n, const directed_edge* de) { mask::set_ptr(n->tag, de); }
 
-    static void set_directed_edge(etnte_ptr n, const directed_edge* de) {
-      mask::set_ptr(n->tag, de);
-    }
+    static directed_edge* get_opposite(const directed_edge* de) { return de->opposite_; }
+    static void set_opposite(directed_edge* de, directed_edge* opp) { de->opposite_ = opp; }
 
-    // ordering of non-tree edges
-    static et_ptr get_ordering_vertex_entry(const directed_edge* de) {
-      // sorted by a pointing-in vertex, the pointing-out works as well        
-      return de->opposite->v1->et_entry_;   
-    }
-    
-    static et_ptr get_ordering_vertex_entry(etnte_cptr n) {
-      return get_ordering_vertex_entry(get_directed_edge(n));      
-    }
+    /**
+     * \brief
+     *   ordering of non-tree edges
+     *   sorted by a pointing-in vertex, the pointing-out works as well
+     */
+    static et_ptr get_ordering_vertex_entry(const directed_edge* de) { return get_opposite(de)->v1->et_entry_; }
+    static et_ptr get_ordering_vertex_entry(etnte_cptr n) { return get_ordering_vertex_entry(get_directed_edge(n)); }
 
     // ---------------
 
-    static et_ptr get_entry(vertex* v) {
-      return v->et_entry_;
-    }
+    static et_ptr get_entry(vertex* v) { return v->et_entry_; }
+    static void set_entry(vertex* v, et_ptr et) { v->et_entry_ = et; }
 
-    static void set_entry(vertex* v, et_ptr et) {
-      v->et_entry_ = et;
+    auto get_idx(const vertex* v) const {
+      return v - graph_->vertices().data();
     }
 
     // ---------------
 
     using compression = HW::tagged_pointer_as_size_t<bool, 1>;
 
-    static bool is_tree_edge(const directed_edge* x) {
-      return compression::get_bits(x->entry_type_);
-    }
+    static bool is_tree_edge(const directed_edge* x) { return compression::get_bits(x->entry_type_); }
 
-    static et_ptr get_tree_edge_entry(const directed_edge* x) {
-      return compression::get_pointer<et_ptr>(x->entry_type_);      
-    }
+    static et_ptr get_tree_edge_entry(const directed_edge* x) { return compression::get_pointer<et_ptr>(x->entry_type_); }
+    static void set_tree_edge_entry(directed_edge* x, et_ptr y) { compression::set_pointer_and_bits(x->entry_type_, y, true); }
 
-    static void set_tree_edge_entry(directed_edge* x, et_ptr y) {
-      compression::set_pointer_and_bits(x->entry_type_, y, true);      
-    }
-
-    static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) {
-      return compression::get_pointer<etnte_ptr>(x->entry_type_);      
-    }
-
-    static void set_non_tree_edge_entry(directed_edge* x, etnte_ptr y) {
-      compression::set_pointer_and_bits(x->entry_type_, y, false);      
-    }    
+    static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return compression::get_pointer<etnte_ptr>(x->entry_type_); }
+    static void set_non_tree_edge_entry(directed_edge* x, etnte_ptr y) { compression::set_pointer_and_bits(x->entry_type_, y, false); }    
   };
 
 

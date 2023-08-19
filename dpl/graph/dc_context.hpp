@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dc_graph.hpp"
-#include "etnte_context.hpp"
+#include "dc_et_context.hpp"
 
 #include <boost/graph/two_bit_color_map.hpp>
 #include <boost/property_map/function_property_map.hpp>
@@ -46,10 +46,6 @@ namespace dpl::graph
     using etnte_nt = etnte_traits;
 
   public:    
-  
-  #ifdef CONNECTIVITY_DIAGNOSTICS
-  vector<dc_stat> dcStatistics;
-  #endif 
 
     smart_pool<et_traits::node> etPool_;
     smart_pool<etnte_traits::node> etntePool_;
@@ -72,125 +68,129 @@ namespace dpl::graph
     //   execute_dfs(g, rootVertex, euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
     // }
 
-    void init(const dc_graph& g) {           
+    void init(dc_graph& g, Context& c) {           
       auto vertex_count = num_vertices(g);                 
+
+      
 
       using color_t = boost::two_bit_color_type;
       auto color_uptr = std::make_unique<color_t[]>(vertex_count);
       boost::iterator_property_map color_map{
         color_uptr.get(),
         boost::make_function_property_map<vertex*>(
-          [](vertex* v) { return v->row_idx_; })
+          [&c](vertex* v) { return c.get_idx(v); })
       };
 
       auto tree_edge_stack = std::vector<et_node_ptr>(vertex_count + 1);     
       euler_tour_visitor<dc_graph, Context> visitor{&etPool_, &etntePool_, tree_edge_stack.data()};
 
-      for (vertex* v : range(g))
-        if (color_map[v] != color_t::two_bit_black)
-          boost::depth_first_visit(g, v, visitor, color_map);
+
+
+      for (vertex& v : range(g))
+        if (color_map[&v] != color_t::two_bit_black)
+          boost::depth_first_visit(g, &v, visitor, color_map);
+    }
+
+    void print(etnte_node_ptr hdr, Context& c) {
+      for (etnte_node_ptr etnte : HW::tree_inorder_range<etnte_algo>(hdr)) {
+        directed_edge* de = Context::get_directed_edge(etnte);
+        std::cout << fmt::format(" {}, {}", c.get_idx(de->v1), c.get_idx(Context::get_opposite(de)->v1));
+      }
+    }
+
+    void print(et_node_ptr hdr, Context& c) {
+      for (et_node_ptr et : HW::tree_inorder_range<et_algo>(hdr)) {
+        if (!Context::is_loop_edge(et)) {
+          directed_edge* de = Context::get_directed_edge(et);
+          std::cout << fmt::format(" ({}, {})", c.get_idx(Context::get_opposite(de)->v1), c.get_idx(de->v1));  
+        }
+      }
     }
 
     // Returns true if reconnected.
     bool split_and_reconnect_tree_edge(directed_edge* ab) {
-      auto ba = ab->opposite;
+      auto ba = Context::get_opposite(ab);
 
-      auto etAB = Context::get_tree_edge_entry(ab);
-      auto etBA = Context::get_tree_edge_entry(ba);
+      et_node_ptr et_ab = Context::get_tree_edge_entry(ab);
+      et_node_ptr et_ba = Context::get_tree_edge_entry(ba);
       
-      auto etHeaderA = et_algo::get_header(etAB);
-      auto etnteHeaderA = Context::get_etnte_header(etHeaderA);
+      et_node_ptr et_hdr_a = et_algo::get_header(et_ab);
+      etnte_node_ptr etnte_hdr_a = Context::get_etnte_header(et_hdr_a);
 
-      auto etHeaderB = etPool_.acquire();
-      et_algo::init_header(etHeaderB);
-        
-      auto etnteHeaderB = etntePool_.acquire();
-      etnte_algo::init_header(etnteHeaderB);                           
-      Context::set_etnte_header(etHeaderB, etnteHeaderB);                        
+      et_node_ptr et_hdr_b = etPool_.acquire();
+      etnte_node_ptr etnte_hdr_b = etntePool_.acquire();
 
-      etnte_context_operations<Context>::split(etnteHeaderA, etnteHeaderB, etAB, etBA);
+      et_algo::init_header(et_hdr_b);
+      etnte_algo::init_header(etnte_hdr_b);                           
+      Context::set_etnte_header(et_hdr_b, etnte_hdr_b);                        
 
-      if (et_algo::less_than(etAB, etBA))
-        cyclic<et_algo>::split(etHeaderA, etHeaderB, etAB, etBA);
+      etnte_context_operations<Context>::split(etnte_hdr_a, etnte_hdr_b, et_ab, et_ba);
+
+      if (et_algo::less_than(et_ab, et_ba))
+        cyclic<et_algo>::split(et_hdr_a, et_hdr_b, et_ab, et_ba);
       else {
-        cyclic<et_algo>::split(etHeaderA, etHeaderB, etBA, etAB);
-        et_algo::swap_tree(etHeaderA, etHeaderB);        
+        cyclic<et_algo>::split(et_hdr_a, et_hdr_b, et_ba, et_ab);
+        et_algo::swap_tree(et_hdr_a, et_hdr_b);        
       }      
       
                                                                 
       directed_edge::set_null_et_entry(ab);
       directed_edge::set_null_et_entry(ba);      
-              
-      auto etnteSizeA = etnte_nt::get_size(etnte_nt::get_parent(etnteHeaderA));
-      auto etnteSizeB = etnte_nt::get_size(etnte_nt::get_parent(etnteHeaderB));
 
-      if (etnteSizeB < etnteSizeA) {
-        std::swap(etHeaderA, etHeaderB);
-        std::swap(etnteHeaderA, etnteHeaderB);
-      }
 
-      etnte_node_ptr replacementAB = nullptr;        
+      {
+        etnte_node_ptr root_a = etnte_nt::get_parent(etnte_hdr_a);
+        etnte_node_ptr root_b = etnte_nt::get_parent(etnte_hdr_b);
 
-      #ifdef CONNECTIVITY_DIAGNOSTICS
+        auto size_a = root_a ? etnte_nt::get_size(root_a) : 0;
+        auto size_b = root_b ? etnte_nt::get_size(root_b) : 0;
 
-      size_t i = 0;                                
-
-      for (const auto& etnte : tree_inorder_range<etnte_algo>(etnteHeaderA)) {
-        ++i;
-
-        if (etnte_algo::get_header(directed_edge::get_non_tree_edge_entry(etnte_nt::get_directed_edge(etnte)->opposite)) == etnteHeaderB) {            
-          dcStatistics.push_back(dc_stat{  
-            etnte_nt::get_size(etnte_nt::get_parent(etnteHeaderB)),
-            etnte_nt::get_size(etnte_nt::get_parent(etnteHeaderA)),            
-//            et_nt::get_size(et_nt::get_parent(etHeaderB)),
-//            et_nt::get_size(et_nt::get_parent(etHeaderA)),      
-            i});
-
-          replacementAB = etnte;
-          break;
+        if (size_b < size_a) {
+          std::swap(et_hdr_a, et_hdr_b);
+          std::swap(etnte_hdr_a, etnte_hdr_b);
         }
       }
-       
-      #else
-      for (const auto& etnte : tree_inorder_range<etnte_algo>(etnteHeaderA))
-        if (etnte_algo::get_header(Context::get_non_tree_edge_entry(Context::get_directed_edge(etnte)->opposite)) == etnteHeaderB) {
-          replacementAB = etnte;
+
+      etnte_node_ptr replacement_ab = nullptr;        
+      
+      for (etnte_node_ptr etnte : HW::tree_inorder_range<etnte_algo>(etnte_hdr_a))
+        if (etnte_algo::get_header(
+          Context::get_non_tree_edge_entry(
+            Context::get_opposite(
+              Context::get_directed_edge(etnte)))) == etnte_hdr_b) {
+          replacement_ab = etnte;
           break;
         }
-      #endif
-
      
-      if (replacementAB) {                                
-        ab = Context::get_directed_edge(replacementAB);
-        ba = ab->opposite;        
-        auto replacementBA = Context::get_non_tree_edge_entry(ba);
+      if (replacement_ab) {                                
+        ab = Context::get_directed_edge(replacement_ab);
+        ba = Context::get_opposite(ab);        
+        etnte_node_ptr replacement_ba = Context::get_non_tree_edge_entry(ba);
 
-        auto etRecA = Context::get_ordering_vertex_entry(ab);
-        auto etRecB = Context::get_ordering_vertex_entry(ba);                                        
+        et_node_ptr et_rec_a = Context::get_ordering_vertex_entry(ab);
+        et_node_ptr et_rec_b = Context::get_ordering_vertex_entry(ba);                                        
 
-        Context::set_directed_edge(etAB, ab);
-        Context::set_directed_edge(etBA, ba);
+        Context::set_directed_edge(et_ab, ab);
+        Context::set_directed_edge(et_ba, ba);
 
-        Context::set_tree_edge_entry(ab, etAB);
-        Context::set_tree_edge_entry(ba, etBA);
-                
+        Context::set_tree_edge_entry(ab, et_ab);
+        Context::set_tree_edge_entry(ba, et_ba);
 
         // etnte
-        cyclic<etnte_algo>::principal_cut(etnteHeaderA, etnte_context_operations<Context>::lower_bound(etnteHeaderA, etRecA));
-        auto leastB = etnte_context_operations<Context>::lower_bound(etnteHeaderB, etRecB);
-        cyclic<etnte_algo>::principal_cut_least_dropped(etnteHeaderB, leastB);
-        etnte_algo::join_trees(etnteHeaderA, leastB, etnteHeaderB);
+        cyclic<etnte_algo>::principal_cut(etnte_hdr_a, etnte_context_operations<Context>::lower_bound(etnte_hdr_a, et_rec_a));
+        auto leastB = etnte_context_operations<Context>::lower_bound(etnte_hdr_b, et_rec_b);
+        cyclic<etnte_algo>::principal_cut_least_dropped(etnte_hdr_b, leastB);
+        etnte_algo::join_trees(etnte_hdr_a, leastB, etnte_hdr_b);
 
-        etnte_algo::erase(etnteHeaderA, replacementAB);
-        etnte_algo::erase(etnteHeaderA, replacementBA);    
-
+        etnte_algo::erase(etnte_hdr_a, replacement_ab);
+        etnte_algo::erase(etnte_hdr_a, replacement_ba);    
 
         // et
-        cyclic<et_algo>::principal_cut(etHeaderA, etRecA);
-        cyclic<et_algo>::principal_cut(etHeaderB, etRecB);                
+        cyclic<et_algo>::principal_cut(et_hdr_a, et_rec_a);
+        cyclic<et_algo>::principal_cut(et_hdr_b, et_rec_b);                
                   
-        et_algo::join_trees(etHeaderA, etAB, etHeaderB);        
-        et_algo::push_back(etHeaderA, etBA);                       
+        et_algo::join_trees(et_hdr_a, et_ab, et_hdr_b);        
+        et_algo::push_back(et_hdr_a, et_ba);                       
           
         return true;
       }      
@@ -244,7 +244,7 @@ namespace dpl::graph
 
 
     void remove_non_tree_edge(directed_edge* ab) {
-      auto ba = ab->opposite;
+      auto ba = Context::get_opposite(ab);
       auto etnteAB = Context::get_non_tree_edge_entry(ab);
       auto etnteBA = Context::get_non_tree_edge_entry(ba);
       auto etnteHeader = etnte_algo::get_header(etnteAB);
