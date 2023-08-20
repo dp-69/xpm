@@ -23,8 +23,6 @@
 
 #pragma once
 
-// #include "core.hpp"
-
 namespace dpl::graph
 {
   struct avl_node
@@ -77,10 +75,34 @@ namespace dpl::graph
   };
 
 
-  struct mask
+  struct mask_bit
   {
     static inline constexpr std::size_t ptr = ~static_cast<std::size_t>(7);
     static inline constexpr std::size_t bit = 4;
+
+    template <typename Ptr> 
+    static Ptr get_ptr(std::size_t tag) {
+      return reinterpret_cast<Ptr>(tag & ptr);  // NOLINT(performance-no-int-to-ptr)
+    }
+
+    template <typename T> 
+    static void set_ptr(std::size_t& tag, const T* pointer) {
+      tag = reinterpret_cast<size_t>(pointer);
+    }
+
+    template <typename T> 
+    static void set_ptr_bit(std::size_t& tag, const T* p) {
+      tag = reinterpret_cast<size_t>(p) | bit;
+    }
+
+    static bool get_bit(std::size_t tag) {
+      return tag & bit;
+    }
+  };
+
+
+  struct mask_bit_balance : mask_bit
+  {
     static inline constexpr std::size_t balance = 3;
 
     static std::size_t get_balance(std::size_t tag) {
@@ -92,13 +114,8 @@ namespace dpl::graph
     }
 
     template <typename T> 
-    static T* get_ptr(std::size_t tag) {
-      return reinterpret_cast<T*>(tag & ptr);  // NOLINT(performance-no-int-to-ptr)
-    }
-
-    template <typename T> 
-    static void set_ptr(std::size_t& tag, const T* pointer) {
-      tag = reinterpret_cast<size_t>(pointer) | (tag & balance);
+    static void set_ptr(std::size_t& tag, const T* p) {
+      tag = reinterpret_cast<size_t>(p) | (tag & balance);
     }
 
     template <typename T> 
@@ -110,16 +127,14 @@ namespace dpl::graph
     static void set_ptr_balance(std::size_t& tag, const T* p, std::size_t b) {
       tag = reinterpret_cast<size_t>(p) | b;
     }
-
-    static bool get_bit(std::size_t tag) {
-      return tag & bit;
-    }
   };
 
 
   template<typename Node>
-  struct avl_traits 
+  class avl_traits 
   {
+    using mask = mask_bit_balance;
+
     enum class avl_balance
     {
       negative_t = 0,
@@ -128,6 +143,7 @@ namespace dpl::graph
       fourth_state_t = 3
     };
 
+  public:
     using node = Node;
     using node_ptr = node*;
     using const_node_ptr = const node*;
@@ -155,7 +171,7 @@ namespace dpl::graph
     }
 
     /**
-     * \brief avl balance state of a header equals to (4 in decimal) or (11 bits), that is not a valid avl balance state
+     * \brief avl balance state of a header equals to (4 in decimal) or (11 as bitmap), that is not a valid avl balance state
      */
     static void init_header(node_ptr n) {
       mask::set_balance(n->tag, mask::balance);
@@ -168,6 +184,7 @@ namespace dpl::graph
       return mask::get_balance(n->tag) == mask::balance;
     }
   };
+
 
   template<typename Node>
   struct aug_avl_traits : avl_traits<Node>

@@ -41,7 +41,7 @@ namespace dpl::graph
   using etnte_algo = aug_avltree_algorithms_ext<etnte_traits>;
 
 
-  template <typename Context>
+  template <typename Props>
   struct et_relative_less_than_comparator // key < x
   {
     using et_node_ptr = et_traits::node_ptr;
@@ -73,7 +73,7 @@ namespace dpl::graph
     }
 
     bool key_less_than_node(const etnte_node_ptr& x2_etnte) const {
-      auto x2 = Context::get_ordering_vertex_entry(x2_etnte);
+      auto x2 = Props::get_ordering_vertex_entry(x2_etnte);
 
       if (x1_key == x2)
         return false;
@@ -98,7 +98,7 @@ namespace dpl::graph
   };
 
 
-  template <typename Context>
+  template <typename Props>
   struct et_relative_more_than_comparator // x < key
   {
     using et_node_ptr = et_traits::node_ptr;
@@ -130,7 +130,7 @@ namespace dpl::graph
     }
 
     bool key_more_than_node(const etnte_node_ptr& x1_etnte) const {
-      auto x1 = Context::get_ordering_vertex_entry(x1_etnte);
+      auto x1 = Props::get_ordering_vertex_entry(x1_etnte);
 
       if (x1 == x2_key)
         return false;
@@ -155,18 +155,18 @@ namespace dpl::graph
   };
 
 
-  template <typename Context>
+  template <typename Props>
   struct etnte_context_operations
   {
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
 
-    using less_than = et_relative_less_than_comparator<Context>;
-    using more_than = et_relative_more_than_comparator<Context>;
+    using less_than = et_relative_less_than_comparator<Props>;
+    using more_than = et_relative_more_than_comparator<Props>;
 
     static etnte_node_ptr lower_bound(etnte_node_ptr hdr, et_node_ptr vertex_et_entry) {
       return etnte_algo::lower_bound(hdr, more_than{
-        Context::get_ordering_vertex_entry(etnte_traits::get_left(hdr)),
+        Props::get_ordering_vertex_entry(etnte_traits::get_left(hdr)),
         vertex_et_entry
       });
     }
@@ -175,8 +175,8 @@ namespace dpl::graph
       if (etnte_traits::get_parent(hdr))
         etnte_algo::insert_equal_upper_bound(hdr, inserting_node,
           less_than{
-            Context::get_ordering_vertex_entry(etnte_traits::get_left(hdr)),
-            Context::get_ordering_vertex_entry(inserting_node)
+            Props::get_ordering_vertex_entry(etnte_traits::get_left(hdr)),
+            Props::get_ordering_vertex_entry(inserting_node)
           });
 
 //      Equivalent
@@ -192,7 +192,7 @@ namespace dpl::graph
         return;
       
       etnte_node_ptr etnte_least = etnte_traits::get_left(header_a);            
-      et_node_ptr et_least = Context::get_ordering_vertex_entry(etnte_least);      
+      et_node_ptr et_least = Props::get_ordering_vertex_entry(etnte_least);      
 
       etnte_node_ptr etnte_entry_ab = etnte_algo::upper_bound(header_a, less_than{et_least, et_ab});
       etnte_node_ptr etnte_entry_ba = etnte_algo::upper_bound(header_a, less_than{et_least, et_ba});     
@@ -235,7 +235,7 @@ namespace dpl::graph
   };
 
 
-  template <typename Graph, typename Context>
+  template <typename Graph, typename Props>
   class euler_tour_visitor : public boost::default_dfs_visitor
   {
     using et_node_ptr = et_traits::node_ptr;
@@ -268,16 +268,16 @@ namespace dpl::graph
 
     void start_vertex(v_desc, const Graph&) {            
       et_hdr_ = et_pool_->acquire();
-      et_algo::init_header(et_hdr_);      
       etnte_hdr_ = etnte_pool_->acquire();
+      et_algo::init_header(et_hdr_);      
       etnte_algo::init_header(etnte_hdr_);      
-      Context::set_etnte_header(et_hdr_, etnte_hdr_);             
+      Props::set_etnte_header(et_hdr_, etnte_hdr_);             
     }
 
     void discover_vertex(v_desc v, const Graph&) {     
       et_node_ptr entry = et_pool_->acquire();        
-      Context::set_vertex(entry, v);
-      Context::set_entry(v, entry);
+      Props::set_vertex(entry, v);
+      Props::set_entry(v, entry);
       et_algo::push_back(et_hdr_, entry);            
     }
 
@@ -285,17 +285,17 @@ namespace dpl::graph
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_node_ptr entry = et_pool_->acquire();
         et_node_ptr top = *tree_edge_stack_top_--;
-        e_desc top_de_opposite = Context::get_opposite(Context::get_directed_edge(top));
-        Context::set_directed_edge(entry, top_de_opposite);        
-        Context::set_tree_edge_entry(top_de_opposite, entry);
+        e_desc top_de_opposite = Props::get_opposite(Props::get_directed_edge(top));
+        Props::set_directed_edge(entry, top_de_opposite);        
+        Props::set_tree_edge_entry(top_de_opposite, entry);
         et_algo::push_back(et_hdr_, entry);        
       }
     }    
 
     void tree_edge(e_desc e, const Graph&) {
       et_node_ptr entry = et_pool_->acquire();
-      Context::set_directed_edge(entry, e);
-      Context::set_tree_edge_entry(e, entry);
+      Props::set_directed_edge(entry, e);
+      Props::set_tree_edge_entry(e, entry);
       et_algo::push_back(et_hdr_, entry);      
       *++tree_edge_stack_top_ = entry;
     }
@@ -305,16 +305,16 @@ namespace dpl::graph
       etnte_node_ptr entry = etnte_pool_->acquire();
       etnte_node_ptr entry_opp = etnte_pool_->acquire();
       
-      e_desc de_opp = Context::get_opposite(de);
+      e_desc de_opp = Props::get_opposite(de);
 
-      Context::set_non_tree_edge_entry(de, entry); 
-      Context::set_non_tree_edge_entry(de_opp, entry_opp);
+      Props::set_non_tree_edge_entry(de, entry); 
+      Props::set_non_tree_edge_entry(de_opp, entry_opp);
       
-      Context::set_directed_edge(entry, de);
-      Context::set_directed_edge(entry_opp, de_opp);
+      Props::set_directed_edge(entry, de);
+      Props::set_directed_edge(entry_opp, de_opp);
             
-      etnte_context_operations<Context>::insert(etnte_hdr_, entry);
-      etnte_context_operations<Context>::insert(etnte_hdr_, entry_opp);                    
+      etnte_context_operations<Props>::insert(etnte_hdr_, entry);
+      etnte_context_operations<Props>::insert(etnte_hdr_, entry_opp);                    
     }
   }; 
 }

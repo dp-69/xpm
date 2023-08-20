@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dc_graph.hpp"
-#include "dc_et_context.hpp"
+#include "dc_et_properties.hpp"
 
 #include <boost/graph/two_bit_color_map.hpp>
 #include <boost/property_map/function_property_map.hpp>
@@ -34,7 +34,7 @@ namespace dpl::graph
     size_t nteReconnectingFirst;
   };
 
-  template <typename Context>
+  template <typename Props>
   class dc_context
   {
     static constexpr auto stack_capacity = 256;
@@ -68,7 +68,7 @@ namespace dpl::graph
     //   execute_dfs(g, rootVertex, euler_tour_visitor(&etPool_, &etntePool_, treeEdgeStack.data()/*, initial_components_*/));
     // }
 
-    void init(dc_graph& g, Context& c) {           
+    void init(dc_graph& g, Props& c) {           
       auto vertex_count = num_vertices(g);                 
 
       
@@ -82,49 +82,46 @@ namespace dpl::graph
       };
 
       auto tree_edge_stack = std::vector<et_node_ptr>(vertex_count + 1);     
-      euler_tour_visitor<dc_graph, Context> visitor{&etPool_, &etntePool_, tree_edge_stack.data()};
+      euler_tour_visitor<dc_graph, Props> visitor{&etPool_, &etntePool_, tree_edge_stack.data()};
 
-
-
-      for (vertex& v : range(g))
-        if (color_map[&v] != color_t::two_bit_black)
-          boost::depth_first_visit(g, &v, visitor, color_map);
+      for (vertex* v : range(g))
+        if (color_map[v] != color_t::two_bit_black)
+          boost::depth_first_visit(g, v, visitor, color_map);
     }
 
-    void print(etnte_node_ptr hdr, Context& c) {
+    void print(etnte_node_ptr hdr, Props& c) {
       for (etnte_node_ptr etnte : HW::tree_inorder_range<etnte_algo>(hdr)) {
-        directed_edge* de = Context::get_directed_edge(etnte);
-        std::cout << fmt::format(" {}, {}", c.get_idx(de->v1), c.get_idx(Context::get_opposite(de)->v1));
+        directed_edge* de = Props::get_directed_edge(etnte);
+        std::cout << fmt::format(" {}, {}", c.get_idx(de->v1), c.get_idx(Props::get_opposite(de)->v1));
       }
     }
 
-    void print(et_node_ptr hdr, Context& c) {
+    void print(et_node_ptr hdr, Props& c) {
       for (et_node_ptr et : HW::tree_inorder_range<et_algo>(hdr)) {
-        if (!Context::is_loop_edge(et)) {
-          directed_edge* de = Context::get_directed_edge(et);
-          std::cout << fmt::format(" ({}, {})", c.get_idx(Context::get_opposite(de)->v1), c.get_idx(de->v1));  
+        if (!Props::is_loop_edge(et)) {
+          directed_edge* de = Props::get_directed_edge(et);
+          std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
         }
       }
     }
 
     // Returns true if reconnected.
     bool split_and_reconnect_tree_edge(directed_edge* ab) {
-      auto ba = Context::get_opposite(ab);
+      auto ba = Props::get_opposite(ab);
 
-      et_node_ptr et_ab = Context::get_tree_edge_entry(ab);
-      et_node_ptr et_ba = Context::get_tree_edge_entry(ba);
+      et_node_ptr et_ab = Props::get_tree_edge_entry(ab);
+      et_node_ptr et_ba = Props::get_tree_edge_entry(ba);
       
       et_node_ptr et_hdr_a = et_algo::get_header(et_ab);
-      etnte_node_ptr etnte_hdr_a = Context::get_etnte_header(et_hdr_a);
+      etnte_node_ptr etnte_hdr_a = Props::get_etnte_header(et_hdr_a);
 
       et_node_ptr et_hdr_b = etPool_.acquire();
       etnte_node_ptr etnte_hdr_b = etntePool_.acquire();
-
       et_algo::init_header(et_hdr_b);
       etnte_algo::init_header(etnte_hdr_b);                           
-      Context::set_etnte_header(et_hdr_b, etnte_hdr_b);                        
+      Props::set_etnte_header(et_hdr_b, etnte_hdr_b);                        
 
-      etnte_context_operations<Context>::split(etnte_hdr_a, etnte_hdr_b, et_ab, et_ba);
+      etnte_context_operations<Props>::split(etnte_hdr_a, etnte_hdr_b, et_ab, et_ba);
 
       if (et_algo::less_than(et_ab, et_ba))
         cyclic<et_algo>::split(et_hdr_a, et_hdr_b, et_ab, et_ba);
@@ -155,30 +152,30 @@ namespace dpl::graph
       
       for (etnte_node_ptr etnte : HW::tree_inorder_range<etnte_algo>(etnte_hdr_a))
         if (etnte_algo::get_header(
-          Context::get_non_tree_edge_entry(
-            Context::get_opposite(
-              Context::get_directed_edge(etnte)))) == etnte_hdr_b) {
+          Props::get_non_tree_edge_entry(
+            Props::get_opposite(
+              Props::get_directed_edge(etnte)))) == etnte_hdr_b) {
           replacement_ab = etnte;
           break;
         }
      
       if (replacement_ab) {                                
-        ab = Context::get_directed_edge(replacement_ab);
-        ba = Context::get_opposite(ab);        
-        etnte_node_ptr replacement_ba = Context::get_non_tree_edge_entry(ba);
+        ab = Props::get_directed_edge(replacement_ab);
+        ba = Props::get_opposite(ab);        
+        etnte_node_ptr replacement_ba = Props::get_non_tree_edge_entry(ba);
 
-        et_node_ptr et_rec_a = Context::get_ordering_vertex_entry(ab);
-        et_node_ptr et_rec_b = Context::get_ordering_vertex_entry(ba);                                        
+        et_node_ptr et_rec_a = Props::get_ordering_vertex_entry(ab);
+        et_node_ptr et_rec_b = Props::get_ordering_vertex_entry(ba);                                        
 
-        Context::set_directed_edge(et_ab, ab);
-        Context::set_directed_edge(et_ba, ba);
+        Props::set_directed_edge(et_ab, ab);
+        Props::set_directed_edge(et_ba, ba);
 
-        Context::set_tree_edge_entry(ab, et_ab);
-        Context::set_tree_edge_entry(ba, et_ba);
+        Props::set_tree_edge_entry(ab, et_ab);
+        Props::set_tree_edge_entry(ba, et_ba);
 
         // etnte
-        cyclic<etnte_algo>::principal_cut(etnte_hdr_a, etnte_context_operations<Context>::lower_bound(etnte_hdr_a, et_rec_a));
-        auto leastB = etnte_context_operations<Context>::lower_bound(etnte_hdr_b, et_rec_b);
+        cyclic<etnte_algo>::principal_cut(etnte_hdr_a, etnte_context_operations<Props>::lower_bound(etnte_hdr_a, et_rec_a));
+        auto leastB = etnte_context_operations<Props>::lower_bound(etnte_hdr_b, et_rec_b);
         cyclic<etnte_algo>::principal_cut_least_dropped(etnte_hdr_b, leastB);
         etnte_algo::join_trees(etnte_hdr_a, leastB, etnte_hdr_b);
 
@@ -205,11 +202,11 @@ namespace dpl::graph
 
     template<class Visitor = component_visitor_empty>
     void remove_and_release_component(et_node_ptr header, Visitor& visitor = Visitor()) {            
-      auto etnteHeader = Context::get_etnte_header(header);
+      auto etnteHeader = Props::get_etnte_header(header);
 
       auto etnteNode = etnte_nt::get_left(etnteHeader);
       while (etnteNode != etnteHeader) {
-        auto de = Context::get_directed_edge(etnteNode);
+        auto de = Props::get_directed_edge(etnteNode);
         directed_edge::set_null_et_entry(de);
         auto prev = etnteNode;
         etnteNode = etnte_algo::next_node(etnteNode);
@@ -221,18 +218,18 @@ namespace dpl::graph
 
       auto etNode = et_nt::get_left(header);      
       while (etNode != header) {
-        if (Context::is_loop_edge(etNode))
-          Context::set_entry(Context::get_vertex(etNode), nullptr);
+        if (Props::is_loop_edge(etNode))
+          Props::set_entry(Props::get_vertex(etNode), nullptr);
         else
-          directed_edge::set_null_et_entry(Context::get_directed_edge(etNode));
+          directed_edge::set_null_et_entry(Props::get_directed_edge(etNode));
 
         etNode = et_algo::next_node(etNode);
       }
 
       etNode = et_nt::get_left(header);
       while (etNode != header) {
-        if (Context::is_loop_edge(etNode))
-          visitor.vertex(Context::get_vertex(etNode));        
+        if (Props::is_loop_edge(etNode))
+          visitor.vertex(Props::get_vertex(etNode));        
 
         auto prev = etNode;
         etNode = et_algo::next_node(etNode);
@@ -244,9 +241,9 @@ namespace dpl::graph
 
 
     void remove_non_tree_edge(directed_edge* ab) {
-      auto ba = Context::get_opposite(ab);
-      auto etnteAB = Context::get_non_tree_edge_entry(ab);
-      auto etnteBA = Context::get_non_tree_edge_entry(ba);
+      auto ba = Props::get_opposite(ab);
+      auto etnteAB = Props::get_non_tree_edge_entry(ab);
+      auto etnteBA = Props::get_non_tree_edge_entry(ba);
       auto etnteHeader = etnte_algo::get_header(etnteAB);
       
       etnte_algo::erase(etnteHeader, etnteAB);

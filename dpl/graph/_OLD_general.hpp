@@ -234,39 +234,39 @@ namespace HW
 
 
   // NumBits < 3 for x64
-  template <class BitType, size_t NumBits>
-  struct tagged_pointer_as_size_t
-  {
-  private:
-    static const auto tag_bitmap_ = (static_cast<size_t>(1u) << NumBits) - 1;
-    static const auto ptr_bitmap_ = ~tag_bitmap_;
-
-  public:
-//    typedef Pointer pointer;
-    
-    template <class Ptr>
-    static Ptr get_pointer(size_t n) {
-      return reinterpret_cast<Ptr>(n & ptr_bitmap_);
-    }
-
-    template <class Ptr>
-    static void set_pointer(size_t& n, Ptr p) {
-      n = reinterpret_cast<size_t>(p) | n & tag_bitmap_;      
-    }
-
-    static BitType get_bits(size_t n) {
-      return static_cast<BitType>(n & tag_bitmap_);      
-    }
-
-    static void set_bits(size_t& n, BitType c) {
-      n = n & ptr_bitmap_ | static_cast<size_t>(c);
-    }
-
-    template <class Ptr>
-    static void set_pointer_and_bits(size_t& n, Ptr p, BitType c) {
-      n = reinterpret_cast<size_t>(p) | c;
-    }
-  };
+//   template <class BitType, size_t NumBits>
+//   struct tagged_pointer_as_size_t
+//   {
+//   private:
+//     static const auto tag_bitmap_ = (static_cast<size_t>(1u) << NumBits) - 1;
+//     static const auto ptr_bitmap_ = ~tag_bitmap_;
+//
+//   public:
+// //    typedef Pointer pointer;
+//     
+//     template <class Ptr>
+//     static Ptr get_pointer(size_t n) {
+//       return reinterpret_cast<Ptr>(n & ptr_bitmap_);
+//     }
+//
+//     template <class Ptr>
+//     static void set_pointer(size_t& n, Ptr p) {
+//       n = reinterpret_cast<size_t>(p) | n & tag_bitmap_;      
+//     }
+//
+//     static BitType get_bits(size_t n) {
+//       return static_cast<BitType>(n & tag_bitmap_);      
+//     }
+//
+//     static void set_bits(size_t& n, BitType c) {
+//       n = n & ptr_bitmap_ | static_cast<size_t>(c);
+//     }
+//
+//     template <class Ptr>
+//     static void set_pointer_and_bits(size_t& n, Ptr p, BitType c) {
+//       n = reinterpret_cast<size_t>(p) | c;
+//     }
+//   };
 }
 
 

@@ -201,14 +201,14 @@ namespace xpm
       using et_algo = dpl::graph::et_algo;
       using et_traits = dpl::graph::et_traits;
 
-      dpl::graph::dc_graph g;
-      dpl::graph::etnte_context context{g};
-
       int vertex_count = 6;
+
+      dpl::graph::dc_graph g(vertex_count);
+      dpl::graph::etnte_properties context{g};
 
       auto& vertices = g.vertices();
 
-      vertices.resize(vertex_count);
+      g.vertices() = std::vector<vertex>(vertex_count);
 
       std::pair<int, int> edges[] = {
         {0, 1}, {1, 2}, {2, 0},
@@ -227,7 +227,7 @@ namespace xpm
         add_edge(vertices[l], vertices[r], d0, d1, g);
       }
 
-      dpl::graph::dc_context<dpl::graph::etnte_context> etdc_context;
+      dpl::graph::dc_context<dpl::graph::etnte_properties> etdc_context;
 
       etdc_context.init(g, context/*, &vertices[1]*/);
 
@@ -244,17 +244,17 @@ namespace xpm
         auto* v = &vertices[i];
 
         
-        auto* hdr = dpl::graph::et_algo::get_header(dpl::graph::etnte_context::get_entry(v));
+        auto* hdr = dpl::graph::et_algo::get_header(dpl::graph::etnte_properties::get_entry(v));
         auto* v_et_ref = et_traits::get_left(hdr);
 
-        if (dpl::graph::etnte_context::is_loop_edge(v_et_ref)) {
+        if (dpl::graph::etnte_properties::is_loop_edge(v_et_ref)) {
           int p = 3;
         }
         else {
           int k = 3;
         }
 
-        auto* v_ref = dpl::graph::etnte_context::get_vertex(v_et_ref);
+        auto* v_ref = dpl::graph::etnte_properties::get_vertex(v_et_ref);
 
         
 
@@ -317,7 +317,7 @@ namespace xpm
       vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::etnte_context::set_vertex(&input[i], &vertices[i]);
+        dpl::graph::etnte_properties::set_vertex(&input[i], &vertices[i]);
         algo::push_back(header_a, &input[i]);
       }
 
@@ -473,7 +473,7 @@ namespace xpm
       vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::etnte_context::set_directed_edge(&input[i], &edges[i]);
+        dpl::graph::etnte_properties::set_directed_edge(&input[i], &edges[i]);
         algo::push_back(header_a, &input[i]);
       }
 
