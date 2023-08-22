@@ -40,8 +40,8 @@ namespace dpl::graph
     static directed_edge* get_directed_edge(etnte_cptr n) { return mask_bit_balance::get_ptr<directed_edge*>(n->tag); }
     static void set_directed_edge(etnte_ptr n, const directed_edge* de) { mask_bit_balance::set_ptr(n->tag, de); }
 
-    static directed_edge* get_opposite(const directed_edge* de) { return de->opposite_; }
-    static void set_opposite(directed_edge* de, directed_edge* opp) { de->opposite_ = opp; }
+    static directed_edge* get_opposite(const directed_edge* de) { return de->opposite; }
+    static void set_opposite(directed_edge* de, directed_edge* opp) { de->opposite = opp; }
 
     /**
      * \brief
@@ -53,8 +53,8 @@ namespace dpl::graph
 
     // ---------------
 
-    static et_ptr get_entry(vertex* v) { return v->et_entry_; }
-    static void set_entry(vertex* v, et_ptr et) { v->et_entry_ = et; }
+    static et_ptr get_entry(vertex* v) { return v->entry_; }
+    static void set_entry(vertex* v, et_ptr et) { v->entry_ = et; }
 
     auto get_idx(const vertex* v) const {
       return v - graph_->vertices().data();
@@ -62,14 +62,15 @@ namespace dpl::graph
 
     // ---------------
 
-    static bool is_tree_edge(const directed_edge* x) { return mask_bit::get_bit(x->entry_type_); }
+    static bool is_tree_edge(const directed_edge* x) { return mask_bit::get_bit(x->entry_); }
 
-    static et_ptr get_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<et_ptr>(x->entry_type_); }
-    static void set_tree_edge_entry(directed_edge* x, et_ptr y) { mask_bit::set_ptr_bit(x->entry_type_, y); }
+    static et_ptr get_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<et_ptr>(x->entry_); }
+    static void set_tree_edge_entry(directed_edge* x, et_ptr y) { mask_bit::set_ptr_bit(x->entry_, y); }
 
-    static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<etnte_ptr>(x->entry_type_); }
+    static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<etnte_ptr>(x->entry_); }
+    static void set_non_tree_edge_entry(directed_edge* x, etnte_ptr y) { return mask_bit::set_ptr(x->entry_, y); }
 
-    static void set_non_tree_edge_entry(directed_edge* x, etnte_ptr y) { return mask_bit::set_ptr(x->entry_type_, y); }    
+    static void set_null_entry(directed_edge* x) { x->entry_ = 0; }
   };
 
 

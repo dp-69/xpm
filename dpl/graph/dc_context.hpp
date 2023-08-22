@@ -6,6 +6,91 @@
 #include <boost/graph/two_bit_color_map.hpp>
 #include <boost/property_map/function_property_map.hpp>
 
+namespace _TODO_ {
+ template<class NodeTraits>
+  class inorder_iter
+  {
+    typedef NodeTraits node_traits;
+    typedef typename node_traits::node_ptr node_ptr;
+    
+    node_ptr _node;
+  public:
+    typedef std::forward_iterator_tag iterator_category;
+    typedef node_ptr value_type;
+    typedef std::ptrdiff_t difference_type;
+    typedef std::ptrdiff_t distance_type;
+    typedef node_ptr pointer;
+    typedef node_ptr reference;
+    
+    
+    inorder_iter() {}
+
+    explicit inorder_iter(node_ptr node)
+      : _node(node) {}
+
+    node_ptr operator*() const {
+      return _node;   
+    }
+
+    node_ptr operator->() const { 
+      return _node;
+    }
+
+
+    inorder_iter& operator++() {      
+      _node = node_traits::get_next(_node);
+      return *this;
+    }
+
+    inorder_iter operator++(int) {
+      inorder_iter result(_node);
+      operator++();
+      return result;
+    }
+
+    friend bool operator==(const inorder_iter& l, const inorder_iter& r) {
+      return l._node == r._node;
+    }
+
+    friend bool operator!=(const inorder_iter& l, const inorder_iter& r) {
+      return !operator==(l, r);
+    }
+  };
+
+
+
+  template<typename Algo>
+  class tree_inorder_range
+  {   
+    struct adjusted_traits
+    {
+      typedef typename Algo::node_ptr node_ptr;
+
+      static node_ptr get_next(node_ptr node) {
+        return Algo::next_node(node);
+      }
+    };
+
+
+    typedef typename Algo::node_traits node_traits;
+    typedef typename node_traits::node_ptr node_ptr;
+    
+    node_ptr header_;
+
+
+  public:
+    tree_inorder_range(node_ptr header) : header_(header) {}
+
+    inorder_iter<adjusted_traits> begin() {
+      return inorder_iter<adjusted_traits>(node_traits::get_left(header_));
+    }
+
+    inorder_iter<adjusted_traits> end() {
+      return inorder_iter<adjusted_traits>(header_);
+    }    
+  };
+}
+
 namespace dpl::graph
 {      
   struct component_visitor_empty
@@ -90,14 +175,14 @@ namespace dpl::graph
     }
 
     void print(etnte_node_ptr hdr, Props& c) {
-      for (etnte_node_ptr etnte : HW::tree_inorder_range<etnte_algo>(hdr)) {
+      for (etnte_node_ptr etnte : _TODO_::tree_inorder_range<etnte_algo>(hdr)) {
         directed_edge* de = Props::get_directed_edge(etnte);
         std::cout << fmt::format(" {}, {}", c.get_idx(de->v1), c.get_idx(Props::get_opposite(de)->v1));
       }
     }
 
     void print(et_node_ptr hdr, Props& c) {
-      for (et_node_ptr et : HW::tree_inorder_range<et_algo>(hdr)) {
+      for (et_node_ptr et : _TODO_::tree_inorder_range<et_algo>(hdr)) {
         if (!Props::is_loop_edge(et)) {
           directed_edge* de = Props::get_directed_edge(et);
           std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
@@ -131,8 +216,8 @@ namespace dpl::graph
       }      
       
                                                                 
-      directed_edge::set_null_et_entry(ab);
-      directed_edge::set_null_et_entry(ba);      
+      Props::set_null_entry(ab);
+      Props::set_null_entry(ba);      
 
 
       {
@@ -150,7 +235,7 @@ namespace dpl::graph
 
       etnte_node_ptr replacement_ab = nullptr;        
       
-      for (etnte_node_ptr etnte : HW::tree_inorder_range<etnte_algo>(etnte_hdr_a))
+      for (etnte_node_ptr etnte : _TODO_::tree_inorder_range<etnte_algo>(etnte_hdr_a))
         if (etnte_algo::get_header(
           Props::get_non_tree_edge_entry(
             Props::get_opposite(
@@ -207,7 +292,7 @@ namespace dpl::graph
       auto etnteNode = etnte_nt::get_left(etnteHeader);
       while (etnteNode != etnteHeader) {
         auto de = Props::get_directed_edge(etnteNode);
-        directed_edge::set_null_et_entry(de);
+        Props::set_null_entry(de);
         auto prev = etnteNode;
         etnteNode = etnte_algo::next_node(etnteNode);
         etntePool_.release(prev);
@@ -221,7 +306,7 @@ namespace dpl::graph
         if (Props::is_loop_edge(etNode))
           Props::set_entry(Props::get_vertex(etNode), nullptr);
         else
-          directed_edge::set_null_et_entry(Props::get_directed_edge(etNode));
+          Props::set_null_entry(Props::get_directed_edge(etNode));
 
         etNode = et_algo::next_node(etNode);
       }
@@ -249,8 +334,8 @@ namespace dpl::graph
       etnte_algo::erase(etnteHeader, etnteAB);
       etnte_algo::erase(etnteHeader, etnteBA);
 
-      directed_edge::set_null_et_entry(ab);
-      directed_edge::set_null_et_entry(ba);
+      Props::set_null_entry(ab);
+      Props::set_null_entry(ba);
 
       etntePool_.release(etnteAB);
       etntePool_.release(etnteBA);

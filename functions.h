@@ -197,7 +197,6 @@ namespace xpm
   {
     inline void DFS_CHECK() {
       using vertex = dpl::graph::vertex;
-      using directed_edge = dpl::graph::directed_edge;
       using et_algo = dpl::graph::et_algo;
       using et_traits = dpl::graph::et_traits;
 
@@ -210,22 +209,78 @@ namespace xpm
 
       g.vertices() = std::vector<vertex>(vertex_count);
 
+
+      g.directed_edges_end() = std::make_unique<std::size_t[]>(vertex_count);
+
       std::pair<int, int> edges[] = {
         {0, 1}, {1, 2}, {2, 0},
         {3, 4}, {5, 2}
       };
 
-      int edge_count = sizeof(edges)/sizeof(std::pair<int, int>);
+      size_t edge_count = sizeof(edges)/sizeof(std::pair<int, int>);
 
-      std::vector<directed_edge> de_buffer(edge_count*2);
+      g.directed_edges() = std::vector<dpl::graph::directed_edge>(edge_count*2);
 
-      auto* de_ptr = de_buffer.data();
+      auto& de_vec = g.directed_edges();
+      auto* de_ptr = g.directed_edges().data();
+
+
+      auto shift_per_vertex = std::vector<size_t>(vertex_count + 1);
+
+      std::fill_n(shift_per_vertex.data(), vertex_count + 1, 0);
+
       for (auto [l, r] : edges) {
-        auto& d0 = *de_ptr++;
-        auto& d1 = *de_ptr++;
-
-        add_edge(vertices[l], vertices[r], d0, d1, g);
+        ++shift_per_vertex[l + 1];
+        ++shift_per_vertex[r + 1];
       }
+
+      for (auto i = 0; i < vertex_count; ++i) {
+        shift_per_vertex[i + 1] += shift_per_vertex[i];
+        g.directed_edges_end()[i] = shift_per_vertex[i + 1];
+      }
+
+      for (auto [l, r] : edges) {
+        auto l_shift = shift_per_vertex[l];
+        auto r_shift = shift_per_vertex[r];
+
+        de_ptr[l_shift].v1 = &vertices[r];
+        de_ptr[l_shift].opposite = &de_ptr[r_shift];
+        de_ptr[r_shift].v1 = &vertices[l];
+        de_ptr[r_shift].opposite = &de_ptr[l_shift];
+
+        ++shift_per_vertex[l];
+        ++shift_per_vertex[r];
+      }
+
+      for (auto i = 0; i < vertex_count; ++i) {
+        auto [begin, end] = dpl::graph::out_edges(&vertices[i], g);
+        for (auto iter = begin; iter != end; ++iter) {
+          auto directed_edge = *iter;
+
+        }
+      }
+
+
+      // for (auto i = 0; i < edge_count; ++i) {
+      //
+      // }
+
+
+
+
+      // for (auto [l, r] : edges) {
+      //   auto& d0 = *de_ptr++;
+      //   auto& d1 = *de_ptr++;
+      //
+      // add_edge(vertices[l], vertices[r], d0, d1, g);
+      // }
+
+      
+
+
+
+
+
 
       dpl::graph::dc_context<dpl::graph::etnte_properties> etdc_context;
 
