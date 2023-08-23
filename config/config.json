@@ -46,23 +46,25 @@
 }
 
 
-
 // {
-//   "image": "C:\\Users\\dmytr\\OneDrive - Imperial College London\\hwu_backup\\temp\\images\\Est-v0m2s3_500x500x500_4p0um.raw",
-//   "phase": {
-//     "void" : 0, /* void = 0 for Ali's extraction */
-//     "solid" : 3,
-//     "microporous": 2
+//   "image":  {
+//     "path" : "C:\\Users\\dmytr\\OneDrive - Imperial College London\\hwu_backup\\temp\\images\\Est-v0m2s3_500x500x500_4p0um.raw",
+//     "size" : [500, 500, 500],
+//     "resolution": 4e-6,
+//     "phase": {
+//       "void" : 0, /* void = 0 for Ali's extraction */
+//       "solid" : 3,
+//       "microporous": 2
+//     }  
 //   },
-//   "resolution": 4e-6,
-//   "microporosity": {
-//     "permeability": 1.0 /* mD */
+//   "properties": {
+//     "microporosity": {
+//       "permeability": 1.0 /* mD */
+//     }
 //   },
 //   "solver" : {
+//     // "decomposition": [2, 2, 2], /* the product is a number of MPI processes */
 //     "tolerance" : 1e-9,
-//     "max_iterations" : 1000
+//     "max_iterations" : 19
 //   }
 // }
-
-
-
