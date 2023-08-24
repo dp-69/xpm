@@ -1,95 +1,9 @@
 #pragma once
 
-#include "dc_graph.hpp"
-#include "dc_et_properties.hpp"
+#include "dc_properties.hpp"
 
 #include <boost/graph/two_bit_color_map.hpp>
 #include <boost/property_map/function_property_map.hpp>
-
-namespace _TODO_ {
- template<class NodeTraits>
-  class inorder_iter
-  {
-    typedef NodeTraits node_traits;
-    typedef typename node_traits::node_ptr node_ptr;
-    
-    node_ptr _node;
-  public:
-    typedef std::forward_iterator_tag iterator_category;
-    typedef node_ptr value_type;
-    typedef std::ptrdiff_t difference_type;
-    typedef std::ptrdiff_t distance_type;
-    typedef node_ptr pointer;
-    typedef node_ptr reference;
-    
-    
-    inorder_iter() {}
-
-    explicit inorder_iter(node_ptr node)
-      : _node(node) {}
-
-    node_ptr operator*() const {
-      return _node;   
-    }
-
-    node_ptr operator->() const { 
-      return _node;
-    }
-
-
-    inorder_iter& operator++() {      
-      _node = node_traits::get_next(_node);
-      return *this;
-    }
-
-    inorder_iter operator++(int) {
-      inorder_iter result(_node);
-      operator++();
-      return result;
-    }
-
-    friend bool operator==(const inorder_iter& l, const inorder_iter& r) {
-      return l._node == r._node;
-    }
-
-    friend bool operator!=(const inorder_iter& l, const inorder_iter& r) {
-      return !operator==(l, r);
-    }
-  };
-
-
-
-  template<typename Algo>
-  class tree_inorder_range
-  {   
-    struct adjusted_traits
-    {
-      typedef typename Algo::node_ptr node_ptr;
-
-      static node_ptr get_next(node_ptr node) {
-        return Algo::next_node(node);
-      }
-    };
-
-
-    typedef typename Algo::node_traits node_traits;
-    typedef typename node_traits::node_ptr node_ptr;
-    
-    node_ptr header_;
-
-
-  public:
-    tree_inorder_range(node_ptr header) : header_(header) {}
-
-    inorder_iter<adjusted_traits> begin() {
-      return inorder_iter<adjusted_traits>(node_traits::get_left(header_));
-    }
-
-    inorder_iter<adjusted_traits> end() {
-      return inorder_iter<adjusted_traits>(header_);
-    }    
-  };
-}
 
 namespace dpl::graph
 {      
@@ -122,8 +36,6 @@ namespace dpl::graph
   template <typename Props>
   class dc_context
   {
-    static constexpr auto stack_capacity = 256;
-
     using et_node_ptr = et_traits::node_ptr;
     using etnte_node_ptr = etnte_traits::node_ptr;
 
@@ -131,9 +43,8 @@ namespace dpl::graph
     using etnte_nt = etnte_traits;
 
   public:    
-
-    smart_pool<et_traits::node> etPool_;
-    smart_pool<etnte_traits::node> etntePool_;
+    helper::smart_pool<et_traits::node> et_pool_;
+    helper::smart_pool<etnte_traits::node> etnte_pool_;
 
     // std::vector<et_node_ptr> initial_components_;
    
@@ -156,8 +67,6 @@ namespace dpl::graph
     void init(dc_graph& g, Props& c) {           
       auto vertex_count = num_vertices(g);                 
 
-      
-
       using color_t = boost::two_bit_color_type;
       auto color_uptr = std::make_unique<color_t[]>(vertex_count);
       boost::iterator_property_map color_map{
@@ -167,31 +76,32 @@ namespace dpl::graph
       };
 
       auto tree_edge_stack = std::vector<et_node_ptr>(vertex_count + 1);     
-      euler_tour_visitor<dc_graph, Props> visitor{&etPool_, &etntePool_, tree_edge_stack.data()};
+      euler_tour_visitor<dc_graph, Props> visitor{&et_pool_, &etnte_pool_, tree_edge_stack.data()};
 
       for (vertex* v : range(g))
         if (color_map[v] != color_t::two_bit_black)
           boost::depth_first_visit(g, v, visitor, color_map);
     }
+    
 
-    void print(etnte_node_ptr hdr, Props& c) {
-      for (etnte_node_ptr etnte : _TODO_::tree_inorder_range<etnte_algo>(hdr)) {
-        directed_edge* de = Props::get_directed_edge(etnte);
-        std::cout << fmt::format(" {}, {}", c.get_idx(de->v1), c.get_idx(Props::get_opposite(de)->v1));
-      }
-    }
+    void non_tree_edge_remove(directed_edge* ab) {
+      auto ba = Props::get_opposite(ab);
+      auto etnteAB = Props::get_non_tree_edge_entry(ab);
+      auto etnteBA = Props::get_non_tree_edge_entry(ba);
+      auto etnteHeader = etnte_algo::get_header(etnteAB);
+      
+      etnte_algo::erase(etnteHeader, etnteAB);
+      etnte_algo::erase(etnteHeader, etnteBA);
 
-    void print(et_node_ptr hdr, Props& c) {
-      for (et_node_ptr et : _TODO_::tree_inorder_range<et_algo>(hdr)) {
-        if (!Props::is_loop_edge(et)) {
-          directed_edge* de = Props::get_directed_edge(et);
-          std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
-        }
-      }
-    }
+      Props::set_null_entry(ab);
+      Props::set_null_entry(ba);
+
+      etnte_pool_.release(etnteAB);
+      etnte_pool_.release(etnteBA);
+    }    
 
     // Returns true if reconnected.
-    bool split_and_reconnect_tree_edge(directed_edge* ab) {
+    bool tree_edge_split_and_reconnect(directed_edge* ab) {
       auto ba = Props::get_opposite(ab);
 
       et_node_ptr et_ab = Props::get_tree_edge_entry(ab);
@@ -200,8 +110,8 @@ namespace dpl::graph
       et_node_ptr et_hdr_a = et_algo::get_header(et_ab);
       etnte_node_ptr etnte_hdr_a = Props::get_etnte_header(et_hdr_a);
 
-      et_node_ptr et_hdr_b = etPool_.acquire();
-      etnte_node_ptr etnte_hdr_b = etntePool_.acquire();
+      et_node_ptr et_hdr_b = et_pool_.acquire();
+      etnte_node_ptr etnte_hdr_b = etnte_pool_.acquire();
       et_algo::init_header(et_hdr_b);
       etnte_algo::init_header(etnte_hdr_b);                           
       Props::set_etnte_header(et_hdr_b, etnte_hdr_b);                        
@@ -235,7 +145,7 @@ namespace dpl::graph
 
       etnte_node_ptr replacement_ab = nullptr;        
       
-      for (etnte_node_ptr etnte : _TODO_::tree_inorder_range<etnte_algo>(etnte_hdr_a))
+      for (etnte_node_ptr etnte : range<etnte_traits>(etnte_hdr_a))
         if (etnte_algo::get_header(
           Props::get_non_tree_edge_entry(
             Props::get_opposite(
@@ -295,10 +205,10 @@ namespace dpl::graph
         Props::set_null_entry(de);
         auto prev = etnteNode;
         etnteNode = etnte_algo::next_node(etnteNode);
-        etntePool_.release(prev);
+        etnte_pool_.release(prev);
       }
 
-      etntePool_.release(etnteHeader);
+      etnte_pool_.release(etnteHeader);
 
 
       auto etNode = et_nt::get_left(header);      
@@ -318,27 +228,13 @@ namespace dpl::graph
 
         auto prev = etNode;
         etNode = et_algo::next_node(etNode);
-        etPool_.release(prev);
+        et_pool_.release(prev);
       }
 
-      etPool_.release(header);
+      et_pool_.release(header);
     }
 
 
-    void remove_non_tree_edge(directed_edge* ab) {
-      auto ba = Props::get_opposite(ab);
-      auto etnteAB = Props::get_non_tree_edge_entry(ab);
-      auto etnteBA = Props::get_non_tree_edge_entry(ba);
-      auto etnteHeader = etnte_algo::get_header(etnteAB);
-      
-      etnte_algo::erase(etnteHeader, etnteAB);
-      etnte_algo::erase(etnteHeader, etnteBA);
-
-      Props::set_null_entry(ab);
-      Props::set_null_entry(ba);
-
-      etntePool_.release(etnteAB);
-      etntePool_.release(etnteBA);
-    }    
+    
   };  
 }

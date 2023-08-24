@@ -5,7 +5,7 @@
 
 namespace dpl::graph
 {
-  class etnte_properties
+  class dc_properties
   {
     using et_ptr = et_traits::node_ptr;
     using et_cptr = et_traits::const_node_ptr;
@@ -17,7 +17,7 @@ namespace dpl::graph
     dc_graph* graph_;
 
   public:
-    explicit etnte_properties(dc_graph& graph)
+    explicit dc_properties(dc_graph& graph)
       : graph_(&graph) {}
 
 
@@ -57,7 +57,7 @@ namespace dpl::graph
     static void set_entry(vertex* v, et_ptr et) { v->entry_ = et; }
 
     auto get_idx(const vertex* v) const {
-      return v - graph_->vertices().data();
+      return v - graph_->vertices().get();
     }
 
     // ---------------

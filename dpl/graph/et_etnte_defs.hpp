@@ -23,13 +23,47 @@
 
 #pragma once
 
-#include "core.hpp"
-
-#include "bst/avl_defs.hpp"
 #include "bst/aug_avltree_algorithms_ext.hpp"
+#include "bst/avl_defs.hpp"
 #include "bst/cyclic.hpp"
 
 #include <boost/graph/depth_first_search.hpp>
+#include <boost/pool/object_pool.hpp>
+
+namespace dpl::graph::helper
+{
+  template <class T,
+    typename = std::enable_if_t<sizeof(T) >= sizeof(std::size_t)>>
+  class smart_pool
+  { 
+    static T* get_next(T* x) {       
+      return *reinterpret_cast<T**>(x);
+    }
+
+    static void set_next(T* x, T* next) {
+      *reinterpret_cast<T**>(x) = next;
+    }
+
+    boost::object_pool<T> pool_;
+    T* released_stack_top_ = nullptr;
+
+  public:
+    T* acquire() {
+      if (released_stack_top_) {
+        auto result = released_stack_top_;        
+        released_stack_top_ = get_next(released_stack_top_);       
+        return result;
+      }      
+
+      return pool_.malloc();
+    }
+
+    void release(T* x) {
+      set_next(x, released_stack_top_);
+      released_stack_top_ = x;
+    }
+  };
+}
 
 namespace dpl::graph
 {
@@ -39,6 +73,30 @@ namespace dpl::graph
 
   using etnte_traits = aug_avl_traits<aug_avl_node>;
   using etnte_algo = aug_avltree_algorithms_ext<etnte_traits>;
+
+
+
+  template <typename Props>
+  void print(etnte_traits::node_ptr hdr, const Props& c) {
+    for (etnte_traits::node_ptr etnte : range<etnte_traits>(hdr)) {
+      auto de = Props::get_directed_edge(etnte);
+      std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));
+    }
+  }
+
+  template <typename Props>
+  void print(et_traits::node_ptr hdr, const Props& c) {
+    for (et_traits::node_ptr et : range<et_traits>(hdr)) {
+      if (Props::is_loop_edge(et)) {
+        auto v = Props::get_vertex(et);
+        std::cout << fmt::format(" [{}]", c.get_idx(v));  
+      }
+      else {
+        auto de = Props::get_directed_edge(et);
+        std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
+      }
+    }
+  }
 
 
   template <typename Props>
@@ -247,16 +305,16 @@ namespace dpl::graph
     et_node_ptr et_hdr_;
     etnte_node_ptr etnte_hdr_;
 
-    smart_pool<et_traits::node>* et_pool_;
-    smart_pool<etnte_traits::node>* etnte_pool_;
+    helper::smart_pool<et_traits::node>* et_pool_;
+    helper::smart_pool<etnte_traits::node>* etnte_pool_;
 
     et_node_ptr* tree_edge_stack_empty_;
     et_node_ptr* tree_edge_stack_top_;
     
   public:
     euler_tour_visitor(
-      smart_pool<et_traits::node>* et_pool
-    , smart_pool<etnte_traits::node>* etnte_pool
+      helper::smart_pool<et_traits::node>* et_pool
+    , helper::smart_pool<etnte_traits::node>* etnte_pool
     , et_node_ptr* tree_edge_stack
     )
       : et_pool_(et_pool)

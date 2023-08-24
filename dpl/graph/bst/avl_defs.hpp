@@ -199,4 +199,51 @@ namespace dpl::graph
       n->size = s;
     }
   };
+
+
+  namespace internal {
+    template<typename NodeTraits>
+    class bst_inorder_iterator
+    {
+      using node_ptr = typename NodeTraits::node_ptr;
+      node_ptr node_;
+
+    public:
+      using iterator_category = std::forward_iterator_tag;
+      using difference_type = std::ptrdiff_t;
+      // using value_type = node_ptr;
+      // using distance_type = std::ptrdiff_t;
+      // using pointer = node_ptr;
+      // using reference = node_ptr;
+      
+      bst_inorder_iterator() = default;
+      bst_inorder_iterator(node_ptr node) : node_(node) {}
+
+      node_ptr operator*() const { return node_; }
+      // node_ptr operator->() const {  return _node; }
+
+      bst_inorder_iterator& operator++() {
+        node_ = boost::intrusive::bstree_algorithms<NodeTraits>::next_node(node_);
+        return *this;
+      }
+
+      bst_inorder_iterator operator++(int) {
+        bst_inorder_iterator result{node_};
+        operator++();
+        return result;
+      }
+
+      friend bool operator==(const bst_inorder_iterator& l, const bst_inorder_iterator& r) {
+        return l.node_ == r.node_;
+      }
+    };
+  }
+
+
+  template<typename NodeTraits>
+  auto range(typename NodeTraits::node_ptr hdr) {
+    return std::ranges::subrange<internal::bst_inorder_iterator<NodeTraits>>{
+      NodeTraits::get_left(hdr), hdr
+    };
+  }
 }

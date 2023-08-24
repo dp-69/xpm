@@ -196,132 +196,99 @@ namespace xpm
   namespace test
   {
     inline void DFS_CHECK() {
-      using vertex = dpl::graph::vertex;
-      using et_algo = dpl::graph::et_algo;
-      using et_traits = dpl::graph::et_traits;
+      using namespace dpl::graph;
 
       int vertex_count = 6;
 
-      dpl::graph::dc_graph g(vertex_count);
-      dpl::graph::etnte_properties context{g};
-
-      auto& vertices = g.vertices();
-
-      g.vertices() = std::vector<vertex>(vertex_count);
-
-
-      g.directed_edges_end() = std::make_unique<std::size_t[]>(vertex_count);
-
       std::pair<int, int> edges[] = {
         {0, 1}, {1, 2}, {2, 0},
-        {3, 4}, {5, 2}
+        {3, 4}, {5, 2}, {5, 1}
       };
 
       size_t edge_count = sizeof(edges)/sizeof(std::pair<int, int>);
 
-      g.directed_edges() = std::vector<dpl::graph::directed_edge>(edge_count*2);
+      dc_graph g{vertex_count};
+      dc_properties context{g};
 
-      auto& de_vec = g.directed_edges();
-      auto* de_ptr = g.directed_edges().data();
-
-
-      auto shift_per_vertex = std::vector<size_t>(vertex_count + 1);
-
-      std::fill_n(shift_per_vertex.data(), vertex_count + 1, 0);
-
-      for (auto [l, r] : edges) {
-        ++shift_per_vertex[l + 1];
-        ++shift_per_vertex[r + 1];
-      }
-
-      for (auto i = 0; i < vertex_count; ++i) {
-        shift_per_vertex[i + 1] += shift_per_vertex[i];
-        g.directed_edges_end()[i] = shift_per_vertex[i + 1];
-      }
-
-      for (auto [l, r] : edges) {
-        auto l_shift = shift_per_vertex[l];
-        auto r_shift = shift_per_vertex[r];
-
-        de_ptr[l_shift].v1 = &vertices[r];
-        de_ptr[l_shift].opposite = &de_ptr[r_shift];
-        de_ptr[r_shift].v1 = &vertices[l];
-        de_ptr[r_shift].opposite = &de_ptr[l_shift];
-
-        ++shift_per_vertex[l];
-        ++shift_per_vertex[r];
-      }
-
-      for (auto i = 0; i < vertex_count; ++i) {
-        auto [begin, end] = dpl::graph::out_edges(&vertices[i], g);
-        for (auto iter = begin; iter != end; ++iter) {
-          auto directed_edge = *iter;
-
-        }
-      }
-
-
-      // for (auto i = 0; i < edge_count; ++i) {
-      //
-      // }
-
-
-
-
-      // for (auto [l, r] : edges) {
-      //   auto& d0 = *de_ptr++;
-      //   auto& d1 = *de_ptr++;
-      //
-      // add_edge(vertices[l], vertices[r], d0, d1, g);
-      // }
-
+      g.directed_edges() = std::make_unique<directed_edge[]>(edge_count*2);
       
+      auto shift = std::make_unique<size_t[]>(vertex_count + 1);
 
+      std::fill_n(shift.get(), vertex_count + 1, 0);
 
-
-
-
-
-      dpl::graph::dc_context<dpl::graph::etnte_properties> etdc_context;
-
-      etdc_context.init(g, context/*, &vertices[1]*/);
-
-
-
-      // auto* de_for_split = &de_buffer[4*2];
-      // if (dpl::graph::etnte_context::is_tree_edge(de_for_split))
-      //   etdc_context.split_and_reconnect_tree_edge(de_for_split);
-      // else
-      //   etdc_context.remove_non_tree_edge(de_for_split);
-
-
-      for (int i = 0; i < vertex_count; ++i) {
-        auto* v = &vertices[i];
-
-        
-        auto* hdr = dpl::graph::et_algo::get_header(dpl::graph::etnte_properties::get_entry(v));
-        auto* v_et_ref = et_traits::get_left(hdr);
-
-        if (dpl::graph::etnte_properties::is_loop_edge(v_et_ref)) {
-          int p = 3;
-        }
-        else {
-          int k = 3;
-        }
-
-        auto* v_ref = dpl::graph::etnte_properties::get_vertex(v_et_ref);
-
-        
-
-        std::cout << fmt::format("vertex {} : root {}\n", context.get_idx(v), context.get_idx(v_ref));
+      for (auto [l, r] : edges) {
+        ++shift[l + 1]; 
+        ++shift[r + 1];
       }
 
+      for (auto i = 0; i < vertex_count; ++i) {
+        shift[i + 1] += shift[i];
+        g.directed_edges_end()[i] = shift[i + 1];
+      }
+
+      for (auto [l, r] : edges)
+        set_directed_edges_pair(
+          g.get_vertex(l),
+          g.get_vertex(r),
+          g.get_directed_edge(shift[l]++),
+          g.get_directed_edge(shift[r]++));
 
 
+      // for (auto i = 0; i < vertex_count; ++i) {
+      //   auto [begin, end] = out_edges(g.get_vertex(i), g);
+      //   for (auto iter = begin; iter != end; ++iter) {
+      //     auto directed_edge = *iter;
+      //   }
+      // }
 
-      int p = 3;
+
+      dc_context<dc_properties> etdc_context;
+
+      etdc_context.init(g, context);
+
+      {
+        auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
+        print(hdr, dc_properties{g});
+        std::cout << '\n';
+        print(dc_properties::get_etnte_header(hdr), dc_properties{g});
+        std::cout << "\n\n";
+      }
+
+      {
+        if (auto* de_for_split = g.get_directed_edge(0);
+          dc_properties::is_tree_edge(de_for_split))
+          etdc_context.tree_edge_split_and_reconnect(de_for_split);
+        else
+          etdc_context.non_tree_edge_remove(de_for_split);
+
+        {
+          auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
+          std::cout << '\n';
+          print(hdr, dc_properties{g});
+          std::cout << '\n';
+          print(dc_properties::get_etnte_header(hdr), dc_properties{g});
+          std::cout << "\n\n";
+        }
 
 
+        for (int i = 0; i < vertex_count; ++i) {
+          auto* v = g.get_vertex(i);
+          
+          auto* hdr = et_algo::get_header(dc_properties::get_entry(v));
+          auto* v_et_ref = et_traits::get_left(hdr);
+
+          if (dc_properties::is_loop_edge(v_et_ref)) {
+            int p = 3;
+          }
+          else {
+            int k = 3;
+          }
+
+          auto* v_ref = dc_properties::get_vertex(v_et_ref);
+
+          std::cout << fmt::format("vertex {} : root {}\n", context.get_idx(v), context.get_idx(v_ref));
+        }
+      }
 
 
 
@@ -372,7 +339,7 @@ namespace xpm
       vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::etnte_properties::set_vertex(&input[i], &vertices[i]);
+        dpl::graph::dc_properties::set_vertex(&input[i], &vertices[i]);
         algo::push_back(header_a, &input[i]);
       }
 
@@ -528,7 +495,7 @@ namespace xpm
       vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::etnte_properties::set_directed_edge(&input[i], &edges[i]);
+        dpl::graph::dc_properties::set_directed_edge(&input[i], &edges[i]);
         algo::push_back(header_a, &input[i]);
       }
 
