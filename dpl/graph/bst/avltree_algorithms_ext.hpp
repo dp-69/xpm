@@ -76,6 +76,10 @@ namespace dpl::graph
       return nt::is_header(p);
     }
 
+    static bool empty(node_ptr header) {
+      return !nt::get_parent(header);
+    }
+
     static auto node_height(const_node_ptr x) {
       int height = 0;
 

@@ -95,11 +95,6 @@ if(Qt6_FOUND)
         ${Qt6_DIR}/../../$<$<CONFIG:Debug>:debug/>Qt6/plugins/styles/
         $<TARGET_FILE_DIR:xpm>/styles/
     )
-
-    #add_custom_command(TARGET xpm POST_BUILD 
-    #  COMMAND Qt6::windeployqt
-    #  ARGS $<TARGET_FILE:xpm>
-    #)
   endif()
 else()
   target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets) # Qt5::Charts
@@ -154,3 +149,9 @@ endif()
 
 find_package(HYPRE REQUIRED)
 target_link_libraries(xpm PRIVATE HYPRE::HYPRE)
+
+if(NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)
+  file(COPY_FILE
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/config.json
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)
+endif()

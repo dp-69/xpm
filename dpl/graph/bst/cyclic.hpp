@@ -36,7 +36,7 @@ namespace dpl::graph
     using const_node_ptr = typename nt::const_node_ptr;
 
   public:    
-    static void principal_cut(node_ptr header, node_ptr least) {      
+    static void cut(node_ptr header, node_ptr least) {      
       if (nt::get_left(header) != least)
         if (nt::get_right(header) == least) {
           algo::erase(header, least);
@@ -56,7 +56,7 @@ namespace dpl::graph
         }
     }
 
-    static void principal_cut_least_dropped(node_ptr header, node_ptr least) {
+    static void cut_least_dropped(node_ptr header, node_ptr least) {
       if (nt::get_right(header) == least || nt::get_left(header) == least)
         algo::erase(header, least);
       else {        

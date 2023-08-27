@@ -21,8 +21,8 @@ namespace dpl::graph
       : graph_(&graph) {}
 
 
-    static etnte_ptr get_etnte_header(et_cptr n) { return mask_bit_balance::get_ptr<etnte_ptr>(n->tag); }
-    static void set_etnte_header(et_ptr n, etnte_cptr etnte_header) { mask_bit_balance::set_ptr_balance(n->tag, etnte_header, mask_bit_balance::balance); }
+    static etnte_ptr get_etnte_header(et_cptr hdr) { return mask_bit_balance::get_ptr<etnte_ptr>(hdr->tag); }
+    static void set_etnte_header(et_ptr hdr, etnte_cptr etnte_header) { mask_bit_balance::set_ptr_balance(hdr->tag, etnte_header, mask_bit_balance::balance); }
 
     static directed_edge* get_directed_edge(et_cptr n) { return mask_bit_balance::get_ptr<directed_edge*>(n->tag); }
     static void set_directed_edge(et_ptr n, const directed_edge* de) { mask_bit_balance::set_ptr(n->tag, de); }
@@ -53,12 +53,10 @@ namespace dpl::graph
 
     // ---------------
 
-    static et_ptr get_entry(vertex* v) { return v->entry_; }
+    static et_ptr get_entry(vertex* v) { return static_cast<et_ptr>(v->entry_); }
     static void set_entry(vertex* v, et_ptr et) { v->entry_ = et; }
 
-    auto get_idx(const vertex* v) const {
-      return v - graph_->vertices().get();
-    }
+    auto get_idx(const vertex* v) const { return graph_->get_idx(v); }
 
     // ---------------
 
@@ -70,6 +68,7 @@ namespace dpl::graph
     static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<etnte_ptr>(x->entry_); }
     static void set_non_tree_edge_entry(directed_edge* x, etnte_ptr y) { return mask_bit::set_ptr(x->entry_, y); }
 
+    static bool is_null_entry(const directed_edge* x) { return x->entry_ == 0; }
     static void set_null_entry(directed_edge* x) { x->entry_ = 0; }
   };
 

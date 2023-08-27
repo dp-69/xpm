@@ -5,23 +5,12 @@
 
 int main(int argc, char* argv[])
 {
-  xpm::test::DFS_CHECK();
-
-  xpm::test::split_join_validity_check_ET_ONLY();
-
-  xpm::test::split_join_validity_check_ETNTE_ONLY();
-
-  
-
-
-  getchar();
-  return 0;
-
-
-
-
-
-
+  // xpm::test::DFS_CHECK();
+  // xpm::test::split_join_validity_check_ET_ONLY();
+  // xpm::test::split_join_validity_check_ETNTE_ONLY();
+  //
+  // getchar();
+  // return 0;
 
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);

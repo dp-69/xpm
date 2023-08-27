@@ -36,14 +36,12 @@ namespace xpm
   struct strong_integer
   {
     using value_type = T;
-
     // using difference_type = std::ptrdiff_t;
 
-    T value;
+    value_type value;
 
-    // ReSharper disable once CppNonExplicitConvertingConstructor
-    constexpr strong_integer(T v = 0) : value(v) {}
-    constexpr explicit operator T() const { return value; }
+    constexpr strong_integer(value_type v = 0) : value{v} {}
+    constexpr explicit operator value_type() const { return value; }
 
     constexpr Derived& operator++() {
       ++value;
@@ -65,20 +63,21 @@ namespace xpm
 
     auto& operator*() { return value; }
 
-    template<std::integral Integral>
-    constexpr bool operator<(Integral rhs) const { return value < rhs; }
+    template<std::integral U>
+    constexpr bool operator<(U rhs) const { return value < rhs; }
 
-    template<std::integral Integral>
-    constexpr bool operator>=(Integral rhs) const { return value >= rhs; }
+    template<std::integral U>
+    constexpr bool operator>=(U rhs) const { return value >= rhs; }
 
     constexpr bool operator<(const Derived& rhs) const { return value < *rhs; }
 
 
-    template<std::integral Integral>
-    constexpr Derived operator+(Integral rhs) const { return Derived{value + rhs}; }
+    template<std::integral U>
+    constexpr Derived operator+(U rhs) const { return Derived{value + rhs}; }
 
     friend constexpr bool operator==(const Derived& lhs, const Derived& rhs) { return *lhs == *rhs; }
     friend constexpr bool operator!=(const Derived& lhs, const Derived& rhs) { return *lhs != *rhs; }
+
 
     //
     // constexpr Derived operator-(const Derived& rhs) const {
@@ -176,7 +175,10 @@ namespace xpm
 
 
   struct voxel_idx : strong_integer<voxel_idx, idx1d_t> {};
-  struct macro_idx : strong_integer<macro_idx, idx1d_t> {};
+  struct macro_idx : strong_integer<macro_idx, idx1d_t>
+  {
+
+  };
 
 
   // struct idx1d_expl

@@ -26,6 +26,7 @@
 #include <vtkProperty.h>
 #include <vtkSphereSource.h>
 
+#include <algorithm>
 #include <random>
 #include <regex>
 
@@ -192,10 +193,12 @@ namespace xpm
     return actor;        
   }
 
+  
+
 
   namespace test
   {
-    inline void DFS_CHECK() {
+    inline auto GenerateGraph() {
       using namespace dpl::graph;
 
       int vertex_count = 6;
@@ -205,34 +208,21 @@ namespace xpm
         {3, 4}, {5, 2}, {5, 1}
       };
 
-      size_t edge_count = sizeof(edges)/sizeof(std::pair<int, int>);
-
-      dc_graph g{vertex_count};
-      dc_properties context{g};
-
-      g.directed_edges() = std::make_unique<directed_edge[]>(edge_count*2);
-      
-      auto shift = std::make_unique<size_t[]>(vertex_count + 1);
-
-      std::fill_n(shift.get(), vertex_count + 1, 0);
-
-      for (auto [l, r] : edges) {
-        ++shift[l + 1]; 
-        ++shift[r + 1];
-      }
-
-      for (auto i = 0; i < vertex_count; ++i) {
-        shift[i + 1] += shift[i];
-        g.directed_edges_end()[i] = shift[i + 1];
-      }
+      graph_generator gen(vertex_count);
 
       for (auto [l, r] : edges)
-        set_directed_edges_pair(
-          g.get_vertex(l),
-          g.get_vertex(r),
-          g.get_directed_edge(shift[l]++),
-          g.get_directed_edge(shift[r]++));
+        gen.reserve(l, r);
 
+      gen.allocate();
+
+      for (auto [l, r] : edges)
+        gen.set(l, r);
+
+      return gen.acquire();
+    }
+
+    inline void DFS_CHECK() {
+      using namespace dpl::graph;
 
       // for (auto i = 0; i < vertex_count; ++i) {
       //   auto [begin, end] = out_edges(g.get_vertex(i), g);
@@ -241,17 +231,19 @@ namespace xpm
       //   }
       // }
 
+      auto g = GenerateGraph();
+
+      dc_properties context{g};
 
       dc_context<dc_properties> etdc_context;
 
-      etdc_context.init(g, context);
+      etdc_context.init_with_dfs(g, context);
 
       {
         auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
         print(hdr, dc_properties{g});
-        std::cout << '\n';
         print(dc_properties::get_etnte_header(hdr), dc_properties{g});
-        std::cout << "\n\n";
+        std::cout << '\n';
       }
 
       {
@@ -265,26 +257,18 @@ namespace xpm
           auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
           std::cout << '\n';
           print(hdr, dc_properties{g});
-          std::cout << '\n';
           print(dc_properties::get_etnte_header(hdr), dc_properties{g});
-          std::cout << "\n\n";
+          std::cout << '\n';
         }
 
 
-        for (int i = 0; i < vertex_count; ++i) {
+        for (int i = 0; i < g.vertex_count(); ++i) {
           auto* v = g.get_vertex(i);
-          
-          auto* hdr = et_algo::get_header(dc_properties::get_entry(v));
-          auto* v_et_ref = et_traits::get_left(hdr);
 
-          if (dc_properties::is_loop_edge(v_et_ref)) {
-            int p = 3;
-          }
-          else {
-            int k = 3;
-          }
-
-          auto* v_ref = dc_properties::get_vertex(v_et_ref);
+          auto* v_ref = dc_properties::get_vertex(
+            *std::ranges::find_if(
+              range<et_traits>(et_algo::get_header(dc_properties::get_entry(v))),
+              dc_properties::is_loop_edge));
 
           std::cout << fmt::format("vertex {} : root {}\n", context.get_idx(v), context.get_idx(v_ref));
         }
@@ -348,7 +332,7 @@ namespace xpm
       cout << "*** verification: " << algo::verify(header_a) << "***\n";
 
 
-      cyclic_op::principal_cut(header_a, &input[0]); // tip: does effectively nothing
+      cyclic_op::cut(header_a, &input[0]); // tip: does effectively nothing
 
 
       node headerNodeB;
@@ -654,7 +638,7 @@ namespace xpm
       //  auto found6 = eti_query::find_before_insert_interval(etiTree.header_ptr(), treeA.header_ptr(), &input[totalSize - 1]);
 
 
-      cyclic_op::principal_cut(header_a, &input[0]); // tip: does effectively nothing
+      cyclic_op::cut(header_a, &input[0]); // tip: does effectively nothing
 
 
       //  t0 = system_clock::now();

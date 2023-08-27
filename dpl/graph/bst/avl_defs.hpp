@@ -211,7 +211,7 @@ namespace dpl::graph
     public:
       using iterator_category = std::forward_iterator_tag;
       using difference_type = std::ptrdiff_t;
-      // using value_type = node_ptr;
+      using value_type = node_ptr;
       // using distance_type = std::ptrdiff_t;
       // using pointer = node_ptr;
       // using reference = node_ptr;
@@ -220,7 +220,7 @@ namespace dpl::graph
       bst_inorder_iterator(node_ptr node) : node_(node) {}
 
       node_ptr operator*() const { return node_; }
-      // node_ptr operator->() const {  return _node; }
+      // node_ptr operator->() const {  return node_; }
 
       bst_inorder_iterator& operator++() {
         node_ = boost::intrusive::bstree_algorithms<NodeTraits>::next_node(node_);
