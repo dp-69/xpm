@@ -205,7 +205,7 @@ namespace xpm
 
       std::pair<int, int> edges[] = {
         {0, 1}, {1, 2}, {2, 0},
-        {3, 4}, {5, 2}, {5, 1}
+        {3, 4}, {5, 2}, {5, 1}, {5, 0}
       };
 
       graph_generator gen(vertex_count);
@@ -238,6 +238,25 @@ namespace xpm
       dc_context<dc_properties> etdc_context;
 
       etdc_context.init_with_dfs(g, context);
+
+
+
+      
+      
+
+      auto etnte_hdr = dc_properties::get_etnte_header(et_algo::get_header(dc_properties::get_entry(g.get_vertex(0))));
+      
+      for (auto etnte_entry : range<etnte_traits>(etnte_hdr))
+        etnte_entry->size = 0;
+
+      etnte_algo::recalculate_sizes(etnte_hdr);
+
+      if (!etnte_algo::verify(etnte_hdr)) {
+        std::cout << "Invalid recalc\n";
+      }
+
+
+
 
       {
         auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));

@@ -71,7 +71,7 @@ namespace dpl::graph
     aug_avl_node* left;
     aug_avl_node* right;
 
-    std::size_t size;
+    std::size_t size = 0;
   };
 
 

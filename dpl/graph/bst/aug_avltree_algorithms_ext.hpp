@@ -72,9 +72,39 @@ namespace dpl::graph
         1);
     }
 
-    static void size_increment_after_insert(const_node_ptr header, node_ptr n) {
+    static void recalculate_sizes(const_node_ptr hdr) {
+      if (!base::empty(hdr)) {
+        auto node = nt::get_left(hdr);
+
+        while (node != hdr) {
+          subsize l_size = 0;
+          if (auto l = nt::get_left(node); l)
+            if (l_size = nt::get_size(l); l_size == 0) {
+              node = l;
+              continue;
+            }
+          
+          subsize r_size = 0;
+          if (auto r = nt::get_right(node); r)
+            if (r_size = nt::get_size(r); r_size == 0) {
+              node = r;
+              continue;
+            }
+
+          nt::set_size(node, l_size + r_size + 1);
+          node = nt::get_parent(node);
+        }
+      }
+
+
+      // nt::set_size(n, 1);
+      // for (n = nt::get_parent(n); n != header; n = nt::get_parent(n))
+      //   nt::set_size(n, nt::get_size(n) + 1);
+    }
+
+    static void size_increment_after_insert(const_node_ptr hdr, node_ptr n) {
       nt::set_size(n, 1);
-      for (n = nt::get_parent(n); n != header; n = nt::get_parent(n))
+      for (n = nt::get_parent(n); n != hdr; n = nt::get_parent(n))
         nt::set_size(n, nt::get_size(n) + 1);
     }
 

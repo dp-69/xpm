@@ -317,14 +317,14 @@ namespace dpl::graph
                   dc_properties::set_directed_edge(etnte_entry, de);
 
                   // avltree_algorithms_ext<etnte_traits>
-
                   // etnte_algo::insert_commit()
 
+                  // etnte_algo::push_back(etnte_hdr, etnte_entry);
 
-
-                  etnte_algo
-                  ::push_back(etnte_hdr, etnte_entry);
+                  avltree_algorithms_ext<etnte_traits>::push_back(etnte_hdr, etnte_entry);
                 }
+
+          etnte_algo::recalculate_sizes(etnte_hdr);
         }
       }
       // for (vertex* v : g.range())

@@ -439,7 +439,7 @@ namespace xpm
         double inlet_flow = 0;
         double outlet_flow = 0;
       
-        std::cout << fmt::format("  disconnected {} nodes", disconnected_macro);
+        std::cout << fmt::format("  isolated {} nodes", disconnected_macro);
       
         for (auto i : dpl::range(throat_count())) {
           auto [l, r] = throat_[attribs::adj][i];
@@ -453,11 +453,10 @@ namespace xpm
               outlet_flow += coef(i)*(pressure[*l]);
         }
       
-        std::cout << fmt::format(
-          R"(
-  INLET_PERM={} mD
-  OUTLET_PERM={} mD
-  residual={:.6g}, iterations={}
+        std::cout << fmt::format(R"(
+  inlet perm: {} mD
+  outlet perm: {} mD
+  residual: {:.4g}, iterations: {}
 )",
           -inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
           -outlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
@@ -564,10 +563,17 @@ namespace xpm
           ++microporous_voxels;
         }
 
-      #ifdef XPM_DEBUG_OUTPUT // NOLINTNEXTLINE(clang-diagnostic-misleading-indentation)
-        std::cout << fmt::format("total: {}; pore: {}; solid: {}; microporous: {} voxels\n\n", 
-          size, pore_voxels, solid_voxels, microporous_voxels); 
-      #endif
+      // #ifdef XPM_DEBUG_OUTPUT // NOLINTNEXTLINE(clang-diagnostic-misleading-indentation)
+      std::cout << fmt::format(
+R"(image voxels
+  total: {:L}
+  pore: {:L}
+  solid: {:L}
+  microprs: {:L}
+
+)",
+        size, pore_voxels, solid_voxels, microporous_voxels); 
+      // #endif
     }
 
     /**
@@ -998,7 +1004,7 @@ namespace xpm
 
 
    
-    void flow_summary(const double* pressure, double const_permeability, HYPRE_Real residual, HYPRE_Int iters) const {
+    void flow_summary(const double* pressure, double const_permeability) const {
       double inlet_flow_sum = 0;
       double outlet_flow_sum = 0;
 
@@ -1034,12 +1040,14 @@ namespace xpm
         }
 
       
-      std::cout << fmt::format("MICROPOROUS_PERM={} mD\nINLET_PERM={} mD\nOUTLET_PERM={} mD\nresidual={:.6g}, iterations={}\n\n",
+      std::cout << fmt::format(
+R"(microprs perm: {} mD
+  inlet perm: {} mD
+  outlet perm: {} mD
+)",
         const_permeability/darcy_to_m2*1000,
         -inlet_flow_sum/pn_.physical_size.x()/darcy_to_m2*1000,
-        -outlet_flow_sum/pn_.physical_size.x()/darcy_to_m2*1000,
-        residual,
-        iters);
+        -outlet_flow_sum/pn_.physical_size.x()/darcy_to_m2*1000);
     }
   };
 }

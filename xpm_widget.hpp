@@ -280,6 +280,8 @@ namespace xpm
 
   public:
     void Init() {
+      std::locale::global(std::locale("en_US.UTF-8"));
+
       InitGUI();
 
 
@@ -301,6 +303,7 @@ namespace xpm
 
     void ComputePressure() {
       using clock = std::chrono::high_resolution_clock;
+      using seconds = std::chrono::seconds;
 
       startup_settings startup;
 
@@ -354,8 +357,9 @@ namespace xpm
       pore_network pn{pnm_path, pore_network::file_format::statoil};
 
       #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "network loaded";
-        std::cout << (pn.eval_inlet_outlet_connectivity() ? " [CONNECTED]" : " [DISCONNECTED]") << '\n';
+        std::cout
+          << "network\n  "
+          << (pn.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
       #endif
 
 
@@ -403,8 +407,8 @@ namespace xpm
       using namespace presets;
 
       std::vector<HYPRE_Complex> pressure;
-      HYPRE_Real residual;
-      HYPRE_Int iters;
+      HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
+      HYPRE_Int iters = 0;
 
 
       if (use_cache && std::filesystem::exists(cache_path)) {
@@ -437,8 +441,9 @@ namespace xpm
 
         std::cout
           << " done\n\n"
-          << "pre hypre time: " <<
-          duration_cast<std::chrono::milliseconds>(clock::now() - begin_init_time).count() << "ms\n\n";
+          // << "pre hypre time: " <<
+          // duration_cast<std::chrono::milliseconds>(clock::now() - begin_init_time).count() << "ms\n\n"
+        ;
 
         std::cout << 
           fmt::format("save input matrix [{} MB]...", (
@@ -478,42 +483,37 @@ namespace xpm
             pressure[decomposition.decomposed_to_net[i]] = decomposed_pressure[i];
         }
 
-        std::cout << "Pressure solved\n\n";
+        std::cout << "pressure solved\n\n";
 
         if (save_cache) {
           std::filesystem::create_directory("cache");
           std::ofstream cache_stream(cache_path, std::ofstream::binary);
           cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*pressure.size());
-          std::cout << "Pressure cached\n\n";
+          std::cout << "pressure cached\n\n";
         }
       }
 
 
-      pni.flow_summary(pressure.data(), const_permeability, residual, iters);
-
-
+      pni.flow_summary(pressure.data(), const_permeability);
+      std::cout << fmt::format("  residual: {:.4g}, iterations: {}\n\n", residual, iters);
 
       {
-      using namespace dpl::graph;
-      
-      auto dc_props = dc_properties{dc_graph_};
-
-      auto t0 = clock::now();
-
-      dc_graph_ = pni.generate_dc_graph();
-
-      auto t1 = clock::now();
-
-      std::cout <<
-        fmt::format(
-          "dc graph generated: {}s\n",
-          duration_cast<std::chrono::seconds>(t1 - t0).count());
-
-      dc_context_.init_with_dfs(dc_graph_, dc_props);
+        using namespace dpl::graph;
         
-      std::cout
-        << "dc context initialized (dfs for et-only, fast etnte): "
-        << duration_cast<std::chrono::seconds>(clock::now() - t1).count() << "s\n\n";
+        auto dc_props = dc_properties{dc_graph_};
+
+        auto t0 = clock::now();
+        std::cout << "graph...";
+        dc_graph_ = pni.generate_dc_graph();
+        std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
+          duration_cast<seconds>(clock::now() - t0).count(),
+          dc_graph_.vertex_count(),
+          dc_graph_.edge_count());
+
+        auto t1 = clock::now();
+        std::cout << "euler tour..."; // dfs for et-only, fast etnte
+        dc_context_.init_with_dfs(dc_graph_, dc_props);
+        std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
       }
 
 
@@ -522,21 +522,6 @@ namespace xpm
 
 
       // std::ranges::fill(pressure, 0);
-
-
-
-
-
-
-
-
-
-      
-      
-
-      
-
-      
 
       
 
@@ -606,14 +591,13 @@ namespace xpm
               ;
             }
 
-            auto start = clock::now();
+            cout << "3D faces...";
+
+            auto t0 = clock::now();
 
             img_glyph_mapper_.Populate(img_.dim, pn.physical_size/img_.dim, [&](idx1d_t idx1d) { return filter[idx1d]; });
 
-            auto stop = clock::now();
- 
-            cout << "3D faces time: " << duration_cast<std::chrono::milliseconds>(stop - start).count() << "ms\n\n";
-
+            std::cout << fmt::format(" done {}s\n", duration_cast<seconds>(clock::now() - t0).count());
               
             dpl::sfor<6>([&](auto face_idx) {
               dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);

@@ -76,7 +76,7 @@ namespace dpl::graph
       return nt::is_header(p);
     }
 
-    static bool empty(node_ptr header) {
+    static bool empty(const_node_ptr header) {
       return !nt::get_parent(header);
     }
 
