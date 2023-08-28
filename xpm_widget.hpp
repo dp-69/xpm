@@ -304,6 +304,7 @@ namespace xpm
     void ComputePressure() {
       using clock = std::chrono::high_resolution_clock;
       using seconds = std::chrono::seconds;
+      using minutes = std::chrono::minutes;
 
       startup_settings startup;
 
@@ -511,9 +512,54 @@ namespace xpm
           dc_graph_.edge_count());
 
         auto t1 = clock::now();
-        std::cout << "euler tour..."; // dfs for et-only, fast etnte
+        std::cout << "euler tour...";
         dc_context_.init_with_dfs(dc_graph_, dc_props);
         std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
+
+        auto t2 = clock::now();
+        std::cout << "full random decremental connectivity...\n";
+
+        auto index_count = dc_graph_.vertex_count() - 1;
+        auto indices = std::make_unique<idx1d_t[]>(index_count);
+        std::iota(indices.get(), indices.get() + index_count, 0);
+
+        std::random_device rd;
+        std::shuffle(indices.get(), indices.get() + index_count, std::mt19937(3192/*rd()*/));
+
+
+        // {
+        //   std::ifstream is("cache/replacement_indices.bin", std::ifstream::binary);
+        //   is.seekg(0, std::ios_base::end);
+        //   auto count = is.tellg()/sizeof(std::size_t);
+        //   is.seekg(0, std::ios_base::beg);
+        //   dc_context_.saved_replacement_indices.resize(count);          
+        //   is.read(reinterpret_cast<char*>(dc_context_.saved_replacement_indices.data()), count*sizeof(std::size_t));
+        // }
+
+        // auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
+
+        for (idx1d_t i = 0; i < index_count; ++i) {
+          if (i%((index_count - 1)/40) == 0)
+            std::cout << fmt::format("{:.1f} %\n", 100.*i/index_count);
+
+          // if (
+          //   et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(indices[i]))) ==
+          //   et_algo::get_header(outlet_entry))
+
+          dc_context_.adjacent_edges_remove(indices[i], dc_graph_);
+        }
+
+        
+
+        std::cout << fmt::format(" done {:.2f} min\n\n", duration_cast<seconds>(clock::now() - t1).count()/60.);
+
+        // {
+        //   auto ptr = dc_context_.saved_replacement_indices.data();
+        //   std::filesystem::create_directory("cache");
+        //   std::ofstream cache_stream("cache/replacement_indices.bin", std::ofstream::binary);
+        //   cache_stream.write(reinterpret_cast<const char*>(ptr), sizeof(std::size_t)*dc_context_.saved_replacement_indices.size());
+        //   std::cout << "pressure cached\n\n";
+        // }
       }
 
 

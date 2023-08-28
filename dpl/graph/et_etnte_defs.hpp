@@ -30,6 +30,8 @@
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/pool/object_pool.hpp>
 
+#define ETNTE_AS_AVL_ONLY
+
 namespace dpl::graph::helper
 {
   template <class T,
@@ -71,8 +73,13 @@ namespace dpl::graph
   using et_algo = avltree_algorithms_ext<et_traits>;
 
 
-  using etnte_traits = aug_avl_traits<aug_avl_node>;
-  using etnte_algo = aug_avltree_algorithms_ext<etnte_traits>;
+  #ifdef ETNTE_AS_AVL_ONLY
+    using etnte_traits = avl_traits<avl_node>;
+    using etnte_algo = avltree_algorithms_ext<etnte_traits>;
+  #else
+    using etnte_traits = aug_avl_traits<aug_avl_node>;
+    using etnte_algo = aug_avltree_algorithms_ext<etnte_traits>;
+  #endif
 
 
 
@@ -85,20 +92,24 @@ namespace dpl::graph
     std::cout << '\n';
   }
 
-  template <typename Props>
-  void print(et_traits::node_ptr hdr, const Props& c) {
-    for (et_traits::node_ptr et : range<et_traits>(hdr)) {
-      if (Props::is_loop_edge(et)) {
-        auto v = Props::get_vertex(et);
-        std::cout << fmt::format(" [{}]", c.get_idx(v));  
+  #ifndef ETNTE_AS_AVL_ONLY
+    template <typename Props>
+    void print(et_traits::node_ptr hdr, const Props& c) {
+      for (et_traits::node_ptr et : range<et_traits>(hdr)) {
+        if (Props::is_loop_edge(et)) {
+          auto v = Props::get_vertex(et);
+          std::cout << fmt::format(" [{}]", c.get_idx(v));  
+        }
+        else {
+          auto de = Props::get_directed_edge(et);
+          std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
+        }
       }
-      else {
-        auto de = Props::get_directed_edge(et);
-        std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
-      }
+      std::cout << '\n';
     }
-    std::cout << '\n';
-  }
+  #endif
+
+
 
 
   template <typename Props>
@@ -151,9 +162,11 @@ namespace dpl::graph
       return key_less_than_node(x2_etnte);
     }
 
+    #ifndef ETNTE_AS_AVL_ONLY
     bool operator()(const etnte_node_ptr& /*comparing node*/, const etnte_node_ptr& x2_etnte) const {
       return key_less_than_node(x2_etnte);    
     }
+    #endif
   };
 
 
@@ -207,9 +220,11 @@ namespace dpl::graph
       return key_more_than_node(x1_etnte);
     }
 
+    #ifndef ETNTE_AS_AVL_ONLY
     bool operator()(const etnte_node_ptr& x1_etnte, const etnte_node_ptr& /*comparing node*/) const {
       return key_more_than_node(x1_etnte);    
     }
+    #endif
   };
 
 

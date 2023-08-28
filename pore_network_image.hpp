@@ -454,8 +454,8 @@ namespace xpm
         }
       
         std::cout << fmt::format(R"(
-  inlet perm: {} mD
-  outlet perm: {} mD
+  inlet perm: {:.6f} mD
+  outlet perm: {:.6f} mD
   residual: {:.4g}, iterations: {}
 )",
           -inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
@@ -612,7 +612,7 @@ R"(image voxels
     pore_network& pn_;
     image_data& img_;
 
-    static inline constexpr idx1d_t isolated_idx = std::numeric_limits<idx1d_t>::max();
+    static inline constexpr idx1d_t isolated_idx_ = std::numeric_limits<idx1d_t>::max();
 
     /**
      * \brief
@@ -642,8 +642,8 @@ R"(image voxels
     idx1d_t net(macro_idx i) const { return net_map_[total(i)]; }
     idx1d_t net(voxel_idx i) const { return net_map_[total(i)]; }
 
-    bool connected(macro_idx i) const { return net(i) != isolated_idx; }
-    bool connected(voxel_idx i) const { return net(i) != isolated_idx; }
+    bool connected(macro_idx i) const { return net(i) != isolated_idx_; }
+    bool connected(voxel_idx i) const { return net(i) != isolated_idx_; }
 
 
 
@@ -708,7 +708,7 @@ R"(image voxels
 
       for (auto i : dpl::range(gross_total_size)) {
         auto rep = ds.find_set(i); 
-        net_map_[i] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx;
+        net_map_[i] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
       }
     }
 
@@ -788,24 +788,23 @@ R"(image voxels
     }
 
 
-    dpl::graph::dc_graph generate_dc_graph() {
+    dpl::graph::dc_graph generate_dc_graph() const {
       using namespace dpl::graph;
       using namespace presets;
       auto map_idx = img_.idx1d_mapper();
 
-      // auto inlet = this->inlet();
-      // auto outlet = inlet + 1;
-
-      
-      auto vertex_count = connected_count_;
+      auto vertex_count = connected_count_ + 1; // last is outlet
+      auto outlet_idx = vertex_count - 1;
 
       graph_generator gen(vertex_count);
 
-      // using namespace std::ranges::views;
-
       for (auto [l, r] : pn_.throat_.range(attribs::adj)/* | std::ranges::views::filter([](auto pair) { return true; })*/)
-        if (connected(l) && pn_.inner_node(r)) // macro-macro
-          gen.reserve(net(l), net(r));
+        if (connected(l))
+          if (pn_.inner_node(r)) // macro-macro
+            gen.reserve(net(l), net(r));
+          else if (pn_.outlet() == r) // macro-outlet
+            gen.reserve(net(l), outlet_idx);
+
 
       {
         idx3d_t ijk;
@@ -813,9 +812,14 @@ R"(image voxels
         voxel_idx idx1d;
 
         for (k = 0; k < img_.dim.z(); ++k)
-          for (j = 0; j < img_.dim.y(); ++j)
+          for (j = 0; j < img_.dim.y(); ++j) {
+            if (voxel_idx adj_idx1d{map_idx(img_.dim.x() - 1, j, k)};
+              connected(adj_idx1d)) { // darcy-outlet
+              gen.reserve(net(adj_idx1d), outlet_idx);
+            }
+
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-              if (img_.phase[*idx1d] == microporous && connected(idx1d)) {
+              if (connected(idx1d)) {
                 if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) // macro-darcy 
                   gen.reserve(net(adj_macro_idx), net(idx1d));
 
@@ -825,13 +829,17 @@ R"(image voxels
                       gen.reserve(net(idx1d), net(adj_idx1d));
                 });
               }
+          }
       }
 
       gen.allocate();
 
       for (auto [l, r] : pn_.throat_.range(attribs::adj))
-        if (connected(l) && pn_.inner_node(r)) // macro-macro
-          gen.set(net(l), net(r));
+        if (connected(l))
+          if (pn_.inner_node(r)) // macro-macro
+            gen.set(net(l), net(r));
+          else if (pn_.outlet() == r) // macro-outlet
+            gen.set(net(l), outlet_idx);
 
       {
         idx3d_t ijk;
@@ -839,9 +847,14 @@ R"(image voxels
         voxel_idx idx1d;
 
         for (k = 0; k < img_.dim.z(); ++k)
-          for (j = 0; j < img_.dim.y(); ++j)
+          for (j = 0; j < img_.dim.y(); ++j) {
+            if (voxel_idx adj_idx1d{map_idx(img_.dim.x() - 1, j, k)};
+              connected(adj_idx1d)) { // darcy-outlet
+              gen.set(net(adj_idx1d), outlet_idx);
+            }
+
             for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-              if (img_.phase[*idx1d] == microporous && connected(idx1d)) {
+              if (connected(idx1d)) {
                 if (macro_idx adj_macro_idx{*img_.velem[*idx1d]}; adj_macro_idx >= 0) // macro-darcy 
                   gen.set(net(adj_macro_idx), net(idx1d));
 
@@ -851,6 +864,7 @@ R"(image voxels
                       gen.set(net(idx1d), net(adj_idx1d));
                 });
               }
+          }
       }
 
       return gen.acquire();
@@ -1042,8 +1056,8 @@ R"(image voxels
       
       std::cout << fmt::format(
 R"(microprs perm: {} mD
-  inlet perm: {} mD
-  outlet perm: {} mD
+  inlet perm: {:.6f} mD
+  outlet perm: {:.6f} mD
 )",
         const_permeability/darcy_to_m2*1000,
         -inlet_flow_sum/pn_.physical_size.x()/darcy_to_m2*1000,

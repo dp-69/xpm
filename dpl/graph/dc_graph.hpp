@@ -114,13 +114,13 @@ namespace dpl::graph
       return vertex_count_;
     }
 
-    const auto& vertices() const {
-      return vertices_;
-    }
+    // const auto& vertices() const {
+    //   return vertices_;
+    // }
 
-    auto& vertices() {
-      return vertices_;
-    }
+    // auto& vertices() {
+    //   return vertices_;
+    // }
 
     auto get_idx(const vertex* v) const {
       return v - vertices_.get();
@@ -138,27 +138,31 @@ namespace dpl::graph
       return vertices_.get() + vertex_count_;
     }
 
-    auto range() const {
+    auto vertices() const {
       return std::ranges::subrange{begin(), end()};
     }
 
     // ---------------------------
 
+    auto get_idx(const directed_edge* v) const {
+      return v - directed_edges_.get();
+    }
+
     auto edge_count() const {
       return edge_count_;
     }
 
-    const auto& directed_edges() const {
-      return directed_edges_;
-    }
+    // const auto& directed_edges() const {
+    //   return directed_edges_;
+    // }
 
     edge_descriptor get_directed_edge(std::integral auto de_idx) const {
       return directed_edges_.get() + de_idx;
     }
 
-    const auto& directed_edges_end() const {
-      return directed_edges_end_;
-    }
+    // const auto& directed_edges_end() const {
+    //   return directed_edges_end_;
+    // }
 
     auto& directed_edges_end() {
       return directed_edges_end_;
@@ -172,8 +176,12 @@ namespace dpl::graph
       return &directed_edges_[directed_edges_end_[v_idx]];
     }
 
-    auto range(std::integral auto v_idx) const {
+    auto edges(std::integral auto v_idx) const {
       return std::ranges::subrange{out_edges_begin(v_idx), out_edges_end(v_idx)};
+    }
+
+    auto edges(vertex_descriptor v) const {
+      return edges(get_idx(v));
     }
   };
 
@@ -199,8 +207,8 @@ namespace dpl::graph
     uv->opposite = vu;
   }
 
-  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex* u, const dc_graph& g) {
-    auto idx = u - g.vertices().get();
+  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex* v, const dc_graph& g) {
+    auto idx = g.get_idx(v);
     return {g.out_edges_begin(idx), g.out_edges_end(idx)};
   }
   

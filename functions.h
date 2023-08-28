@@ -233,69 +233,73 @@ namespace xpm
 
       auto g = GenerateGraph();
 
-      dc_properties context{g};
+      dc_properties props{g};
 
-      dc_context<dc_properties> etdc_context;
+      dc_context<dc_properties> context;
 
-      etdc_context.init_with_dfs(g, context);
+      context.init_with_dfs(g, props);
 
-
-
-      
-      
 
       auto etnte_hdr = dc_properties::get_etnte_header(et_algo::get_header(dc_properties::get_entry(g.get_vertex(0))));
-      
+
+      #ifndef ETNTE_AS_AVL_ONLY
       for (auto etnte_entry : range<etnte_traits>(etnte_hdr))
         etnte_entry->size = 0;
 
-      etnte_algo::recalculate_sizes(etnte_hdr);
+      etnte_algo::populate_sizes(etnte_hdr);
+      #endif
 
       if (!etnte_algo::verify(etnte_hdr)) {
         std::cout << "Invalid recalc\n";
       }
 
 
-
-
-      {
-        auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
-        print(hdr, dc_properties{g});
-        print(dc_properties::get_etnte_header(hdr), dc_properties{g});
-        std::cout << '\n';
-      }
-
-      {
-        if (auto* de_for_split = g.get_directed_edge(0);
-          dc_properties::is_tree_edge(de_for_split))
-          etdc_context.tree_edge_split_and_reconnect(de_for_split);
-        else
-          etdc_context.non_tree_edge_remove(de_for_split);
-
-        {
-          auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
-          std::cout << '\n';
-          print(hdr, dc_properties{g});
-          print(dc_properties::get_etnte_header(hdr), dc_properties{g});
-          std::cout << '\n';
-        }
-
-
+      auto print_clusters = [&]() {
         for (int i = 0; i < g.vertex_count(); ++i) {
-          auto* v = g.get_vertex(i);
+          auto v = g.get_vertex(i);
 
-          auto* v_ref = dc_properties::get_vertex(
+          auto hdr = et_algo::get_header(dc_properties::get_entry(v));
+
+          auto v_ref = dc_properties::get_vertex(
             *std::ranges::find_if(
-              range<et_traits>(et_algo::get_header(dc_properties::get_entry(v))),
+              range<et_traits>(hdr),
               dc_properties::is_loop_edge));
 
-          std::cout << fmt::format("vertex {} : root {}\n", context.get_idx(v), context.get_idx(v_ref));
+          std::cout << fmt::format("vertex {} : root {}\n", props.get_idx(v), props.get_idx(v_ref));
         }
-      }
+      };
 
 
 
+      // {
+      //   auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
+      //   print(hdr, dc_properties{g});
+      //   print(dc_properties::get_etnte_header(hdr), dc_properties{g});
+      //   std::cout << '\n';
+      // }
+      //
+      // if (auto* de_for_split = g.get_directed_edge(0);
+      //   dc_properties::is_tree_edge(de_for_split))
+      //   etdc_context.tree_edge_split_and_reconnect(de_for_split);
+      // else
+      //   etdc_context.non_tree_edge_remove(de_for_split);
+      //
+      // {
+      //   auto hdr = et_algo::get_header(dc_properties::get_entry(g.get_vertex(0)));
+      //   std::cout << '\n';
+      //   print(hdr, dc_properties{g});
+      //   print(dc_properties::get_etnte_header(hdr), dc_properties{g});
+      //   std::cout << '\n';
+      // }
 
+      print_clusters();
+
+      for (std::size_t i = 0; i < g.vertex_count(); ++i)
+        context.adjacent_edges_remove(i, g);
+
+      std::cout << '\n';
+
+      print_clusters();
     }
 
     inline void split_join_validity_check_ET_ONLY() {
@@ -451,7 +455,7 @@ namespace xpm
 
       using traits = dpl::graph::etnte_traits;
       using node = traits::node;
-      using algo = dpl::graph::aug_avltree_algorithms_ext<traits>;
+      using algo = dpl::graph::etnte_algo;
       using cyclic_op = dpl::graph::cyclic<algo>;
 
       // using vertex = dpl::graph::vertex;
@@ -846,14 +850,22 @@ namespace xpm
 
         if (check_validity_naive) {
           if (auto* root = traits::get_parent(header_a); !(
-            algo::verify(header_a) &&
-            algo::calculate_subtree_size(root) == (root ? traits::get_size(root) : 0)))
+            algo::verify(header_a)
+
+            #ifndef ETNTE_AS_AVL_ONLY
+              && algo::calculate_subtree_size(root) == (root ? traits::get_size(root) : 0)
+            #endif
+            ))
 
             cout << "{A} INVALID\n";
 
           if (auto* root = traits::get_parent(header_b); !(
-            algo::verify(header_b) &&
-            algo::calculate_subtree_size(root) == (root ? traits::get_size(root) : 0)))
+            algo::verify(header_b)
+
+            #ifndef ETNTE_AS_AVL_ONLY
+              && algo::calculate_subtree_size(root) == (root ? traits::get_size(root) : 0)
+            #endif
+            ))
             cout << "{B} INVALID\n";
 
           //      auto calcSizeA = treeA.size();            

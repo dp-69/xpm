@@ -72,7 +72,10 @@ namespace dpl::graph
         1);
     }
 
-    static void recalculate_sizes(const_node_ptr hdr) {
+    /**
+     * \brief size of all nodes must be 0
+     */
+    static void populate_sizes(const_node_ptr hdr) {
       if (!base::empty(hdr)) {
         auto node = nt::get_left(hdr);
 

@@ -37,8 +37,10 @@ namespace dpl::graph
 
     // ---------------
 
+    #ifndef ETNTE_AS_AVL_ONLY
     static directed_edge* get_directed_edge(etnte_cptr n) { return mask_bit_balance::get_ptr<directed_edge*>(n->tag); }
     static void set_directed_edge(etnte_ptr n, const directed_edge* de) { mask_bit_balance::set_ptr(n->tag, de); }
+    #endif
 
     static directed_edge* get_opposite(const directed_edge* de) { return de->opposite; }
     static void set_opposite(directed_edge* de, directed_edge* opp) { de->opposite = opp; }
@@ -70,6 +72,20 @@ namespace dpl::graph
 
     static bool is_null_entry(const directed_edge* x) { return x->entry_ == 0; }
     static void set_null_entry(directed_edge* x) { x->entry_ = 0; }
+
+    static bool less_than(etnte_cptr hdr_l, etnte_cptr hdr_r) {
+      etnte_ptr root_l = etnte_traits::get_parent(hdr_l);
+      etnte_ptr root_r = etnte_traits::get_parent(hdr_r);
+
+      return
+        #ifdef ETNTE_AS_AVL_ONLY
+          (root_l ? etnte_algo::node_height(root_l) : 0) < 
+          (root_r ? etnte_algo::node_height(root_r) : 0);
+        #else
+          (root_l ? etnte_traits::get_size(root_l) : 0) < 
+          (root_r ? etnte_traits::get_size(root_r) : 0);
+        #endif
+    }
   };
 
 
