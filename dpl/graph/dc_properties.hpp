@@ -51,7 +51,7 @@ namespace dpl::graph
      *   sorted by a pointing-in vertex, the pointing-out works as well
      */
     static et_ptr get_ordering_vertex_entry(const directed_edge* de) { return get_entry(get_opposite(de)->v1); }
-    static et_ptr get_ordering_vertex_entry(etnte_cptr n) { return get_ordering_vertex_entry(get_directed_edge(n)); }
+    // static et_ptr get_ordering_vertex_entry(etnte_cptr n) { return get_ordering_vertex_entry(get_directed_edge(n)); }
 
     // ---------------
 
@@ -86,6 +86,20 @@ namespace dpl::graph
           (root_r ? etnte_traits::get_size(root_r) : 0);
         #endif
     }
+
+    // static bool less_than(etnte_cptr hdr_l, etnte_cptr hdr_r) {
+    //   etnte_ptr root_l = etnte_traits::get_parent(hdr_l);
+    //   etnte_ptr root_r = etnte_traits::get_parent(hdr_r);
+    //
+    //   return
+    //     #ifdef ETNTE_AS_AVL_ONLY
+    //       (root_l ? etnte_algo::node_height(root_l) : 0) < 
+    //       (root_r ? etnte_algo::node_height(root_r) : 0);
+    //     #else
+    //       (root_l ? etnte_traits::get_size(root_l) : 0) < 
+    //       (root_r ? etnte_traits::get_size(root_r) : 0);
+    //     #endif
+    // }
   };
 
 

@@ -78,11 +78,6 @@ namespace dpl::graph
     }
 
 
-    // Split initial BST into the following format: A + {n0} + B + {n1} + C.
-    // Returns:
-    //   headerB <- B (from n0 to n1)
-    //   headerA <- C + A (from n1 to n0)
-
     /**
      * \brief Assuming format A + {n0} + B + {n1} + C
      * \param hdr_a returns (n1, n0) = C + A range

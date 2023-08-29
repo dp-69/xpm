@@ -536,22 +536,23 @@ namespace xpm
         //   is.read(reinterpret_cast<char*>(dc_context_.saved_replacement_indices.data()), count*sizeof(std::size_t));
         // }
 
-        // auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
+
+        auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
 
         for (idx1d_t i = 0; i < index_count; ++i) {
           if (i%((index_count - 1)/40) == 0)
             std::cout << fmt::format("{:.1f} %\n", 100.*i/index_count);
 
-          // if (
-          //   et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(indices[i]))) ==
-          //   et_algo::get_header(outlet_entry))
+          if (
+            et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(indices[i]))) ==
+            et_algo::get_header(outlet_entry))
 
           dc_context_.adjacent_edges_remove(indices[i], dc_graph_);
         }
 
         
 
-        std::cout << fmt::format(" done {:.2f} min\n\n", duration_cast<seconds>(clock::now() - t1).count()/60.);
+        std::cout << fmt::format(" done {} s\n\n", duration_cast<seconds>(clock::now() - t1).count()/*/60.*/);
 
         // {
         //   auto ptr = dc_context_.saved_replacement_indices.data();

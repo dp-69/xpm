@@ -502,7 +502,7 @@ namespace xpm
       vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::dc_properties::set_directed_edge(&input[i], &edges[i]);
+        // dpl::graph::dc_properties::set_directed_edge(&input[i], &edges[i]);
         algo::push_back(header_a, &input[i]);
       }
 

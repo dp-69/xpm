@@ -32,6 +32,8 @@
 
 #define ETNTE_AS_AVL_ONLY
 
+// #define ET_AS_AUG_AVL
+
 namespace dpl::graph::helper
 {
   template <class T,
@@ -69,8 +71,13 @@ namespace dpl::graph::helper
 
 namespace dpl::graph
 {
-  using et_traits = avl_traits<avl_node>;
-  using et_algo = avltree_algorithms_ext<et_traits>;
+  #ifdef ET_AS_AUG_AVL
+    using et_traits = aug_avl_traits<aug_avl_node>;
+    using et_algo = aug_avltree_algorithms_ext<et_traits>;
+  #else
+    using et_traits = avl_traits<avl_node>;
+    using et_algo = avltree_algorithms_ext<et_traits>;
+  #endif
 
 
   #ifdef ETNTE_AS_AVL_ONLY
