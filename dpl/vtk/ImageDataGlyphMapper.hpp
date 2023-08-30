@@ -117,6 +117,7 @@ namespace dpl::vtk
       vtkNew<vtkPolyData> polydata;
       polydata->GetPointData()->SetScalars(this->color_arr_);
       polydata->SetPoints(this->points_);
+      
 
       this->glyph_mapper_->OrientOff();
       this->glyph_mapper_->SetScaleFactor(half_length/*1.0000*/); 

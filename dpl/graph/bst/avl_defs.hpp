@@ -98,6 +98,10 @@ namespace dpl::graph
     static bool get_bit(std::size_t tag) {
       return tag & bit;
     }
+
+    static void set_bit(std::size_t& tag) {
+      tag = bit;
+    }
   };
 
 

@@ -32,7 +32,7 @@ namespace xpm
 
 
 
-  template <typename Derived, std::integral T>
+  template <std::integral T, typename Tag = void>
   struct strong_integer
   {
     using value_type = T;
@@ -43,9 +43,9 @@ namespace xpm
     constexpr strong_integer(value_type v = 0) : value{v} {}
     constexpr explicit operator value_type() const { return value; }
 
-    constexpr Derived& operator++() {
+    constexpr auto& operator++() {
       ++value;
-      return *static_cast<Derived*>(this);
+      return *this;
     }
 
     // constexpr Derived operator++(int) {
@@ -63,20 +63,17 @@ namespace xpm
 
     auto& operator*() { return value; }
 
-    template<std::integral U>
-    constexpr bool operator<(U rhs) const { return value < rhs; }
+    constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
 
-    template<std::integral U>
-    constexpr bool operator>=(U rhs) const { return value >= rhs; }
+    constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
 
-    constexpr bool operator<(const Derived& rhs) const { return value < *rhs; }
+    constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
 
 
-    template<std::integral U>
-    constexpr Derived operator+(U rhs) const { return Derived{value + rhs}; }
+    constexpr strong_integer operator+(std::integral auto rhs) const { return {value + rhs}; }
 
-    friend constexpr bool operator==(const Derived& lhs, const Derived& rhs) { return *lhs == *rhs; }
-    friend constexpr bool operator!=(const Derived& lhs, const Derived& rhs) { return *lhs != *rhs; }
+    friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
+    friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
 
 
     //
@@ -174,12 +171,11 @@ namespace xpm
   >;
 
 
-  struct voxel_idx : strong_integer<voxel_idx, idx1d_t> {};
-  struct macro_idx : strong_integer<macro_idx, idx1d_t>
-  {
+  struct voxel_t {};
+  struct macro_t {};
 
-  };
-
+  using voxel_idx = strong_integer<idx1d_t, voxel_t>;
+  using macro_idx = strong_integer<idx1d_t, macro_t>;
 
   // struct idx1d_expl
   // {

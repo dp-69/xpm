@@ -62,30 +62,30 @@ namespace dpl::graph
 
     // ---------------
 
-    static bool is_tree_edge(const directed_edge* x) { return mask_bit::get_bit(x->entry_); }
+    static bool is_tree_edge(const directed_edge* x) { return !mask_bit::get_bit(x->entry_); }
 
     static et_ptr get_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<et_ptr>(x->entry_); }
-    static void set_tree_edge_entry(directed_edge* x, et_ptr y) { mask_bit::set_ptr_bit(x->entry_, y); }
+    static void set_tree_edge_entry(directed_edge* x, et_ptr y) { mask_bit::set_ptr(x->entry_, y); }
 
-    static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<etnte_ptr>(x->entry_); }
-    static void set_non_tree_edge_entry(directed_edge* x, etnte_ptr y) { return mask_bit::set_ptr(x->entry_, y); }
+    // static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<etnte_ptr>(x->entry_); }
+    static void set_non_tree_edge(directed_edge* x) { return mask_bit::set_bit(x->entry_); }
 
     static bool is_null_entry(const directed_edge* x) { return x->entry_ == 0; }
     static void set_null_entry(directed_edge* x) { x->entry_ = 0; }
 
-    static bool less_than(etnte_cptr hdr_l, etnte_cptr hdr_r) {
-      etnte_ptr root_l = etnte_traits::get_parent(hdr_l);
-      etnte_ptr root_r = etnte_traits::get_parent(hdr_r);
-
-      return
-        #ifdef ETNTE_AS_AVL_ONLY
-          (root_l ? etnte_algo::node_height(root_l) : 0) < 
-          (root_r ? etnte_algo::node_height(root_r) : 0);
-        #else
-          (root_l ? etnte_traits::get_size(root_l) : 0) < 
-          (root_r ? etnte_traits::get_size(root_r) : 0);
-        #endif
-    }
+    // static bool less_than(etnte_cptr hdr_l, etnte_cptr hdr_r) {
+    //   etnte_ptr root_l = etnte_traits::get_parent(hdr_l);
+    //   etnte_ptr root_r = etnte_traits::get_parent(hdr_r);
+    //
+    //   return
+    //     #ifdef ETNTE_AS_AVL_ONLY
+    //       (root_l ? etnte_algo::node_height(root_l) : 0) < 
+    //       (root_r ? etnte_algo::node_height(root_r) : 0);
+    //     #else
+    //       (root_l ? etnte_traits::get_size(root_l) : 0) < 
+    //       (root_r ? etnte_traits::get_size(root_r) : 0);
+    //     #endif
+    // }
 
     // static bool less_than(etnte_cptr hdr_l, etnte_cptr hdr_r) {
     //   etnte_ptr root_l = etnte_traits::get_parent(hdr_l);

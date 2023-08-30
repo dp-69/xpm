@@ -2,23 +2,24 @@
 
 namespace dpl::graph::internal
 {
-  template<typename Pointer>
+  template<typename Ptr>
   class iterator_deference_pointer
   {
-    Pointer ptr_;
+    Ptr ptr_;
 
   public:
     iterator_deference_pointer() = default;
-    iterator_deference_pointer(Pointer ptr) : ptr_(ptr) {}
+    iterator_deference_pointer(Ptr ptr) : ptr_(ptr) {}
 
     using iterator_category = std::forward_iterator_tag;
-    using value_type = Pointer;
     using difference_type = std::ptrdiff_t;
+    using value_type = Ptr;
+    
     // using distance_type = std::ptrdiff_t;
     // using pointer = Pointer;
     // using reference = Pointer;
 
-    Pointer operator*() const { return ptr_; }
+    Ptr operator*() const { return ptr_; }
     // Pointer operator->() { return ptr; }
 
     iterator_deference_pointer& operator++() {

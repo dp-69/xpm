@@ -46,7 +46,7 @@ namespace xpm
     };
   }
   
-  vtkSmartPointer<vtkActor> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
+  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
     using namespace attribs;
 
     
@@ -104,10 +104,10 @@ namespace xpm
       
     vtkNew<vtkNamedColors> colors;
     actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
-    return actor;
+    return {actor, color_array};
   }
 
-  vtkSmartPointer<vtkActor> CreateThroatActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
+  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
     using namespace attribs;
 
     vtkNew<vtkPolyData> polydata;
@@ -158,16 +158,16 @@ namespace xpm
     vtkNew<vtkPoints> points;
 
     for (size_t i = 0, count = pnm.throat_count(); i < count; ++i)
-      if (auto [n0, n1] = pnm.throat_[adj][i];
-        pnm.inner_node(n0) && pnm.inner_node(n1)) {
-        auto& n0_pos = pnm.node_[pos][*n0];
+      if (auto [l, r] = pnm.throat_[adj][i];
+        /*pnm.inner_node(l) && */pnm.inner_node(r)) {
+        auto& n0_pos = pnm.node_[pos][*l];
 
         points->InsertNextPoint(n0_pos);
-        orient_array->InsertNextTuple(angles_for_j_norm(pnm.node_[pos][*n1] - n0_pos));
+        orient_array->InsertNextTuple(angles_for_j_norm(pnm.node_[pos][*r] - n0_pos));
 
         scale_array->InsertNextTuple(v3d{
           pnm.throat_[r_ins][i],
-          (pnm.node_[pos][*n1] - n0_pos).length(),
+          (pnm.node_[pos][*r] - n0_pos).length(),
           pnm.throat_[r_ins][i]
         });
 
@@ -190,7 +190,7 @@ namespace xpm
       
     vtkNew<vtkNamedColors> colors;
     actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
-    return actor;        
+    return {actor, color_array};        
   }
 
   

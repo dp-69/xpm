@@ -53,6 +53,7 @@
 
 #include <algorithm>
 #include <future>
+#include <unordered_set>
 
 #include <nlohmann/json.hpp>
 
@@ -113,9 +114,10 @@ namespace xpm
 
 
 
-
-
+    pore_network pn_;
     image_data img_;
+    pore_network_image pni_;
+
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
 
@@ -355,19 +357,19 @@ namespace xpm
       // lut_pressure_->SetNanColor(0.584314, 0.552624, 0.267419, 1);
 
 
-      pore_network pn{pnm_path, pore_network::file_format::statoil};
+      pn_.read_from_text_file(pnm_path);
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout
           << "network\n  "
-          << (pn.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
+          << (pn_.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
       #endif
 
 
       #ifdef _WIN32
-        pn.connectivity_flow_summary(startup.solver.tolerance, startup.solver.max_iterations);
+        pn_.connectivity_flow_summary(startup.solver.tolerance, startup.solver.max_iterations);
       #else
-        pn.connectivity_flow_summary_MPI(startup.solver.tolerance, startup.solver.max_iterations);
+        pn_.connectivity_flow_summary_MPI(startup.solver.tolerance, startup.solver.max_iterations);
       #endif
 
       std::cout << '\n';
@@ -391,13 +393,14 @@ namespace xpm
         // #endif
       }
 
-      pore_network_image pni{pn, img_};
+      
+      pni_.init(&pn_, &img_);
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout << "connectivity (isolated components)...";
       #endif
 
-      pni.evaluate_isolated();
+      pni_.evaluate_isolated();
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout << " done\n\n";
@@ -425,7 +428,7 @@ namespace xpm
       else {
         std::cout << "decomposition...";
 
-        auto decomposition = pni.decompose_rows(processors);
+        auto decomposition = pni_.decompose_rows(processors);
 
         // for (auto i = 0; i < processors.prod(); ++i)
         //   std::cout << std::format("\nblock {}, rows {}--{}, size {}",
@@ -438,7 +441,7 @@ namespace xpm
           << " done\n\n"
           << "input matrix build...";
 
-        auto [nrows, nvalues, input] = pni.generate_pressure_input(decomposition, const_permeability);
+        auto [nrows, nvalues, input] = pni_.generate_pressure_input(decomposition, const_permeability);
 
         std::cout
           << " done\n\n"
@@ -495,7 +498,57 @@ namespace xpm
       }
 
 
-      pni.flow_summary(pressure.data(), const_permeability);
+
+
+      vtkFloatArray* macro_colors = nullptr;
+      vtkFloatArray* throat_colors = nullptr;
+
+      auto assembly = vtkSmartPointer<vtkAssembly>::New();
+
+      {
+        vtkSmartPointer<vtkActor> macro_actor;
+        std::tie(macro_actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
+          [&](macro_idx i) {
+            return pni_.connected(i) ? 0/*pressure[pni_.net(i)]*/ : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
+          });
+           
+        assembly->AddPart(macro_actor);
+      }
+
+      {
+        vtkSmartPointer<vtkActor> throat_actor;
+        std::tie(throat_actor, throat_colors) = CreateThroatActor(pn_, lut_pressure_, [&](size_t i) {
+          auto [l, r] = pn_.throat_[attribs::adj][i];
+
+          return
+            pni_.connected(l)
+               ? 0/*(pressure[pni_.net(l)] + pressure[pni_.net(r)])/2*/
+               : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
+
+          // return
+          //   pni_.connected(l)
+          //     ? pn_.inner_node(r)
+          //       ? pni_.connected(r) ? 0/*(pressure[pni_.net(l)] + pressure[pni_.net(r)])/2*/ : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
+          //       : r == pn_.inlet() ? 1.0 : 0.0
+          //     : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
+        });
+
+        assembly->AddPart(throat_actor);
+      }
+
+      renderer_->AddActor(assembly);
+
+
+
+
+
+
+
+
+
+
+
+      pni_.flow_summary(pressure.data(), const_permeability);
       std::cout << fmt::format("  residual: {:.4g}, iterations: {}\n\n", residual, iters);
 
       {
@@ -505,7 +558,7 @@ namespace xpm
 
         auto t0 = clock::now();
         std::cout << "graph...";
-        dc_graph_ = pni.generate_dc_graph();
+        dc_graph_ = pni_.generate_dc_graph();
         std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
           duration_cast<seconds>(clock::now() - t0).count(),
           dc_graph_.vertex_count(),
@@ -516,43 +569,133 @@ namespace xpm
         dc_context_.init_with_dfs(dc_graph_, dc_props);
         std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
 
-        auto t2 = clock::now();
+        
         std::cout << "full random decremental connectivity...\n";
 
-        auto index_count = dc_graph_.vertex_count() - 1;
-        auto indices = std::make_unique<idx1d_t[]>(index_count);
-        std::iota(indices.get(), indices.get() + index_count, 0);
+        // auto mutex = std::make_shared<std::mutex>();
 
-        std::random_device rd;
-        std::shuffle(indices.get(), indices.get() + index_count, std::mt19937(3192/*rd()*/));
+        auto action = [this, /*mutex, */macro_colors, throat_colors] {
+          auto t2 = clock::now();
 
+          auto index_count = dc_graph_.vertex_count() - 1;
+          auto indices = std::make_unique<idx1d_t[]>(index_count);
+          std::iota(indices.get(), indices.get() + index_count, 0);
 
-        // {
-        //   std::ifstream is("cache/replacement_indices.bin", std::ifstream::binary);
-        //   is.seekg(0, std::ios_base::end);
-        //   auto count = is.tellg()/sizeof(std::size_t);
-        //   is.seekg(0, std::ios_base::beg);
-        //   dc_context_.saved_replacement_indices.resize(count);          
-        //   is.read(reinterpret_cast<char*>(dc_context_.saved_replacement_indices.data()), count*sizeof(std::size_t));
-        // }
+          
+          
 
 
-        auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
+          
+          auto pos = std::make_unique<v3d[]>(index_count);
+          {
+            auto* pos_ptr = pos.get();
+          
+            for (macro_idx i{0}; i < pn_.node_count(); ++i)
+              if (pni_.connected(i))
+                *pos_ptr++ = pn_.node_[attribs::pos][*i];
+          
+            idx3d_t ijk;
+            auto& [i, j, k] = ijk;
+            voxel_idx idx1d;
+          
+            auto cell_size = pn_.physical_size/img_.dim;
+          
+            for (k = 0; k < img_.dim.z(); ++k)
+              for (j = 0; j < img_.dim.y(); ++j)
+                for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
+                  if (pni_.connected(idx1d)) // darcy node
+                    *pos_ptr++ = cell_size*(ijk + 0.5);
+          }
+          // std::sort(indices.get(), indices.get() + index_count, [&pos](idx1d_t l, idx1d_t r) { return pos[l].x() > pos[r].x(); });
 
-        for (idx1d_t i = 0; i < index_count; ++i) {
-          if (i%((index_count - 1)/40) == 0)
-            std::cout << fmt::format("{:.1f} %\n", 100.*i/index_count);
 
-          if (
-            et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(indices[i]))) ==
-            et_algo::get_header(outlet_entry))
 
-          dc_context_.adjacent_edges_remove(indices[i], dc_graph_);
-        }
 
+
+
+          std::random_device rd;
+          std::shuffle(indices.get(), indices.get() + index_count, std::mt19937(3192/*rd()*/));
+
+          // std::reverse(indices.get(), indices.get() + index_count);
+
+          std::vector<bool> processed(index_count);
+
+          // {
+          //   std::ifstream is("cache/replacement_indices.bin", std::ifstream::binary);
+          //   is.seekg(0, std::ios_base::end);
+          //   auto count = is.tellg()/sizeof(std::size_t);
+          //   is.seekg(0, std::ios_base::beg);
+          //   dc_context_.saved_replacement_indices.resize(count);          
+          //   is.read(reinterpret_cast<char*>(dc_context_.saved_replacement_indices.data()), count*sizeof(std::size_t));
+          // }
+
+
+          auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
+
+          for (idx1d_t displacement_idx = 0; displacement_idx < index_count; ++displacement_idx) {
+            if (displacement_idx%((index_count - 1)/40) == 0) {
+              QMetaObject::invokeMethod(
+                this,
+                [=, this] {
+                  std::cout << fmt::format("{:.1f} %\n", 100.*displacement_idx/index_count);
+
+                  // std::lock_guard lock{*mutex};
+                  dpl::sfor<6>([&](auto face_idx) {
+                    dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+
+
+                    {
+                      idx1d_t i = 0;
+
+                      for (auto idx1d : face.GetIndices()) {
+                        face.GetColorArray()->SetTypedComponent(i++, 0, 
+                          pni_.connected(voxel_idx{idx1d})
+                            ? /*pressure[pni_.net(v_idx)]*/ processed[pni_.net(voxel_idx{idx1d})] ? 0.5 : 0
+                            : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
+                        );
+                      }
+                    }
+
+                    for (idx1d_t i = 0; i < pn_.node_count(); ++i)
+                      macro_colors->SetTypedComponent(i, 0, processed[pni_.net(macro_idx{i})] ? 0.5 : 0);
+
+                    {
+                      std::size_t i = 0;
+
+                      for (auto [l, r] : pn_.throat_.range(attribs::adj))
+                        if (pn_.inner_node(r))
+                          throat_colors->SetTypedComponent(i++, 0,
+                            processed[pni_.net(macro_idx{l})] &&
+                            processed[pni_.net(macro_idx{r})] ? 0.5 : 0);
+                    }
+
+                    throat_colors->Modified();
+                    macro_colors->Modified();
+                    face.GetColorArray()->Modified();
+                    render_window_->Render();
+                  });
+                },
+                Qt::QueuedConnection);
+            }
+
+            if (
+              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(indices[displacement_idx]))) ==
+              et_algo::get_header(outlet_entry)) {
+              dc_context_.adjacent_edges_remove(indices[displacement_idx], dc_graph_);
+
+              // std::lock_guard lock{*mutex};
+              processed[indices[displacement_idx]] = true;
+            }
+          }
+
+          std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/);
+        };
         
+        std::thread t{action};
+        t.detach();
 
-        std::cout << fmt::format(" done {} s\n\n", duration_cast<seconds>(clock::now() - t1).count()/*/60.*/);
+        // auto lul = std::async(std::launch::async, action);
+        
 
         // {
         //   auto ptr = dc_context_.saved_replacement_indices.data();
@@ -575,121 +718,62 @@ namespace xpm
       
 
 
-      auto assembly = vtkSmartPointer<vtkAssembly>::New();
-
-      // assembly->AddPart(CreateNodeActor(pn, lut_pressure_, 
-      //   [&](macro_idx i) {
-      //     return
-      //       et_algo::get_header(dc_props.get_entry(dc_graph_.get_vertex(pn.node_count() + 1))) ==
-      //       et_algo::get_header(dc_props.get_entry(dc_graph_.get_vertex(*i)))
-      //         ? 0
-      //         : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
-      //
-      //     // return pni.connected(i) ? pressure[pni.net(i)] : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
-      //   }));
-      //
-      // assembly->AddPart(CreateThroatActor(pn, lut_pressure_, [&](size_t i) {
-      //   auto [l, r] = pn.throat_[attribs::adj][i];
-      //
-      //   return
-      //     pni.connected(l)
-      //       ? pn.inner_node(r)
-      //         ? pni.connected(r) ? (pressure[pni.net(l)] + pressure[pni.net(r)])/2 : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
-      //         : r == pn.inlet() ? 1.0 : 0.0
-      //       : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
-      // }));
-
-      assembly->AddPart(CreateNodeActor(pn, lut_pressure_, 
-        [&](macro_idx i) {
-          return pni.connected(i) ? pressure[pni.net(i)] : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
-        }));
       
-      assembly->AddPart(CreateThroatActor(pn, lut_pressure_, [&](size_t i) {
-        auto [l, r] = pn.throat_[attribs::adj][i];
-      
-        return
-          pni.connected(l)
-            ? pn.inner_node(r)
-              ? pni.connected(r) ? (pressure[pni.net(l)] + pressure[pni.net(r)])/2 : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
-              : r == pn.inlet() ? 1.0 : 0.0
-            : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
-      }));
-
-      renderer_->AddActor(assembly);
       
       // std::cout << "\n\nNetwork actor created";
 
       {
-        
-          
-        {
-          auto scale_factor = /*1.0*/pn.physical_size.x()/img_.dim.x(); // needed for vtk 8.2 floating point arithmetics
+        auto scale_factor = /*1.0*/pn_.physical_size.x()/img_.dim.x(); // needed for vtk 8.2 floating point arithmetics
             
-          img_glyph_mapper_.Init(scale_factor);
-          {
-            std::vector<bool> filter(img_.size);
-            for (idx1d_t i = 0; i < img_.size; ++i) {
-              // auto rep_set = inner_ds.find_set(macro_node_count + img_.darcy.index[i]);
-              filter[i] = img_.phase[i] == microporous
-              // && !con_io[pn.node_count_ + i]
-              // && (con_io[pn.node_count_ + i] != connected(macro_node_count + img_.darcy.index[i]))
-              // && inlet_connected[rep_set] && outlet_connected[rep_set]
-              // && total_ds.find_set(old_node_count + voxel_to_row_inc_map[i]) == outlet_set
-              ;
-            }
+        img_glyph_mapper_.Init(scale_factor);
+        {
+          std::vector<bool> filter(img_.size);
+          for (idx1d_t i = 0; i < img_.size; ++i)
+            filter[i] = img_.phase[i] == microporous;
 
-            cout << "3D faces...";
+          cout << "3D faces...";
 
-            auto t0 = clock::now();
+          auto t0 = clock::now();
 
-            img_glyph_mapper_.Populate(img_.dim, pn.physical_size/img_.dim, [&](idx1d_t idx1d) { return filter[idx1d]; });
+          img_glyph_mapper_.Populate(img_.dim, pn_.physical_size/img_.dim,
+            [&](idx1d_t idx1d) { return filter[idx1d]; });
 
-            std::cout << fmt::format(" done {}s\n", duration_cast<seconds>(clock::now() - t0).count());
+          std::cout << fmt::format(" done {}s\n", duration_cast<seconds>(clock::now() - t0).count());
               
-            dpl::sfor<6>([&](auto face_idx) {
-              dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+          dpl::sfor<6>([&](auto face_idx) {
+            dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
 
-              idx1d_t i = 0;
-              for (auto idx1d : face.GetIndices()) {
-                voxel_idx v_idx{idx1d};
+            idx1d_t i = 0;
+            for (auto idx1d : face.GetIndices())
+              face.GetColorArray()->SetTypedComponent(i++, 0, 
+                pni_.connected(voxel_idx{idx1d})
+                  ? /*pressure[pni_.net(v_idx)]*/ 0
+                  : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
+              );
 
-                face.GetColorArray()->SetTypedComponent(i++, 0, 
-                  // img_darcy_adj_arr[idx1d]
-                  // velem_arr[idx1d].value
-                  // total_ds.find_set(old_node_count + voxel_to_row_inc_map[idx1d]) == total_ds.find_set(total_parent.size() - 1) ? 0.5 : 1
+            auto* glyphs = face.GetGlyphMapper();
+            auto* actor = face.GetActor();
 
-                  img_.phase[idx1d] == microporous && pni.connected(v_idx)
-                    ? pressure[pni.net(v_idx)]
-                    : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
-
-                  // phase_arr[idx1d].value
-                );
-              }
-
-              auto* glyphs = face.GetGlyphMapper();
-              auto* actor = face.GetActor();
-
-              // glyphs->SetLookupTable(lut_velem_);
-              glyphs->SetLookupTable(lut_pressure_);
-              // glyphs->SetLookupTable(lut_image_phase_);
+            // glyphs->SetLookupTable(lut_velem_);
+            glyphs->SetLookupTable(lut_pressure_);
+            // glyphs->SetLookupTable(lut_image_phase_);
               
-              glyphs->SetColorModeToMapScalars();
-              glyphs->UseLookupTableScalarRangeOn();
-              // glyphs->SetScalarModeToUsePointData();
-              // glyphs->SetScalarModeToUseCellData();
+            glyphs->SetColorModeToMapScalars();
+            glyphs->UseLookupTableScalarRangeOn();
+            // glyphs->SetScalarModeToUsePointData();
+            // glyphs->SetScalarModeToUseCellData();
               
-              actor->SetMapper(glyphs);
+            actor->SetMapper(glyphs);
 
-              actor->GetProperty()->SetEdgeVisibility(/*false*/false);
-              actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
+            actor->GetProperty()->SetEdgeVisibility(/*false*/false);
+            actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
                 
-              actor->GetProperty()->SetAmbient(0.5);
-              actor->GetProperty()->SetDiffuse(0.4);
-              actor->GetProperty()->BackfaceCullingOn();
+            actor->GetProperty()->SetAmbient(0.5);
+            actor->GetProperty()->SetDiffuse(0.4);
+            actor->GetProperty()->BackfaceCullingOn();
               
-              renderer_->AddActor(actor);
-            });
-          }
+            renderer_->AddActor(actor);
+          });
         }
       }
 
@@ -710,9 +794,9 @@ namespace xpm
       // // tidy_axes_.SetFormat(".2e");
 
       bounds_ = {
-        0., pn.physical_size.x(),
-        0., pn.physical_size.y(),
-        0., pn.physical_size.z()};
+        0., pn_.physical_size.x(),
+        0., pn_.physical_size.y(),
+        0., pn_.physical_size.z()};
 
       // tidy_axes_.Build(bounds);
       // // tidy_axes_.Build();
