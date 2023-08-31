@@ -34,18 +34,18 @@ namespace dpl::qt::property_editor
       return ScalarConvert<Scalar>::ToQString(x).toStdString();
     }
   };
-  
+
   template <typename Scalar, int N>
   struct DefaultFormat<vector_n<Scalar, N>>
   {
     template <int i>
     static std::string Format(const Scalar& x) {
       static_assert(0 <= i && i < N, "Index is outside of the bounds");
-      return DefaultFormat<Scalar>::Format(x);  
+      return DefaultFormat<Scalar>::Format(x);
     }
   };
 
-  template<typename Derived, typename ValueType>
+  template <typename Derived, typename ValueType>
   struct BaseItem : DefaultFormat<ValueType>
   {
     using Type = ValueType;
@@ -55,9 +55,9 @@ namespace dpl::qt::property_editor
     constexpr bool IsReadOnly() { return false; }
     constexpr bool IsActive() { return false; }
     constexpr auto Tooltip() { return ""; }
-    
+
     void SetActive() {}
-    
+
     void Reset() {}
 
     template <typename T>
@@ -72,34 +72,42 @@ namespace dpl::qt::property_editor
   };
 
 
-  template<typename ValueType>
-  struct ItemFunctor
+  template <typename ValueType>
+  struct ItemFunctor : DefaultFormat<ValueType>
   {
     using Type = ValueType;
-    
+
+  private:
+    std::string name;
+    std::function<Type()> get;
+    std::function<void(const Type&)> set;
+
+  public:
     constexpr bool IsVisible() { return true; }
     constexpr bool Calculated() { return false; }
-    constexpr bool IsReadOnly() { return false; }
+    bool IsReadOnly() { return !set; }
     constexpr bool IsActive() { return false; }
     constexpr auto Tooltip() { return ""; }
 
     void SetActive() {}
-    
     void Reset() {}
 
-    auto Name() { return name; }
-    
-    void Set(const Type& x) {
-      set(x);
+    auto Name() {
+      return name;
     }
 
     Type Get() {
       return get();
     }
 
-    std::string name;
-    std::function<void(const Type&)> set;
-    std::function<Type()> get;
-    
+    void Set(const Type& x) {
+      set(x);
+    }
+
+    ItemFunctor(std::string name, const auto& get)
+      : name(std::move(name)), get(get) {}
+
+    ItemFunctor(std::string name, const auto& get, const auto& set)
+      : name(std::move(name)), get(get), set(set) {}
   };
 }

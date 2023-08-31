@@ -25,18 +25,10 @@ struct fmt::formatter<std::filesystem::path>: formatter<std::string_view>
 
 namespace xpm
 {
-  
-
-
-
-
-
-
-  template <std::integral T, typename Tag = void>
+  template <std::integral T, typename /*Tag*/ = void>
   struct strong_integer
   {
     using value_type = T;
-    // using difference_type = std::ptrdiff_t;
 
     value_type value;
 
@@ -48,88 +40,56 @@ namespace xpm
       return *this;
     }
 
-    // constexpr Derived operator++(int) {
-    //   Derived copy{value};
-    //   ++*this;
-    //   return copy;
-    // }
-
-    // template <typename T1> requires std::integral<T1>
-    // constexpr Derived operator+(T1 d) const {
-    //   return Derived{value + d};
-    // }
-
     constexpr auto& operator*() const { return value; }
-
     auto& operator*() { return value; }
 
     constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
-
     constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
-
     constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
-
 
     constexpr strong_integer operator+(std::integral auto rhs) const { return {value + rhs}; }
 
     friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
     friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
-
-
-    //
-    // constexpr Derived operator-(const Derived& rhs) const {
-    //   return Derived{value - rhs.value};
-    // }
   };
-
-
-
-
-
 
   using v3i = dpl::vector3i;
   using v3d = dpl::vector3d;
 
-  namespace voxel_tag
+  /**
+   * \brief maximum node count
+   */
+  using idx1d_t = int32_t;
+  using idx3d_t = dpl::vector_n<idx1d_t, 3>;
+
+  struct voxel_t {};
+  using voxel_idx = strong_integer<idx1d_t, voxel_t>;
+
+  struct macro_t {};
+  using macro_idx = strong_integer<idx1d_t, macro_t>;
+
+  namespace voxel_property
   {
-    struct phase
-    {
-      std::uint8_t value;
-
-      friend bool operator==(const phase& lhs, const phase& rhs) { return lhs.value == rhs.value; }
-      friend bool operator!=(const phase& lhs, const phase& rhs) { return !(lhs == rhs); }
-
-      const auto& operator*() const {
-        return value;
-      }
-    };
+    struct phase_t {};
+    using phase = strong_integer<std::uint8_t, phase_t>;
 
     /**
      * \brief
-     *   -1  : for non-pore voxels
-     *   >=0 : pore node of a pore-voxel
+     *   -1  : for a non-void voxel
+     *   >=0 : macro node of a void voxel
      */
-    struct velem
+    struct velem_t {};
+    struct velem : strong_integer<std::int32_t, velem_t>
     {
-      std::int32_t value;
-
-      // auto& operator*() {
-      //   return value;
-      // }
-
-      const auto& operator*() const {
-        return value;
-      }
+      constexpr operator macro_idx() const { return value; }
     };
-
-
   }
 
   namespace presets
   {
-    static inline constexpr voxel_tag::phase pore = {0};
-    static inline constexpr voxel_tag::phase solid = {1};
-    static inline constexpr voxel_tag::phase microporous = {2};
+    static inline constexpr voxel_property::phase pore = {0};
+    static inline constexpr voxel_property::phase solid = {1};
+    static inline constexpr voxel_property::phase microporous = {2};
 
     static constexpr auto darcy_to_m2 = 9.869233e-13;
   }
@@ -158,40 +118,14 @@ namespace xpm
     def_static_key(length1)
   }
 
-
-  /**
-   * \brief maximum node count
-   */
-  using idx1d_t = int32_t;
-  using idx3d_t = dpl::vector_n<idx1d_t, 3>;
+  
 
   using disjoint_sets = boost::disjoint_sets_with_storage<
     boost::typed_identity_property_map<idx1d_t>,
     boost::typed_identity_property_map<idx1d_t>
   >;
 
-
-  struct voxel_t {};
-  struct macro_t {};
-
-  using voxel_idx = strong_integer<idx1d_t, voxel_t>;
-  using macro_idx = strong_integer<idx1d_t, macro_t>;
-
-  // struct idx1d_expl
-  // {
-  //   idx1d_t value;
-  // };
-
-  // struct idx3d_expl
-  // {
-  //   idx3d_t value;
-  // };
-
-  // template<typename T, int n> requires std::integral<T>
-  // class map_idx_t
-  // {
-  //   // dpl::vector_n<Type, n> dim;
-  // };
+  
 
   template <typename R> requires std::integral<R>
   class map_idx3_t
@@ -213,27 +147,14 @@ namespace xpm
       return static_cast<R>(x) + x_*y + xy_*z;
     }
 
-    template <typename I>
-    auto operator[](std::integral_constant<I, 0>) { return 1; }
-     
-    template <typename I>
-    auto operator[](std::integral_constant<I, 1>) { return x_; }
-
-    template <typename I>
-    auto operator[](std::integral_constant<I, 2>) { return xy_; }
+    auto operator[](std::integral_constant<int, 0>) { return 1; }
+    auto operator[](std::integral_constant<int, 1>) { return x_; }
+    auto operator[](std::integral_constant<int, 2>) { return xy_; }
   };
-
 
   inline auto idx_mapper(idx3d_t dim) {
     return map_idx3_t<idx1d_t>{dim};
   }
-
-
-
-
-
-
-
   
   namespace parse
   {
@@ -250,7 +171,6 @@ namespace xpm
       }
     };
   }
-
 
   struct startup_settings
   {
@@ -291,14 +211,4 @@ namespace xpm
       solver.load(j["solver"]);
     }
   };
-
-
-
-  
-
-
-  
-
-
-  
 }

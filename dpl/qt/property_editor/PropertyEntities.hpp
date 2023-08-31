@@ -185,8 +185,8 @@ namespace dpl::qt::property_editor
   template<typename Scalar>
   struct PropertyItemTextEdit
   {
-    template<typename Inter>
-    static QWidget* CreateEditor(QWidget *parent, const QModelIndex& index, Inter& inter) {
+    template<typename Interface>
+    static QWidget* CreateEditor(QWidget *parent, const QModelIndex& index, Interface& inter) {
       if constexpr (std::is_same_v<Scalar, double>) {
         auto val = inter.Get();
         
@@ -199,8 +199,8 @@ namespace dpl::qt::property_editor
         );
     }
 
-    template<typename Inter>
-    static void SetModelData(QWidget *widget, const QModelIndex &index, Inter& inter) {
+    template<typename Interface>
+    static void SetModelData(QWidget *widget, const QModelIndex &index, Interface& inter) {
       if (auto* editor = static_cast<QLineEditCustom*>(widget->focusProxy()); editor->reset_)
         inter.Reset();
       else if (editor->accept_) {
@@ -212,8 +212,8 @@ namespace dpl::qt::property_editor
     }
 
 
-    template<typename Inter>
-    static QVariant GetModelValue(Inter& inter, Qt::ItemDataRole role) {
+    template<typename Interface>
+    static QVariant GetModelValue(Interface& inter, Qt::ItemDataRole role) {
       if (role != Qt::ItemDataRole::DisplayRole)
         return {};
 
@@ -234,26 +234,25 @@ namespace dpl::qt::property_editor
 
 
   
-  template<typename ValueType> struct PropertyItemTraits {};
-
+  template<typename> struct PropertyItemTraits {};
   template<> struct PropertyItemTraits<std::string> : PropertyItemTextEdit<std::string> {};
   template<> struct PropertyItemTraits<int> : PropertyItemTextEdit<int> {};
   template<> struct PropertyItemTraits<double> : PropertyItemTextEdit<double> {};
 
   template<> struct PropertyItemTraits<bool>
   {
-    template<typename Inter>
-    static QWidget* CreateEditor(QWidget* /*parent*/, const QModelIndex& index, Inter& inter) {         
+    template<typename Interface>
+    static QWidget* CreateEditor(QWidget* /*parent*/, const QModelIndex& index, Interface& inter) {         
       inter.Set(!inter.Get());          
       emit const_cast<QAbstractItemModel*>(index.model())->dataChanged(index, index);
       return nullptr;
     }
 
-    template<typename Inter>
-    static void SetModelData(QWidget* /*widget*/, const QModelIndex &, Inter&) { }
+    template<typename Interface>
+    static void SetModelData(QWidget* /*widget*/, const QModelIndex &, Interface&) { }
 
-    template<typename Inter>
-    static QVariant GetModelValue(Inter& inter, Qt::ItemDataRole role) {
+    template<typename Interface>
+    static QVariant GetModelValue(Interface& inter, Qt::ItemDataRole role) {
       if (role != Qt::ItemDataRole::CheckStateRole)
         return {};
 
@@ -267,13 +266,13 @@ namespace dpl::qt::property_editor
   template<typename Scalar, int Count>
   struct PropertyItemTraits<dpl::vector_n<Scalar, Count>>
   {
-    template<typename Inter>
-    static QWidget* CreateEditor(QWidget *parent, const QModelIndex&, Inter& inter) {
+    template<typename Interface>
+    static QWidget* CreateEditor(QWidget *parent, const QModelIndex&, Interface& inter) {
       return CreateLineEditor(parent, QString::fromStdString(GetTextStream(inter).str()));
     }
 
-    template<typename Inter>
-    static void SetModelData(QWidget *widget, const QModelIndex&, Inter& inter) {
+    template<typename Interface>
+    static void SetModelData(QWidget *widget, const QModelIndex&, Interface& inter) {
       if (auto* editor = static_cast<QLineEditCustom*>(widget->focusProxy()); editor->reset_)
         inter.Reset();
       else if (editor->accept_) {
@@ -308,8 +307,8 @@ namespace dpl::qt::property_editor
       }
     }
 
-    template<typename Inter>
-    static auto GetTextStream(Inter& inter) {
+    template<typename Interface>
+    static auto GetTextStream(Interface& inter) {
       auto arr = inter.Get();
 
       std::stringstream ss;
@@ -325,8 +324,8 @@ namespace dpl::qt::property_editor
       return ss;
     }
 
-    template<typename Inter>
-    static QVariant GetModelValue(Inter& inter, Qt::ItemDataRole role) {
+    template<typename Interface>
+    static QVariant GetModelValue(Interface& inter, Qt::ItemDataRole role) {
       if (role != Qt::ItemDataRole::DisplayRole)
         return {};
 
@@ -369,7 +368,8 @@ namespace dpl::qt::property_editor
     Functor functor_;
     
   public:
-    explicit FunctionGenericItem(Functor functor) : functor_{functor} {}   
+    explicit FunctionGenericItem(Functor functor) // NOLINT(modernize-pass-by-value)
+      : functor_{functor} {}
 
     std::string Name() override {
       return functor_.Name();
@@ -568,8 +568,8 @@ namespace dpl::qt::property_editor
       return 2;
     }
 
-    QModelIndex index(PropertyBase* data) const {
-      return createIndex(data->VisibleIndex(), 0, data);
+    QModelIndex index(int column, const PropertyBase* data) const {
+      return createIndex(data->VisibleIndex(), column, data);
     }
 
 
