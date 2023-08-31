@@ -135,6 +135,8 @@ namespace xpm
       auto idx = tree_view_->model()->index(1, status_property_item_);
       tree_view_->model()->dataChanged(idx, idx);
     }
+
+    std::future<void> invasion_future_;
     
 
 
@@ -584,11 +586,10 @@ namespace xpm
         std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
 
         
-        std::cout << "full decremental connectivity (in parallel)...\n\n";
+        std::cout << "full decremental connectivity (async)...\n\n";
 
-        // auto mutex = std::make_shared<std::mutex>();
 
-        auto action = [this, /*mutex, */macro_colors, throat_colors] {
+        invasion_future_ = std::async(std::launch::async, [this, macro_colors, throat_colors] {
           auto t2 = clock::now();
 
           auto index_count = dc_graph_.vertex_count() - 1;
@@ -644,48 +645,47 @@ namespace xpm
 
           for (idx1d_t displacement_idx = 0; displacement_idx < index_count; ++displacement_idx) {
             if (displacement_idx%((index_count - 1)/40) == 0) {
-              QMetaObject::invokeMethod(
-                this,
-                [=, this] {
-                  // std::cout << fmt::format("{:.1f} %\n", 100.*displacement_idx/index_count);
 
-                  dpl::sfor<6>([&](auto face_idx) {
-                    dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-
-                    idx1d_t i = 0;
-
-                    for (auto idx1d : face.GetIndices()) {
-                      face.GetColorArray()->SetTypedComponent(i++, 0, 
-                        pni_.connected(voxel_idx{idx1d})
-                          ? /*pressure[pni_.net(v_idx)]*/ processed[pni_.net(voxel_idx{idx1d})] ? 0.5 : 0
-                          : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
-                      );
-                    }
-
-                    face.GetColorArray()->Modified();
-                  });
-
-                  for (idx1d_t i = 0; i < pn_.node_count(); ++i)
-                      macro_colors->SetTypedComponent(i, 0, processed[pni_.net(macro_idx{i})] ? 0.5 : 0);
-
-                  {
-                    std::size_t i = 0;
-
-                    for (auto [l, r] : pn_.throat_.range(attribs::adj))
-                      if (pn_.inner_node(r))
-                        throat_colors->SetTypedComponent(i++, 0,
-                          processed[pni_.net(macro_idx{l})] &&
-                          processed[pni_.net(macro_idx{r})] ? 0.5 : 0);
+              {
+                dpl::sfor<6>([&](auto face_idx) {
+                  dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+                  idx1d_t i = 0;
+                  for (auto idx1d : face.GetIndices()) {
+                    face.GetColorArray()->SetTypedComponent(i++, 0, 
+                      pni_.connected(voxel_idx{idx1d})
+                        ? /*pressure[pni_.net(v_idx)]*/ processed[pni_.net(voxel_idx{idx1d})] ? 0.5 : 0
+                        : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
+                    );
                   }
+                });
 
+                for (idx1d_t i = 0; i < pn_.node_count(); ++i)
+                  macro_colors->SetTypedComponent(i, 0, processed[pni_.net(macro_idx{i})] ? 0.5 : 0);
+
+                {
+                  std::size_t i = 0;
+
+                  for (auto [l, r] : pn_.throat_.range(attribs::adj))
+                    if (pn_.inner_node(r))
+                      throat_colors->SetTypedComponent(i++, 0,
+                        processed[pni_.net(macro_idx{l})] &&
+                        processed[pni_.net(macro_idx{r})] ? 0.5 : 0);
+                }
+              }
+
+
+              QMetaObject::invokeMethod(this,
+                [=, this] {
                   UpdateStatus(fmt::format("{:.1f} %", 100.*displacement_idx/index_count));
 
+                  dpl::sfor<6>([&](auto face_idx) {
+                    std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
+                  });
                   throat_colors->Modified();
                   macro_colors->Modified();
                   
                   render_window_->Render();
-                },
-                Qt::QueuedConnection);
+                });
             }
 
             if (
@@ -697,14 +697,14 @@ namespace xpm
             }
           }
 
-          std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/);
-        };
+          QMetaObject::invokeMethod(this,
+            [this, t2] {
+              UpdateStatus(fmt::format("done {}s", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/));
+            });
+        });
         
-        std::thread t{action};
-        t.detach();
+        
 
-        // auto lul = std::async(std::launch::async, action);
-        
 
         // {
         //   auto ptr = dc_context_.saved_replacement_indices.data();
