@@ -568,7 +568,7 @@ namespace dpl::qt::property_editor
       return 2;
     }
 
-    QModelIndex index(int column, const PropertyBase* data) const {
+    QModelIndex index(PropertyBase* data, int column = 0) const {
       return createIndex(data->VisibleIndex(), column, data);
     }
 

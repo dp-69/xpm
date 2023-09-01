@@ -4,18 +4,21 @@
 #include "functions.h"
 
 #include <dpl/units.hpp>
-#include <dpl/hypre/mpi_module.hpp>
 #include <dpl/hypre/InputDeprec.hpp>
+#include <dpl/hypre/mpi_module.hpp>
+#include <dpl/qt/layout.hpp>
 #include <dpl/qt/property_editor/PropertyItemsBase.hpp>
 #include <dpl/qt/property_editor/QPropertyTreeView.hpp>
+#include <dpl/vtk/ImageDataGlyphMapper.hpp>
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
-#include <dpl/vtk/ImageDataGlyphMapper.hpp>
   
 // #include <QWidget>
 #include <QMainWindow>
 #include <QSplitter>
-
+#include <QChartView>
+#include <QLineSeries>
+#include <QValueAxis>
 
 #if (VTK_MAJOR_VERSION == 8)
   #include <QVTKOpenGLWidget.h>
@@ -129,23 +132,18 @@ namespace xpm
 
     std::string status_ = "<nothing>";
     dpl::qt::property_editor::PropertyItem* status_property_item_;
+
+    QLineSeries* sweep_series_;
     
     void UpdateStatus(std::string text) {
       status_ = std::move(text);
-      auto idx = tree_view_->model()->index(1, status_property_item_);
+      auto idx = tree_view_->model()->index(status_property_item_, 1);
       tree_view_->model()->dataChanged(idx, idx);
     }
 
     std::future<void> invasion_future_;
     
 
-
-    // static auto CreateNetworkAssembly(const pore_network_model& pnm, vtkLookupTable* lut) {
-    //   auto net = vtkSmartPointer<vtkAssembly>::New();
-    //   net->AddPart(CreateNodeActor(pnm, lut, [&](pnm_idx i) { return pnm.node_[attribs::r_ins][i]; }));
-    //   net->AddPart(CreateThroatActor(pnm, lut, [&](pnm_idx i) { return pnm.throat_[attribs::r_ins][i]; }));
-    //   return net;
-    // }
 
 
 
@@ -213,15 +211,12 @@ namespace xpm
       renderer_->SetBackground(v3d{1});
 
 
-      
-
       {
         tree_view_ = new QPropertyTreeView;
 
         auto* model = tree_view_->model();
-        // auto* cat_vis = model->AddCategory("Visualisation");
         
-        model->AddItem(/*cat_vis, */
+        model->AddItem(
           dpl::qt::property_editor::ItemFunctor<bool>{
             "Edges",
             [this] {
@@ -236,22 +231,69 @@ namespace xpm
             }
           });
 
-        status_property_item_ = model->AddItem(/*cat_vis, */
-          dpl::qt::property_editor::ItemFunctor<std::string>{
-            "Status",
-            [this] { return status_; }
-          });
-        
-        auto* hsplit = new QSplitter{Qt::Horizontal};
-        hsplit->addWidget(tree_view_);
-        hsplit->addWidget(qvtk_widget_);
-        hsplit->setStretchFactor(0, 0);
-        hsplit->setStretchFactor(1, 1);
-      
-        setCentralWidget(hsplit);
-      }
+        status_property_item_ = model->AddItem(
+          dpl::qt::property_editor::ItemFunctor<std::string>{"Status", [this] { return status_; }});
 
-      // setCentralWidget(qvtk_widget_);
+
+
+
+        auto sweep_chart_view_ = new QChartView;
+        sweep_chart_view_->setRenderHint(QPainter::Antialiasing);
+        sweep_chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+
+        sweep_series_ = new QLineSeries;
+
+        auto sweep_chart_ = new QChart;
+        // sweep_chart_->legend()->hide();
+        sweep_chart_->addSeries(sweep_series_);
+        sweep_chart_->createDefaultAxes();
+
+        sweep_chart_view_->setChart(sweep_chart_);
+
+        auto* axis_x = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Horizontal)[0]);
+        // axis_x->setLabelsFont(scaled_font);
+        axis_x->setLabelFormat("%.2f");
+        axis_x->setTitleText("Water saturation");
+        // axis_x->setTitleFont(font);
+        axis_x->setRange(0, 1);
+        // axis_x->setLabelsBrush(black_brush);
+        // axis_x->setTitleBrush(black_brush);
+
+
+        auto* axis_y = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Vertical)[0]);
+        // axis_y->setLabelsFont(scaled_font);
+        axis_y->setLabelFormat("%.0f");
+        axis_y->setTitleText("Capillary pressure");
+        // axis_y->setTitleFont(font);
+        axis_y->setRange(0, 10000);
+        // axis_y->setLabelsBrush(black_brush);
+        // axis_y->setTitleBrush(black_brush);
+
+        sweep_series_->clear();
+        // sweep_series_->append(1, 0);
+
+        // sweep_series_->append(0.95, 100);
+        // sweep_series_->append(0.90, 500);
+        // sweep_series_->append(0.85, 1000);
+        // sweep_series_->append(0.80, 5000);
+
+        sweep_series_->setPointsVisible(true);
+
+
+
+        using namespace dpl::qt::layout;
+
+
+
+        setCentralWidget(
+          splitter{dir::horizontal}
+          << (
+            splitter{dir::vertical}
+            << tree_view_ << stretch{1}
+            << sweep_chart_view_ << stretch{0}) << stretch{0}
+          << qvtk_widget_ << stretch{1}
+        );
+      }
     }
 
 
@@ -586,8 +628,9 @@ namespace xpm
         std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
 
         
-        std::cout << "full decremental connectivity (async)...\n\n";
+        std::cout << "full decremental connectivity... (async)\n\n";
 
+        
 
         invasion_future_ = std::async(std::launch::async, [this, macro_colors, throat_colors] {
           auto t2 = clock::now();
@@ -641,19 +684,32 @@ namespace xpm
           // }
 
 
+          std::future<void> update_future;
+
           auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
 
           for (idx1d_t displacement_idx = 0; displacement_idx < index_count; ++displacement_idx) {
-            if (displacement_idx%((index_count - 1)/40) == 0) {
+            if (displacement_idx % ((index_count - 1)/200) == 0)
+              QMetaObject::invokeMethod(this, [=, this] {
+                auto progress = 1.*displacement_idx/index_count;  // NOLINT(cppcoreguidelines-narrowing-conversions)
+                  
+                if (displacement_idx % ((index_count - 1)/200*10) == 0)
+                  sweep_series_->append(1 - progress, 10000*progress);
+                
+                UpdateStatus(fmt::format("{:.1f} %", 100.*displacement_idx/index_count));
+              });
 
-              {
+            if (displacement_idx % ((index_count - 1)/40) == 0) {
+              update_future = std::async(std::launch::async, [this, &processed, macro_colors, throat_colors] {
                 dpl::sfor<6>([&](auto face_idx) {
                   dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
                   idx1d_t i = 0;
                   for (auto idx1d : face.GetIndices()) {
-                    face.GetColorArray()->SetTypedComponent(i++, 0, 
+                    face.GetColorArray()->SetTypedComponent(i++, 0,
                       pni_.connected(voxel_idx{idx1d})
-                        ? /*pressure[pni_.net(v_idx)]*/ processed[pni_.net(voxel_idx{idx1d})] ? 0.5 : 0
+                        ? /*pressure[pni_.net(v_idx)]*/ processed[pni_.net(voxel_idx{idx1d})]
+                                                          ? 0.5
+                                                          : 0
                         : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
                     );
                   }
@@ -669,31 +725,32 @@ namespace xpm
                     if (pn_.inner_node(r))
                       throat_colors->SetTypedComponent(i++, 0,
                         processed[pni_.net(macro_idx{l})] &&
-                        processed[pni_.net(macro_idx{r})] ? 0.5 : 0);
+                        processed[pni_.net(macro_idx{r})]
+                          ? 0.5
+                          : 0);
                 }
-              }
 
 
-              QMetaObject::invokeMethod(this,
-                [=, this] {
-                  UpdateStatus(fmt::format("{:.1f} %", 100.*displacement_idx/index_count));
+                QMetaObject::invokeMethod(this,
+                  [this, macro_colors, throat_colors] {
+                    dpl::sfor<6>([&](auto face_idx) {
+                      std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
+                    });
+                    throat_colors->Modified();
+                    macro_colors->Modified();
 
-                  dpl::sfor<6>([&](auto face_idx) {
-                    std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
+                    render_window_->Render();
                   });
-                  throat_colors->Modified();
-                  macro_colors->Modified();
-                  
-                  render_window_->Render();
-                });
+              });
             }
 
-            if (
-              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(indices[displacement_idx]))) ==
-              et_algo::get_header(outlet_entry)) {
-              dc_context_.adjacent_edges_remove(indices[displacement_idx], dc_graph_);
+            if (auto idx = indices[displacement_idx];
+              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(idx))) ==
+              et_algo::get_header(outlet_entry))
+            {
+              dc_context_.adjacent_edges_remove(idx, dc_graph_);
 
-              processed[indices[displacement_idx]] = true;
+              processed[idx] = true;
             }
           }
 

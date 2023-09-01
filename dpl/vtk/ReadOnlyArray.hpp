@@ -52,7 +52,7 @@ namespace dpl::vtk
     
     auto& GetFunctor() { return *func_; }
     
-    static vtkStandardNewMacro(ReadOnlyArray)
+    static auto* New() { VTK_STANDARD_NEW_BODY(ReadOnlyArray) }
     vtkAbstractTemplateTypeMacro(ReadOnlyArray, BaseType)
     
     ValueType GetValue(vtkIdType) const { throw std::logic_error("not implemented"); }

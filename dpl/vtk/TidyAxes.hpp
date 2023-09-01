@@ -41,7 +41,9 @@
 #include <vtkTextProperty.h>
 #include <vtkViewport.h>
 
-#ifndef __cpp_lib_format
+#ifdef __cpp_lib_format
+  #include <format>
+#else
   #include <boost/format.hpp>
 #endif
 

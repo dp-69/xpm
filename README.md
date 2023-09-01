@@ -1,6 +1,7 @@
 Extensive Pore Modelling (xpm)
 ===
 
+<!-- 
 ## Downloads
 
 The latest release can be found at
@@ -9,10 +10,7 @@ The latest release can be found at
 |-------------------------|----------------|
 | Windows ZIP (portable)  | *coming soon*  |
 
-
-
-
-To run xpm, unpack a zip archive and run the executable `xpm.exe`.
+To run xpm, unpack a zip archive and run the executable `xpm.exe`. -->
 
 
 ## Build instructions
@@ -20,7 +18,7 @@ To run xpm, unpack a zip archive and run the executable `xpm.exe`.
 
 #### Windows
 
-All commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
+All commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute.
 
 - Installing MPI
 
@@ -31,7 +29,7 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 > git clone https://github.com/microsoft/vcpkg
 > cd vcpkg
 > bootstrap-vcpkg.bat
-> vcpkg.exe install vtk[qt]:x64-windows hypre:x64-windows boost-interprocess:x64-windows boost-iostreams:x64-windows boost-graph:x64-windows fmt:x64-windows --overlay-ports=ports-xpm
+> vcpkg.exe install vtk[qt]:x64-windows qtcharts:x64-windows hypre:x64-windows boost-interprocess:x64-windows boost-iostreams:x64-windows boost-graph:x64-windows fmt:x64-windows --overlay-ports=ports-xpm --clean-after-build
 ```
 
 - Step 2 - xpm compilation
@@ -50,7 +48,7 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 
 #### Ubuntu
 
-The following instructions assume that vcpkg's repository will be cloned into the user's home folder (`cd ~`), and that all commands are issued from a terminal. Note that Step 1 may take at least an hour to execute and occupy around 100 GB of free storage.
+The following instructions assume that vcpkg's repository will be cloned into the user's home folder (`cd ~`), and that all commands are issued from a terminal. Note that Step 1 may take at least an hour to execute.
 
 - Required Ubuntu packages (install with `sudo apt install`)
 
@@ -74,7 +72,7 @@ openmpi-bin
 > git clone https://github.com/microsoft/vcpkg
 > cd vcpkg
 > ./bootstrap-vcpkg.sh
-> ./vcpkg install vtk[qt] hypre boost-interprocess boost-iostreams boost-graph fmt --clean-after-build
+> ./vcpkg install vtk[qt] qtcharts hypre boost-interprocess boost-iostreams boost-graph fmt --overlay-ports=ports-xpm --clean-after-build
 ```
 
 - Step 2 - xpm compilation
@@ -96,17 +94,15 @@ openmpi-bin
 
 The xpm project's research results are a copyright of the respective members and associates.
 
-### Heriot-Watt University, UK
-[Dmytro Petrovskyy](https://www.linkedin.com/in/dmytro-petrovskyy/)<br/>
-Julien Maes<br/>
-Hannah Menke<br/>
-Kamaljit Singh<br/>
+[Dmytro Petrovskyy](https://www.linkedin.com/in/dmytro-petrovskyy/) <sup>1</sup><br/>
+Julien Maes <sup>2</sup><br/>
+Hannah Menke <sup>2</sup><br/>
+Kamaljit Singh <sup>2</sup><br/>
 
-### Ghent University, Belgium
-Tom Bultreys<br/>
+<sup>1</sup> Ivano-Frankivsk, Ukraine<br/>
+<sup>2</sup> Heriot-Watt University, Edinburgh, UK
 
-
-
+*Tom Bultreys (Ghent University, Belgium) is thanked for their advisory in multi-scale pore-network modelling.*
 
 ## License
 

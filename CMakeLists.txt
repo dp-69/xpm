@@ -14,14 +14,14 @@ if(MSVC)
   #set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /MANIFEST:NO")
 endif()
 
-find_package(Qt6 COMPONENTS Core Gui Widgets OpenGLWidgets)
+find_package(Qt6 COMPONENTS Core Gui Widgets OpenGLWidgets Charts)
 
 if(Qt6_FOUND)
   qt_standard_project_setup()
   message("Qt6_DIR: " ${Qt6_DIR})
   message("Qt6_VERSION: " ${Qt6_VERSION})
 else()
-  find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED) #Charts
+  find_package(Qt5 COMPONENTS Core Gui Widgets Charts REQUIRED) #Charts
   message("Qt5_DIR: " ${Qt5_DIR})
   message("Qt5_VERSION: " ${Qt5_VERSION})
 endif()
@@ -79,7 +79,7 @@ endif()
 set_target_properties(pnextract PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pnextract")
 
 if(Qt6_FOUND)
-  target_link_libraries(xpm PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets)
+  target_link_libraries(xpm PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets Qt6::Charts)
 
   if(WIN32)
     add_custom_command(
@@ -97,7 +97,7 @@ if(Qt6_FOUND)
     )
   endif()
 else()
-  target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets) # Qt5::Charts
+  target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Charts)
 endif()
 
 
