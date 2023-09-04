@@ -39,6 +39,100 @@
 
 namespace dpl
 {
+  template <std::integral T, typename Tag = void>
+  struct strong_integer
+  {
+    using value_type = T;
+
+    value_type value;
+
+    constexpr explicit strong_integer(value_type v = 0) : value{v} {}
+    constexpr explicit operator value_type() const { return value; }
+
+    constexpr auto& operator++() {
+      ++value;
+      return *this;
+    }
+
+    auto operator++(int) {
+      auto temp = *this;
+      ++*this;
+      return temp;
+    }
+
+    constexpr auto& operator*() const { return value; }
+    auto& operator*() { return value; }
+
+    constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
+    constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
+    constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
+
+    constexpr auto operator+(std::integral auto rhs) const { return strong_integer{value + rhs}; }
+    constexpr auto operator-(std::integral auto rhs) const { return strong_integer{value - rhs}; }
+    constexpr auto operator*(std::integral auto rhs) const { return strong_integer{value * rhs}; }
+
+    template <std::integral V>
+    constexpr auto operator+(const strong_integer<V, Tag>& rhs) const { return strong_integer{value + *rhs}; }
+
+    template <std::integral V>
+    constexpr auto operator-(const strong_integer<V, Tag>& rhs) const { return strong_integer{value - *rhs}; }
+
+    friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
+    friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
+  };
+
+  template <typename>
+  struct strong_traits {};
+
+  template <std::integral T>
+  struct strong_traits<T> {
+    static auto& get(const T& x) { return x; }
+    static auto& get(T& x) { return x; }
+  };
+
+  template <std::integral T, typename Tag>
+  struct strong_traits<strong_integer<T, Tag>> {
+    static auto& get(const strong_integer<T, Tag>& x) { return *x; }
+    static auto& get(strong_integer<T, Tag>& x) { return *x; }
+  };
+
+
+
+  template<typename KeyTag, typename ValueTag, typename ValueType>
+  class strong_array
+  {
+    using strong_type = strong_integer<ValueType, ValueTag>;
+
+    std::unique_ptr<strong_type[]> array_;
+
+  public:
+    strong_array() = default;
+
+    explicit strong_array(std::size_t size)
+      : array_{std::make_unique<strong_type[]>(size)} {}
+
+    void resize(std::size_t size) {
+      array_ = std::make_unique<strong_type[]>(size);
+    }
+
+    template<std::integral T>
+    auto& operator[](strong_integer<T, KeyTag> index) {
+      return array_[*index];
+    }
+    
+    template<std::integral T>
+    auto& operator[](strong_integer<T, KeyTag> index) const {
+      return array_[*index];
+    }
+  };
+
+
+
+
+
+
+
+
   // constexpr std::size_t operator "" _uz (std::size_t x) { return x; }
 
   template <typename... T>

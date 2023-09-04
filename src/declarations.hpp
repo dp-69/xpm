@@ -7,6 +7,7 @@
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 
+#include <numbers>
 #include <iostream>
 #include <fstream>
 
@@ -25,33 +26,62 @@ struct fmt::formatter<std::filesystem::path>: formatter<std::string_view>
 
 namespace xpm
 {
-  template <std::integral T, typename /*Tag*/ = void>
-  struct strong_integer
+  namespace hydraulic_properties
   {
-    using value_type = T;
+    struct equilateral_triangle_properties
+    {
+      // struct shape
+      // {
+      //   static constexpr double area(double r_ins = 1) {
+      //     return 5.19615242271*r_ins*r_ins;
+      //   }
+      // };
 
-    value_type value;
+      static double area(double r_ins = 1) {
+        return 5.19615242271*r_ins*r_ins;
+      }
 
-    constexpr strong_integer(value_type v = 0) : value{v} {}
-    constexpr explicit operator value_type() const { return value; }
+      // k*G, k - coefficient, G - shape factor
+      static double conductance(double area = 1, double viscosity = 1) {
+        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
+      }
 
-    constexpr auto& operator++() {
-      ++value;
-      return *this;
-    }
+      /**
+       * \brief checks existence of wetting films
+       */
+      static bool has_films(double theta) {
+        return theta < std::numbers::pi/3;
+      }
 
-    constexpr auto& operator*() const { return value; }
-    auto& operator*() { return value; }
+      static double r_cap_piston_with_films(double theta, double r_ins = 1) {      
+        return r_ins/(std::cos(theta) + 0.759835685652*std::sqrt(1.04719755120 - theta + std::cos(theta)*std::sin(theta)));          
+      }
 
-    constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
-    constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
-    constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
+      static double area_of_films(double theta, double r_cap = 1) {
+        return r_cap*r_cap*(
+          -0.5435164422364771 + 3.*theta + 1.7320508075688772*std::cos(2.*theta) +
+          1.7320508075688772*std::sin(0.5235987755982988 - 2.*theta)
+        );
+      }
+    };
+  }
 
-    constexpr strong_integer operator+(std::integral auto rhs) const { return {value + rhs}; }
 
-    friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
-    friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
-  };
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
 
   using v3i = dpl::vector3i;
   using v3d = dpl::vector3d;
@@ -63,15 +93,21 @@ namespace xpm
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
   struct voxel_t {};
-  using voxel_idx = strong_integer<idx1d_t, voxel_t>;
+  using voxel_idx = dpl::strong_integer<idx1d_t, voxel_t>;
 
   struct macro_t {};
-  using macro_idx = strong_integer<idx1d_t, macro_t>;
+  using macro_idx = dpl::strong_integer<idx1d_t, macro_t>;
+
+  struct total_t {};
+  using total_idx = dpl::strong_integer<idx1d_t, total_t>;
+
+  struct net_t {};
+  using net_idx = dpl::strong_integer<idx1d_t, net_t>;
 
   namespace voxel_property
   {
     struct phase_t {};
-    using phase = strong_integer<std::uint8_t, phase_t>;
+    using phase = dpl::strong_integer<std::uint8_t, phase_t>;
 
     /**
      * \brief
@@ -79,36 +115,21 @@ namespace xpm
      *   >=0 : macro node of a void voxel
      */
     struct velem_t {};
-    struct velem : strong_integer<std::int32_t, velem_t>
+    struct velem : dpl::strong_integer<std::int32_t, velem_t>
     {
-      constexpr operator macro_idx() const { return value; }
+      constexpr operator macro_idx() const { return macro_idx{value}; }
     };
   }
 
   namespace presets
   {
-    static inline constexpr voxel_property::phase pore = {0};
-    static inline constexpr voxel_property::phase solid = {1};
-    static inline constexpr voxel_property::phase microporous = {2};
+    static inline constexpr auto pore = voxel_property::phase{0};
+    static inline constexpr auto solid = voxel_property::phase{1};
+    static inline constexpr auto microporous = voxel_property::phase{2};
 
     static constexpr auto darcy_to_m2 = 9.869233e-13;
   }
 
-  namespace geometric_properties
-  {
-    struct equilateral_triangle_properties
-    {
-      static constexpr double area(double r_ins = 1) {
-        return 5.19615242271*r_ins*r_ins;
-      }
-
-      // k * G, k - coefficient, G - shape factor
-      static constexpr double conductance(double area = 1, double viscosity = 1) {
-        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
-      }
-    };
-  }
-  
   namespace attribs {
     def_static_key(pos)
     def_static_key(r_ins)
@@ -118,16 +139,12 @@ namespace xpm
     def_static_key(length1)
   }
 
-  
-
   using disjoint_sets = boost::disjoint_sets_with_storage<
     boost::typed_identity_property_map<idx1d_t>,
     boost::typed_identity_property_map<idx1d_t>
   >;
 
-  
-
-  template <typename R> requires std::integral<R>
+  template <typename R>// requires std::integral<R>
   class map_idx3_t
   {
     R x_, xy_;
@@ -153,7 +170,7 @@ namespace xpm
   };
 
   inline auto idx_mapper(idx3d_t dim) {
-    return map_idx3_t<idx1d_t>{dim};
+    return map_idx3_t<voxel_idx>{dim};
   }
   
   namespace parse

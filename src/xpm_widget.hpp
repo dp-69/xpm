@@ -364,7 +364,6 @@ namespace xpm
     void ComputePressure() {
       using clock = std::chrono::high_resolution_clock;
       using seconds = std::chrono::seconds;
-      using minutes = std::chrono::minutes;
 
       startup_settings startup;
 
@@ -423,7 +422,6 @@ namespace xpm
           << (pn_.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
       #endif
 
-
       #ifdef _WIN32
         pn_.connectivity_flow_summary(startup.solver.tolerance, startup.solver.max_iterations);
       #else
@@ -445,26 +443,15 @@ namespace xpm
         InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range));
 
         img_.eval_microporous();
-
-        // #ifdef XPM_DEBUG_OUTPUT
-        //   std::cout << "image loaded\n\n";
-        // #endif
       }
-
       
       pni_.init(&pn_, &img_);
 
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout << "connectivity (isolated components)...";
-      #endif
+      std::cout << "connectivity (isolated components)...";
 
       pni_.evaluate_isolated();
 
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout << " done\n\n";
-      #endif
-
-
+      std::cout << " done\n\n";
 
       using namespace presets;
 
@@ -528,14 +515,6 @@ namespace xpm
         
         cout << " done " << duration_cast<std::chrono::seconds>(stop - start).count() << "s\n\n";
 
-
-
-
-
-        // auto [decomposed_pressure, out_residual, out_iters] = dpl::hypre::mpi::load_values(nrows);
-        // residual = out_residual;
-        // iters = out_iters;
-
         {
           std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
           std::tie(decomposed_pressure, residual, iters) = dpl::hypre::mpi::load_values(nrows);
@@ -554,9 +533,6 @@ namespace xpm
           std::cout << "pressure cached\n\n";
         }
       }
-
-
-
 
       vtkFloatArray* macro_colors = nullptr;
       vtkFloatArray* throat_colors = nullptr;
@@ -644,7 +620,7 @@ namespace xpm
           {
             auto* pos_ptr = pos.get();
           
-            for (macro_idx i = 0; i < pn_.node_count(); ++i)
+            for (macro_idx i{0}; i < pn_.node_count(); ++i)
               if (pni_.connected(i))
                 *pos_ptr++ = pn_.node_[attribs::pos][*i];
           
@@ -707,7 +683,7 @@ namespace xpm
                   for (auto idx1d : face.GetIndices()) {
                     face.GetColorArray()->SetTypedComponent(i++, 0,
                       pni_.connected(voxel_idx{idx1d})
-                        ? /*pressure[pni_.net(v_idx)]*/ processed[pni_.net(voxel_idx{idx1d})]
+                        ? /*pressure[pni_.net(v_idx)]*/ processed[*pni_.net(voxel_idx{idx1d})]
                                                           ? 0.5
                                                           : 0
                         : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
@@ -716,7 +692,7 @@ namespace xpm
                 });
 
                 for (idx1d_t i = 0; i < pn_.node_count(); ++i)
-                  macro_colors->SetTypedComponent(i, 0, processed[pni_.net(macro_idx{i})] ? 0.5 : 0);
+                  macro_colors->SetTypedComponent(i, 0, processed[*pni_.net(macro_idx{i})] ? 0.5 : 0);
 
                 {
                   std::size_t i = 0;
@@ -724,8 +700,8 @@ namespace xpm
                   for (auto [l, r] : pn_.throat_.range(attribs::adj))
                     if (pn_.inner_node(r))
                       throat_colors->SetTypedComponent(i++, 0,
-                        processed[pni_.net(macro_idx{l})] &&
-                        processed[pni_.net(macro_idx{r})]
+                        processed[*pni_.net(macro_idx{l})] &&
+                        processed[*pni_.net(macro_idx{r})]
                           ? 0.5
                           : 0);
                 }

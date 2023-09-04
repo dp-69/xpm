@@ -47,11 +47,9 @@ message("VTK_VERSION: " ${VTK_VERSION})
 
 
 add_executable(xpm # WIN32
-  "xpm_widget.hpp"  
-
-  "main.cpp"
-  
-  "functions.cpp"
+  "src/xpm_widget.hpp"  
+  "src/main.cpp"
+  "src/functions.cpp"
   
   "dpl/qt/property_editor/Editors.hpp"
   "dpl/qt/property_editor/PropertyEntities.hpp"

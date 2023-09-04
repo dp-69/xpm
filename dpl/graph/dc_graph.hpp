@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "../general.hpp"
+
 namespace dpl::graph::internal
 {
   template<typename Ptr>
@@ -227,12 +229,14 @@ namespace dpl::graph
 
 
 
-
+  template<typename T = std::size_t>
   class graph_generator
   {
     dc_graph g_;
     std::unique_ptr<std::size_t[]> shift_;
     std::size_t edge_count_ = 0;
+
+    using traits = strong_traits<T>;
 
   public:
     explicit graph_generator(std::size_t vertex_count)
@@ -242,9 +246,9 @@ namespace dpl::graph
       std::fill_n(shift_.get(), vertex_count + 1, 0);
     }
 
-    void reserve(std::size_t l, std::size_t r) {
-      ++shift_[l + 1]; 
-      ++shift_[r + 1];
+    void reserve(T l, T r) {
+      ++shift_[traits::get(l) + 1]; 
+      ++shift_[traits::get(r) + 1];
       edge_count_ += 1;
     }
 
@@ -257,12 +261,12 @@ namespace dpl::graph
       g_.allocate_edges(edge_count_);
     }
 
-    void set(std::size_t l, std::size_t r) {
+    void set(T l, T r) {
       set_directed_edges_pair(
-        g_.get_vertex(l),
-        g_.get_vertex(r),
-        g_.get_directed_edge(shift_[l]++),
-        g_.get_directed_edge(shift_[r]++));
+        g_.get_vertex(traits::get(l)),
+        g_.get_vertex(traits::get(r)),
+        g_.get_directed_edge(shift_[traits::get(l)]++),
+        g_.get_directed_edge(shift_[traits::get(r)]++));
     }
 
     auto acquire() {
