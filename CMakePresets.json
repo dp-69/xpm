@@ -25,6 +25,13 @@
     },
     {
       "inherits": "win-default",
+      "name": "win-relwdi",
+      "displayName": "RelWithDebInfo",
+      "description": "Windows host, debug build, ninja generator.",
+      "environment": { "BUILD_TYPE" : "RelWithDebInfo" }
+    },
+    {
+      "inherits": "win-default",
       "name": "win-deb",
       "displayName": "Debug",
       "description": "Windows host, debug build, ninja generator.",
@@ -54,6 +61,13 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "configurePreset": "win-rel",
       "name": "win-rel",
+      "displayName": "xpm",
+      "targets": ["xpm", "pnextract"]
+    },
+    {
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "configurePreset": "win-relwdi",
+      "name": "win-relwdi",
       "displayName": "xpm",
       "targets": ["xpm", "pnextract"]
     },

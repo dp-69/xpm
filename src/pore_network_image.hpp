@@ -620,7 +620,7 @@ R"(image voxels
      *   .size() = pn_->node_count_ + img_->size
      *   maps total() index to compressed effective (flowing) index
      */
-    dpl::strong_array<total_t, net_t, idx1d_t> net_map_;
+    dpl::strong_array<total_tag, net_tag, idx1d_t> net_map_;
 
     /**
      * \brief effective porosity elements count
@@ -639,6 +639,8 @@ R"(image voxels
     // idx1d_t inlet() const { return pn_->node_count() + img_->size_microporous; }
     // idx1d_t outlet() const { return inlet() + 1; }
 
+    auto connected_count() const { return connected_count_; }
+
     auto total(macro_idx i) const { return total_idx{*i}; }
     auto total(voxel_idx i) const { return total_idx{pn_->node_count() + *i}; }
 
@@ -650,7 +652,7 @@ R"(image voxels
     }
 
     /**
-     * \brief if connected, the voxel must be microporous
+     * \brief if connected, the voxel must be microporous, i.e. the latter evaluation is redundant
      */
     bool connected(voxel_idx i) const {
       return net(i) != isolated_idx_;
@@ -888,7 +890,7 @@ R"(image voxels
       builder.allocate_rows(*connected_count_);
       
       for (auto [l, r] : pn_->throat_.range(adj))
-        if (connected(l) && pn_->inner_node(r)) // macro-macro
+        if (pn_->inner_node(r) && connected(l)) // macro-macro
           builder.reserve_connection(
             block[*net(l)],
             block[*net(r)]);

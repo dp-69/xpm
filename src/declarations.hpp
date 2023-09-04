@@ -11,17 +11,15 @@
 #include <iostream>
 #include <fstream>
 
-
 #include <fmt/format.h>
 
 template <>
-struct fmt::formatter<std::filesystem::path>: formatter<std::string_view>
+struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
 {
-    template <typename FormatContext>
-    auto format(const std::filesystem::path& path, FormatContext& ctx)
-    {
-        return formatter<std::string_view>::format(path.string(), ctx);
-    }
+  template <typename FormatContext>
+  auto format(const std::filesystem::path& path, FormatContext& ctx) {
+    return formatter<std::string_view>::format(path.string(), ctx);
+  }
 };
 
 namespace xpm
@@ -92,17 +90,17 @@ namespace xpm
   using idx1d_t = int32_t;
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
-  struct voxel_t {};
-  using voxel_idx = dpl::strong_integer<idx1d_t, voxel_t>;
+  struct voxel_tag {};
+  using voxel_idx = dpl::strong_integer<idx1d_t, voxel_tag>;
 
-  struct macro_t {};
-  using macro_idx = dpl::strong_integer<idx1d_t, macro_t>;
+  struct macro_tag {};
+  using macro_idx = dpl::strong_integer<idx1d_t, macro_tag>;
 
-  struct total_t {};
-  using total_idx = dpl::strong_integer<idx1d_t, total_t>;
+  struct total_tag {};
+  using total_idx = dpl::strong_integer<idx1d_t, total_tag>;
 
-  struct net_t {};
-  using net_idx = dpl::strong_integer<idx1d_t, net_t>;
+  struct net_tag {};
+  using net_idx = dpl::strong_integer<idx1d_t, net_tag>;
 
   namespace voxel_property
   {

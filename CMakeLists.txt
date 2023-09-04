@@ -149,6 +149,8 @@ find_package(HYPRE REQUIRED)
 target_link_libraries(xpm PRIVATE HYPRE::HYPRE)
 
 if(NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)
+  file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+
   file(COPY_FILE
     ${CMAKE_CURRENT_SOURCE_DIR}/config/config.json
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)

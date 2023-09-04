@@ -97,34 +97,101 @@ namespace dpl
   };
 
 
+  template <typename...>
+  class strong_array {};
 
-  template<typename KeyTag, typename ValueTag, typename ValueType>
-  class strong_array
+  template <typename KeyTag, typename ValueType>
+  class strong_array<KeyTag, ValueType>
   {
-    using strong_type = strong_integer<ValueType, ValueTag>;
-
-    std::unique_ptr<strong_type[]> array_;
+    std::unique_ptr<ValueType[]> array_;
 
   public:
     strong_array() = default;
 
     explicit strong_array(std::size_t size)
-      : array_{std::make_unique<strong_type[]>(size)} {}
+      : array_{std::make_unique<ValueType[]>(size)} {}
 
     void resize(std::size_t size) {
-      array_ = std::make_unique<strong_type[]>(size);
+      array_ = std::make_unique<ValueType[]>(size);
     }
 
-    template<std::integral T>
+    template <std::integral T>
     auto& operator[](strong_integer<T, KeyTag> index) {
       return array_[*index];
     }
-    
-    template<std::integral T>
+
+    template <std::integral T>
     auto& operator[](strong_integer<T, KeyTag> index) const {
       return array_[*index];
     }
   };
+
+  template <typename KeyTag, typename ValueTag, typename ValueType>
+  class strong_array<KeyTag, ValueTag, ValueType> : public strong_array<KeyTag, strong_integer<ValueType, ValueTag>> {};
+
+  // template<typename KeyTag, typename ValueType>
+  // class strong_array_impl_
+  // {
+  //   std::unique_ptr<ValueType[]> array_;
+  //
+  // public:
+  //   strong_array_impl_() = default;
+  //
+  //   explicit strong_array_impl_(std::size_t size)
+  //     : array_{std::make_unique<ValueType[]>(size)} {}
+  //
+  //   void resize(std::size_t size) {
+  //     array_ = std::make_unique<ValueType[]>(size);
+  //   }
+  //
+  //   template<std::integral T>
+  //   auto& operator[](strong_integer<T, KeyTag> index) {
+  //     return array_[*index];
+  //   }
+  //   
+  //   template<std::integral T>
+  //   auto& operator[](strong_integer<T, KeyTag> index) const {
+  //     return array_[*index];
+  //   }
+  // };
+  //
+  // template<typename KeyTag, typename ValueType>
+  // using strong_array = strong_array_impl_<KeyTag, ValueType>;
+  //
+  // template<typename KeyTag, typename ValueTag, typename ValueType>
+  // using strong_array = strong_array_impl_<KeyTag, strong_integer<ValueType, ValueTag>>;
+
+
+
+  // template<typename KeyTag, typename ValueTag, typename ValueType>
+  // class strong_array<KeyTag, strong_integer<ValueType, ValueTag>>
+  // {
+  // //   using strong_type = strong_integer<ValueType, ValueTag>;
+  // //
+  // //   std::unique_ptr<strong_type[]> array_;
+  // //
+  // // public:
+  // //   strong_array() = default;
+  // //
+  // //   explicit strong_array(std::size_t size)
+  // //     : array_{std::make_unique<strong_type[]>(size)} {}
+  // //
+  // //   void resize(std::size_t size) {
+  // //     array_ = std::make_unique<strong_type[]>(size);
+  // //   }
+  // //
+  // //   template<std::integral T>
+  // //   auto& operator[](strong_integer<T, KeyTag> index) {
+  // //     return array_[*index];
+  // //   }
+  // //   
+  // //   template<std::integral T>
+  // //   auto& operator[](strong_integer<T, KeyTag> index) const {
+  // //     return array_[*index];
+  // //   }
+  // };
+
+  
 
 
 

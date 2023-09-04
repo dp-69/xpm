@@ -107,7 +107,7 @@ namespace xpm
     return {actor, color_array};
   }
 
-  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
+  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(const pore_network& pn, vtkLookupTable* lut, const auto& color_map) {
     using namespace attribs;
 
     vtkNew<vtkPolyData> polydata;
@@ -157,18 +157,18 @@ namespace xpm
 
     vtkNew<vtkPoints> points;
 
-    for (size_t i = 0, count = pnm.throat_count(); i < count; ++i)
-      if (auto [l, r] = pnm.throat_[adj][i];
-        /*pnm.inner_node(l) && */pnm.inner_node(r)) {
-        auto& n0_pos = pnm.node_[pos][*l];
+    for (std::size_t i = 0, count = pn.throat_count(); i < count; ++i)
+      if (auto [l, r] = pn.throat_[adj][i];
+        /*pnm.inner_node(l) && */pn.inner_node(r)) {
+        auto& n0_pos = pn.node_[pos][*l];
 
         points->InsertNextPoint(n0_pos);
-        orient_array->InsertNextTuple(angles_for_j_norm(pnm.node_[pos][*r] - n0_pos));
+        orient_array->InsertNextTuple(angles_for_j_norm(pn.node_[pos][*r] - n0_pos));
 
         scale_array->InsertNextTuple(v3d{
-          pnm.throat_[r_ins][i],
-          (pnm.node_[pos][*r] - n0_pos).length(),
-          pnm.throat_[r_ins][i]
+          pn.throat_[r_ins][i],
+          (pn.node_[pos][*r] - n0_pos).length(),
+          pn.throat_[r_ins][i]
         });
 
         color_array->InsertNextTuple1(color_map(i));
@@ -363,7 +363,7 @@ namespace xpm
       algo::init_header(header_b);
 
 
-      size_t iter = 0;
+      std::size_t iter = 0;
 
       auto aIdx = total_size / 2;
       auto bIdx = total_size / 4;

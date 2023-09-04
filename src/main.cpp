@@ -5,6 +5,21 @@
 
 int main(int argc, char* argv[])
 {
+  // {
+  //   using namespace xpm;
+  //
+  //   displ_queue ms;
+  //   ms.insert(displ_elem::macro, 1, 20.);
+  //   ms.insert(displ_elem::macro, 3, 50.);
+  //   ms.insert(displ_elem::macro, 2, 30.);
+  //   ms.insert(displ_elem::macro, 4, 50.);
+  //
+  //   auto first = ms.front();
+  //   ms.pop();
+  //
+  //   int p = 3;
+  // }
+
   // xpm::test::DFS_CHECK();
   // xpm::test::split_join_validity_check_ET_ONLY();
   // xpm::test::split_join_validity_check_ETNTE_ONLY();
