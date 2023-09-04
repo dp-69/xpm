@@ -106,16 +106,8 @@ Kamaljit Singh <sup>2</sup><br/>
 
 ## License
 
-xpm is Free Software released under the 
-[GPLv3](https://www.gnu.org/licenses/gpl.html) license.  It includes 
-[third party libraries](https://bitbucket.org/rapidreservoirmodelling/rrm2/src/main/rrm_3rd_party_libraries.md)
-with other licenses, which we understand to be compatible. An overview of these libraries including
-brief descriptions, the last known URL the code was made available at, the date
-it was retrieved, the license(s) in which the code was made available by their
-authors at the retrieving date, and URL links to publicly available copies of
-such licenses is available
-[here](https://bitbucket.org/rapidreservoirmodelling/rrm2/src/main/rrm_3rd_party_libraries.md).
-Please, check the source code for details on the licenses that apply to each
-piece of software.
+xpm is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
+xpm is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
+You should have received a copy of the GNU General Public License along with xpm. If not, see <http://www.gnu.org/licenses/>.
