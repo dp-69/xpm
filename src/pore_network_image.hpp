@@ -155,7 +155,8 @@ namespace xpm
 
     dpl::soa<
       attribs::pos_t, dpl::vector3d,
-      attribs::r_ins_t, double
+      attribs::r_ins_t, double,
+      attribs::volume_t, double
     > node_;
 
     /**
@@ -169,7 +170,8 @@ namespace xpm
       attribs::r_ins_t, double,
       attribs::length_t, double,
       attribs::length0_t, double,
-      attribs::length1_t, double
+      attribs::length1_t, double,
+      attribs::volume_t, double
     > throat_;
     
 
@@ -320,7 +322,7 @@ namespace xpm
           parse_text(throat2_ptr, throat_[length0][i]); 
           parse_text(throat2_ptr, throat_[length1][i]);
           parse_text(throat2_ptr, throat_[length][i]);
-          // parse_text(throat2_ptr, volume[i]);          //TODO
+          parse_text(throat2_ptr, throat_[volume][i]);
           skip_line(throat2_ptr);
         }  
       }
@@ -335,7 +337,7 @@ namespace xpm
 
         for (idx1d_t i = 0; i < node_count; ++i) {          
           skip_word(node2_ptr);
-          skip_word(node2_ptr); // parse_text(node2_ptr, volume_node[i]); // TODO
+          parse_text(node2_ptr, node_[volume][i]);
           parse_text(node2_ptr, node_[r_ins][i]);
           // parse_text(node2_ptr, shape_factor_node[i]); // TODO
           skip_line(node2_ptr);

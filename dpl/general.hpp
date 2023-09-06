@@ -65,6 +65,7 @@ namespace dpl
 
     constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
     constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
+    constexpr bool operator==(std::integral auto rhs) const { return value == rhs; }
     constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
 
     constexpr auto operator+(std::integral auto rhs) const { return strong_integer{value + rhs}; }

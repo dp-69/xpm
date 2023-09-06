@@ -5,6 +5,41 @@
 
 int main(int argc, char* argv[])
 {
+  // using BoostGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS>;
+  //
+  // BoostGraph g(5);
+  //
+  // add_edge(1, 0, g);
+  // add_edge(2, 0, g);
+  //
+  // auto [iter, end] = out_edges(0, g);
+  // for (; iter != end; ++iter) {
+  //
+  //   
+  //   std::cout << target(*iter, g) << ' ';
+  //   
+  // }
+  //
+  // int k = 3;
+
+  // {
+  //   using namespace std::chrono;
+  //
+  //   auto last = system_clock::now() - seconds{4};
+  //
+  //   if (auto diff = duration_cast<seconds>(system_clock::now() - last); diff < seconds{5})
+  //     std::this_thread::sleep_for(seconds{5} - diff);
+  // }
+
+  // auto diff = std::chrono::system_clock::now() - 
+  // (std::chrono::system_clock::now() - std::chrono::minutes{5});
+  //
+  //
+  //
+  // std::cout << duration_cast<std::chrono::minutes>(diff);
+  //
+  // int  p = 3;
+
   // {
   //   using namespace xpm;
   //

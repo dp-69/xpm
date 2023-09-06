@@ -135,6 +135,7 @@ namespace xpm
     def_static_key(length)
     def_static_key(length0)
     def_static_key(length1)
+    def_static_key(volume)
   }
 
   using disjoint_sets = boost::disjoint_sets_with_storage<

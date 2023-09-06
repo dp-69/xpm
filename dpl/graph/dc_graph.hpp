@@ -202,14 +202,6 @@ namespace dpl::graph
     return e->v1;
   }
 
-  inline void set_directed_edges_pair(vertex* v, vertex* u, directed_edge* vu, directed_edge* uv) {            
-    vu->v1 = u;
-    uv->v1 = v;
-
-    vu->opposite = uv;
-    uv->opposite = vu;
-  }
-
   inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex* v, const dc_graph& g) {
     auto idx = g.get_idx(v);
     return {g.out_edges_begin(idx), g.out_edges_end(idx)};
@@ -221,22 +213,19 @@ namespace dpl::graph
 
   
 
-  // inline auto range(const vertex* u, const dc_graph& g) {
-  //   out_edges()
-  // }
 
 
 
 
 
-  template<typename T = std::size_t>
+  template<typename Index = std::size_t>
   class graph_generator
   {
     dc_graph g_;
     std::unique_ptr<std::size_t[]> shift_;
     std::size_t edge_count_ = 0;
 
-    using traits = strong_traits<T>;
+    using traits = strong_traits<Index>;
 
   public:
     explicit graph_generator(std::size_t vertex_count)
@@ -246,7 +235,7 @@ namespace dpl::graph
       std::fill_n(shift_.get(), vertex_count + 1, 0);
     }
 
-    void reserve(T l, T r) {
+    void reserve(Index l, Index r) {
       ++shift_[traits::get(l) + 1]; 
       ++shift_[traits::get(r) + 1];
       edge_count_ += 1;
@@ -261,8 +250,16 @@ namespace dpl::graph
       g_.allocate_edges(edge_count_);
     }
 
-    void set(T l, T r) {
-      set_directed_edges_pair(
+    void set(Index l, Index r) {
+      auto set_pair = [](vertex* v, vertex* u, directed_edge* vu, directed_edge* uv) {            
+        vu->v1 = u;
+        uv->v1 = v;
+
+        vu->opposite = uv;
+        uv->opposite = vu;
+      };
+
+      set_pair(
         g_.get_vertex(traits::get(l)),
         g_.get_vertex(traits::get(r)),
         g_.get_directed_edge(shift_[traits::get(l)]++),

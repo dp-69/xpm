@@ -54,6 +54,7 @@
 #include <vtkVersionMacros.h>
 
 #include <boost/pending/disjoint_sets.hpp>
+#include <boost/graph/adjacency_list.hpp>
 
 #include <algorithm>
 #include <future>
@@ -84,7 +85,90 @@ namespace xpm
     using QVTKWidgetRef = QVTKOpenGLNativeWidget;
   #endif
 
-  
+
+  //   template<typename Index = std::size_t>
+  // class graph_generator
+  // {
+  //   dc_graph g_;
+  //   std::unique_ptr<std::size_t[]> shift_;
+  //   std::size_t edge_count_ = 0;
+  //
+  //   using traits = strong_traits<Index>;
+  //
+  // public:
+  //   explicit graph_generator(std::size_t vertex_count)
+  //     : g_{vertex_count} {
+  //
+  //     shift_= std::make_unique<std::size_t[]>(vertex_count + 1);
+  //     std::fill_n(shift_.get(), vertex_count + 1, 0);
+  //   }
+  //
+  //   void reserve(Index l, Index r) {
+  //     ++shift_[traits::get(l) + 1]; 
+  //     ++shift_[traits::get(r) + 1];
+  //     edge_count_ += 1;
+  //   }
+  //
+  //   void allocate() {
+  //     for (auto i = 0; i < g_.vertex_count(); ++i) {
+  //       shift_[i + 1] += shift_[i];
+  //       g_.directed_edges_end()[i] = shift_[i + 1];
+  //     }
+  //
+  //     g_.allocate_edges(edge_count_);
+  //   }
+  //
+  //   void set(Index l, Index r) {
+  //     auto set_pair = [](vertex* v, vertex* u, directed_edge* vu, directed_edge* uv) {            
+  //       vu->v1 = u;
+  //       uv->v1 = v;
+  //
+  //       vu->opposite = uv;
+  //       uv->opposite = vu;
+  //     };
+  //
+  //     set_pair(
+  //       g_.get_vertex(traits::get(l)),
+  //       g_.get_vertex(traits::get(r)),
+  //       g_.get_directed_edge(shift_[traits::get(l)]++),
+  //       g_.get_directed_edge(shift_[traits::get(r)]++));
+  //   }
+  //
+  //   auto acquire() {
+  //     return std::move(g_);
+  //   }
+  // };
+
+  // class macro_generator
+  // {
+  //   idx1d_t macro_count_;
+  //   std::unique_ptr<std::size_t[]> shift_;
+  //   std::size_t edge_count_ = 0;
+  //
+  //   using traits = dpl::strong_traits<macro_idx>;
+  //
+  // public:
+  //   explicit macro_generator(idx1d_t macro_count)
+  //     : macro_count_{macro_count}/*: g_{vertex_count}*/ {
+  //
+  //     shift_= std::make_unique<std::size_t[]>(macro_count + 1);
+  //     std::fill_n(shift_.get(), macro_count + 1, 0);
+  //   }
+  //
+  //   void reserve(macro_idx l, macro_idx r) {
+  //     ++shift_[*l + 1]; 
+  //     ++shift_[*r + 1];
+  //     edge_count_ += 1;
+  //   }
+  //
+  //   auto allocate_and_acquire() {
+  //     for (auto i = 0; i < macro_count_; ++i)
+  //       shift_[i + 1] += shift_[i];
+  //
+  //     return std::move(shift_);
+  //   }
+  // };
+
   class XPMWidget : public QMainWindow
   {
   Q_OBJECT
@@ -281,9 +365,10 @@ namespace xpm
         auto* axis_y = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Vertical)[0]);
         // axis_y->setLabelsFont(scaled_font);
         axis_y->setLabelFormat("%.0f");
-        axis_y->setTitleText("Capillary pressure");
+        axis_y->setTitleText("Capillary pressure, Pa");
         // axis_y->setTitleFont(font);
-        axis_y->setRange(0, 10000);
+        
+        axis_y->setRange(0, 400000);
         // axis_y->setLabelsBrush(black_brush);
         // axis_y->setTitleBrush(black_brush);
 
@@ -415,63 +500,102 @@ namespace xpm
       invasion_future_ = std::async(std::launch::async, [this] {
         auto t2 = clock::now();
 
-        auto index_count = dc_graph_.vertex_count() - 1;
-        auto indices = std::make_unique<idx1d_t[]>(index_count);
-        std::iota(indices.get(), indices.get() + index_count, 0);
+        auto theta = 0.0;
 
-        
-        auto pos = std::make_unique<v3d[]>(index_count);
-        {
-          auto* pos_ptr = pos.get();
-        
-          for (macro_idx i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i))
-              *pos_ptr++ = pn_.node_[attribs::pos][*i];
-        
-          idx3d_t ijk;
-          auto& [i, j, k] = ijk;
-          voxel_idx idx1d;
-        
-          auto cell_size = pn_.physical_size/img_.dim;
-        
-          for (k = 0; k < img_.dim.z(); ++k)
-            for (j = 0; j < img_.dim.y(); ++j)
-              for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-                if (pni_.connected(idx1d)) // darcy node
-                  *pos_ptr++ = cell_size*(ijk + 0.5);
-        }
-        // std::sort(indices.get(), indices.get() + index_count, [&pos](idx1d_t l, idx1d_t r) { return pos[l].x() > pos[r].x(); });
-
-
-        std::random_device rd;
-        std::shuffle(indices.get(), indices.get() + index_count, std::mt19937(3192/*rd()*/));
-
+        auto index_count = *pni_.connected_count();
+        // auto indices = std::make_unique<idx1d_t[]>(index_count);
+        // std::iota(indices.get(), indices.get() + index_count, 0);
+        //
+        // std::random_device rd;
+        // std::shuffle(indices.get(), indices.get() + index_count, std::mt19937(3192/*rd()*/));
         // std::reverse(indices.get(), indices.get() + index_count);
 
+        using props = hydraulic_properties::equilateral_triangle_properties;
+
+        struct processed_t
+        {
+          // connected_count
+          std::vector<bool> node_voxel;
+
+          // local
+          std::vector<bool> throat;
+          std::vector<bool> added_node;
+          std::vector<bool> added_throat;
+
+          processed_t(size_t connected_count, size_t node_count, size_t throat_count)
+            : node_voxel(connected_count), throat(throat_count), added_node(node_count), added_throat(throat_count) {}
+        };
+
+
+        auto processed = std::make_shared<processed_t>(index_count, pn_.node_count(), pn_.throat_count());
+
+        displ_queue queue;
+        // for (macro_idx i{0}; i < pn_.node_count(); ++i) {
+        //   if (pni_.connected(i))
+        //     queue.insert(
+        //       displ_elem::macro,
+        //       *i,
+        //       props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*i]));
+        // }
+
+        for (size_t i{0}; i < pn_.throat_count(); ++i)
+          if (auto [l, r] = pn_.throat_[attribs::adj][i];
+            pn_.inlet() == r)
+            if (pni_.connected(l)) {
+              queue.insert(
+                displ_elem::macro,
+                *l,
+                props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
+
+              processed->added_node[*l] = true;
+            }
+
+
+
+        using BoostGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS>;
+
+        auto bad_graph = std::make_shared<BoostGraph>(pn_.node_count());
+        for (auto [l, r] : pn_.throat_.range(attribs::adj))
+          if (pn_.inner_node(r))
+            add_edge(*l, *r, *bad_graph);
+
+        // Graph G(N);
+
+        // macro_generator gen{pn_.node_count()};
+        // for (auto [l, r] : pn_.throat_.range(attribs::adj))
+        //   if (pn_.inner_node(r))
+        //     gen.reserve(l, r);
+        // std::shared_ptr<std::size_t[]> throat_adjacency(gen.allocate_and_acquire().release());
+
+
+
         
 
-        auto processed = std::make_shared<std::vector<bool>>(index_count);
 
-        auto update_3d = [this, processed] {
+
+        auto update_3d = [this, processed/*, theta*/](double r_cap) {
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
             
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (pni_.connected(voxel_idx{idx1d}) && (*processed)[*pni_.net(voxel_idx{idx1d})])
+              if (pni_.connected(voxel_idx{idx1d}) && processed->node_voxel[*pni_.net(voxel_idx{idx1d})])
                 face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
               ++i;
             }
           });
       
           for (macro_idx i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && (*processed)[*pni_.net(macro_idx{i})])
-              macro_colors->SetTypedComponent(*i, 0, 0.5);
+            if (pni_.connected(i) && processed->node_voxel[*pni_.net(macro_idx{i})])
+              macro_colors->SetTypedComponent(*i, 0,
+                // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
+                0.5
+              );
 
           for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
             if (pn_.inner_node(r)) {
               if (pni_.connected(l)
-                && (*processed)[*pni_.net(l)]
-                && (*processed)[*pni_.net(r)])
+                && processed->node_voxel[*pni_.net(l)]
+                && processed->node_voxel[*pni_.net(r)])
                 throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
 
               ++throat_net_idx;
@@ -502,36 +626,116 @@ namespace xpm
 
         auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
 
+        constexpr auto delay = std::chrono::milliseconds{250};
+        auto last = clock::now() - delay;
+        
+
+        auto inv_volume_a0 = 0.0;
+        auto inv_volume_a2 = 0.0;
+
+        auto total_volume = 0.0;
+
+        auto last_r_cap = std::numeric_limits<double>::max();
+
+
+        for (macro_idx i{0}; i < pn_.node_count(); ++i)
+          // if (pni_.connected(i))
+            total_volume += pn_.node_[attribs::volume][*i];
+
+
         for (idx1d_t displ_idx = 0; displ_idx < index_count; ++displ_idx) {
           if (displ_idx % ((index_count - 1)/200) == 0)
             QMetaObject::invokeMethod(this, [=, this] {
-              auto progress = 1.*displ_idx/index_count;  // NOLINT(cppcoreguidelines-narrowing-conversions)
-                
+              auto inv_volume = inv_volume_a0 + inv_volume_a2*last_r_cap*last_r_cap;
+
               if (displ_idx % ((index_count - 1)/200*10) == 0)
-                sweep_series_->append(1 - progress, 10000*progress);
+                sweep_series_->append(1 - inv_volume/total_volume, 1/last_r_cap/*10000*progress*/);
               
               UpdateStatus(fmt::format("{:.1f} %", 100.*displ_idx/index_count));
             });
 
-          if (displ_idx % ((index_count - 1)/40) == 0) {
-            update_future = std::async(std::launch::async, update_3d);
+          if (displ_idx % ((index_count - 1)/100/*40*/) == 0) {
+            using namespace std::chrono;
+            if (auto diff = duration_cast<seconds>(clock::now() - last); diff < delay)
+              std::this_thread::sleep_for(delay - diff);
+            last = clock::now();
+            update_future = std::async(std::launch::async, update_3d, last_r_cap);
           }
 
-          if (auto idx = indices[displ_idx];
-            et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(idx))) ==
-            et_algo::get_header(outlet_entry))
-          {
-            dc_context_.adjacent_edges_remove(idx, dc_graph_);
+          if (!queue.empty()) {
+            auto local_idx = queue.front().local_idx;
 
-            (*processed)[idx] = true;
+            macro_idx macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+            auto net_idx = pni_.net(macro_idx);
+
+            dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
+            processed->node_voxel[*net_idx] = true;
+
+            last_r_cap = std::min(last_r_cap, queue.front().radius_cap);
+
+            inv_volume_a0 += 
+              pn_.node_[attribs::volume][*macro_idx];
+
+            inv_volume_a2 += 
+              pn_.node_[attribs::volume][*macro_idx]*
+              -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][*macro_idx]);
+            
+
+            queue.pop();
+
+            // auto [iter, end] = out_edges(local_idx, *bad_graph);
+            // for (; iter != end; ++iter) {
+            //   auto adj_macro_local_idx = target(*iter, *bad_graph);
+            //   if ()
+            // }
+
+
+            for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
+              if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
+                pn_.inner_node(r)) {
+
+                if (l == local_idx && !processed->added_node[*r]) {
+                  queue.insert(
+                    displ_elem::macro,
+                    *r,
+                    props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
+
+                  processed->added_node[*r] = true;
+                }
+                else if (r == local_idx && !processed->added_node[*l]) {
+                  queue.insert(
+                    displ_elem::macro,
+                    *l,
+                    props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
+
+                  processed->added_node[*l] = true;
+                }
+              }
+            }
+
+
+            // auto begin = throat_adjacency[queue.front().local_idx];
+            // for ()
+
+            
           }
+
+
+          // if (auto idx = indices[displ_idx];
+          //   et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(idx))) ==
+          //   et_algo::get_header(outlet_entry))
+          // {
+          //   dc_context_.adjacent_edges_remove(idx, dc_graph_);
+          //
+          //   (*processed)[idx] = true;
+          // }
         }
 
         
 
         QMetaObject::invokeMethod(this,
-          [this, t2, update_3d] {
-            // update_3d();
+          [this, t2, update_3d, last_r_cap] {
+            update_3d(last_r_cap);
 
             UpdateStatus(fmt::format("done {}s", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/));
           });
@@ -848,3 +1052,30 @@ namespace xpm
       // };
      
       // HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
+
+
+
+
+
+
+// auto pos = std::make_unique<v3d[]>(index_count);
+        // {
+        //   auto* pos_ptr = pos.get();
+        //
+        //   for (macro_idx i{0}; i < pn_.node_count(); ++i)
+        //     if (pni_.connected(i))
+        //       *pos_ptr++ = pn_.node_[attribs::pos][*i];
+        //
+        //   idx3d_t ijk;
+        //   auto& [i, j, k] = ijk;
+        //   voxel_idx idx1d;
+        //
+        //   auto cell_size = pn_.physical_size/img_.dim;
+        //
+        //   for (k = 0; k < img_.dim.z(); ++k)
+        //     for (j = 0; j < img_.dim.y(); ++j)
+        //       for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
+        //         if (pni_.connected(idx1d)) // darcy node
+        //           *pos_ptr++ = cell_size*(ijk + 0.5);
+        // }
+        // std::sort(indices.get(), indices.get() + index_count, [&pos](idx1d_t l, idx1d_t r) { return pos[l].x() > pos[r].x(); });
