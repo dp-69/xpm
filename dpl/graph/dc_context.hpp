@@ -57,7 +57,7 @@ namespace dpl::graph
           return;
 
         if (dc_properties::is_loop_edge(*et_iter)) {
-          auto v_idx = graph_->idx(dc_properties::get_vertex(*et_iter));
+          auto v_idx = dc_properties::get_vertex(*et_iter);
 
           for (edge_iter = graph_->out_edges_begin(v_idx), edge_end = graph_->out_edges_end(v_idx); edge_iter != edge_end; ++edge_iter)
             if (!dc_properties::is_null_entry(*edge_iter) && !dc_properties::is_tree_edge(*edge_iter))
@@ -85,7 +85,7 @@ namespace dpl::graph
           return *this;
 
         if (dc_properties::is_loop_edge(*et_iter)) {
-          auto v_idx = graph_->idx(dc_properties::get_vertex(*et_iter));
+          auto v_idx = dc_properties::get_vertex(*et_iter);
 
           for (edge_iter = graph_->out_edges_begin(v_idx), edge_end = graph_->out_edges_end(v_idx); edge_iter != edge_end; ++edge_iter)
             if (!dc_properties::is_null_entry(*edge_iter) && !dc_properties::is_tree_edge(*edge_iter))
@@ -133,22 +133,20 @@ namespace dpl::graph
 
       using color_t = boost::two_bit_color_type;
       auto color_uptr = std::make_unique<color_t[]>(vertex_count);
-      boost::iterator_property_map color_map{
+      boost::iterator_property_map color_map{ // TODO: REMOVE
         color_uptr.get(),
         boost::make_function_property_map<vertex_t>(
-          [&c](vertex_t v) { return c.get_idx(v); })
+          [](vertex_t v) { return v; })
       };
 
       auto tree_edge_stack = std::vector<et_ptr>(vertex_count + 1);     
       euler_tour_visitor<dc_graph, dc_properties> visitor{&et_pool_, tree_edge_stack.data()};
 
       for (std::size_t i = 0; i < g.vertex_count(); ++i) {
-        vertex_t v = g.get_vertex(i);
+        if (color_map[i] != color_t::two_bit_black) {
+          boost::depth_first_visit(g, i, visitor, color_map); // tree edges
 
-        if (color_map[v] != color_t::two_bit_black) {
-          boost::depth_first_visit(g, v, visitor, color_map); // tree edges
-
-          for (et_ptr et : range<et_nt>(et_algo::get_header(dc_properties::get_entry(v, g))))
+          for (et_ptr et : range<et_nt>(et_algo::get_header(dc_properties::get_entry(i, g))))
             if (dc_properties::is_loop_edge(et))
               for (edge_t de : g.edges(dc_properties::get_vertex(et)))
                 if (dc_properties::is_null_entry(de)) // non-tree edges

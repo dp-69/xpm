@@ -612,7 +612,7 @@ namespace xpm
 
         std::future<void> update_future;
 
-        auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count), dc_graph_);
+        auto outlet_entry = dc_properties::get_entry(index_count, dc_graph_);
 
         constexpr auto delay = std::chrono::milliseconds{50};
         auto last = clock::now() - delay;
@@ -627,7 +627,7 @@ namespace xpm
 
 
         for (macro_idx i{0}; i < pn_.node_count(); ++i)
-          // if (pni_.connected(i))
+          if (pni_.connected(i))
             total_volume += pn_.node_[attribs::volume][*i];
 
 
@@ -652,33 +652,58 @@ namespace xpm
 
           if (!queue.empty()) {
             auto local_idx = queue.front().local_idx;
+            auto r_cap = queue.front().radius_cap;
+
+            queue.pop();
 
             macro_idx macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
             auto net_idx = pni_.net(macro_idx);
 
-
             if (
-              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(*net_idx), dc_graph_)) ==
-              et_algo::get_header(outlet_entry)
-              // true
+              // et_algo::get_header(dc_properties::get_entry(*net_idx, dc_graph_)) ==
+              // et_algo::get_header(outlet_entry)
+              true
               )
             {
               dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
               processed->node_voxel[*net_idx] = true;
+
+              last_r_cap = std::min(last_r_cap, r_cap);
+
+              inv_volume_a0 += 
+                pn_.node_[attribs::volume][*macro_idx];
+
+              inv_volume_a2 += 
+                pn_.node_[attribs::volume][*macro_idx]*
+                -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][*macro_idx]);
+
+              for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
+                if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
+                  pn_.inner_node(r)) {
+
+                  if (l == local_idx && !processed->added_node[*r]) {
+                    queue.insert(
+                      displ_elem::macro, *r,
+                      props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
+
+                    processed->added_node[*r] = true;
+                  }
+                  else if (r == local_idx && !processed->added_node[*l]) {
+                    queue.insert(
+                      displ_elem::macro, *l,
+                      props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
+
+                    processed->added_node[*l] = true;
+                  }
+                }
+              }
             }
 
             
 
-            last_r_cap = std::min(last_r_cap, queue.front().radius_cap);
-
-            inv_volume_a0 += 
-              pn_.node_[attribs::volume][*macro_idx];
-
-            inv_volume_a2 += 
-              pn_.node_[attribs::volume][*macro_idx]*
-              -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][*macro_idx]);
             
-            queue.pop();
+            
+           
 
             // auto [iter, end] = out_edges(local_idx, *bad_graph);
             // for (; iter != end; ++iter) {
@@ -703,26 +728,7 @@ namespace xpm
 
 
 
-            for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
-              if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
-                pn_.inner_node(r)) {
-
-                if (l == local_idx && !processed->added_node[*r]) {
-                  queue.insert(
-                    displ_elem::macro, *r,
-                    props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
-
-                  processed->added_node[*r] = true;
-                }
-                else if (r == local_idx && !processed->added_node[*l]) {
-                  queue.insert(
-                    displ_elem::macro, *l,
-                    props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
-
-                  processed->added_node[*l] = true;
-                }
-              }
-            }
+            
 
 
             // auto begin = throat_adjacency[queue.front().local_idx];

@@ -16,6 +16,8 @@ namespace dpl::graph
 
     dc_graph* graph_;
 
+    using vertex_desc = dc_graph::vertex_descriptor;
+
   public:
     explicit dc_properties(dc_graph& graph)
       : graph_(&graph) {}
@@ -23,8 +25,13 @@ namespace dpl::graph
     static directed_edge* get_directed_edge(et_cptr n) { return mask_bit_balance::get_ptr<directed_edge*>(n->tag); }
     static void set_directed_edge(et_ptr n, const directed_edge* de) { mask_bit_balance::set_ptr(n->tag, de); }
 
-    static vertex* get_vertex(et_cptr n) { return mask_bit_balance::get_ptr<vertex*>(n->tag); }
-    static void set_vertex(et_ptr n, const vertex* v) { mask_bit_balance::set_ptr_bit(n->tag, v); }                     
+    static vertex_desc get_vertex(et_cptr n) {
+      return mask_bit_balance::get_value<vertex_desc>(n->tag);
+    }
+
+    static void set_vertex(et_ptr n, vertex_desc v) {
+      mask_bit_balance::set_value_bit(n->tag, v);
+    }                     
 
     /**
      * \brief checks if n is a vertex-type et entry
@@ -51,10 +58,8 @@ namespace dpl::graph
 
     // ---------------
 
-    static et_ptr get_entry(vertex* v, const dc_graph& g) { return static_cast<et_ptr>(g.vertex_entry(g.idx(v))); }
-    static void set_entry(vertex* v, et_ptr et, const dc_graph& g) { g.set_vertex_entry(g.idx(v), et); }
-
-    auto get_idx(const vertex* v) const { return graph_->idx(v); }
+    static et_ptr get_entry(vertex_desc v, const dc_graph& g) { return static_cast<et_ptr>(g.vertex_entry(v)); }
+    static void set_entry(vertex_desc v, et_ptr et, const dc_graph& g) { g.set_vertex_entry(v, et); }
 
     // ---------------
 

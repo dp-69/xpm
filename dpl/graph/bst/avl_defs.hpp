@@ -46,6 +46,9 @@ namespace dpl::graph
     avl_node* parent;
     avl_node* left;
     avl_node* right;
+
+    TEST_VERTEX_DESC_TYPE _TO_DEL_vertex = 0;
+    bool _TO_DEL_bit = 0;
   };
 
 
@@ -85,15 +88,20 @@ namespace dpl::graph
       return reinterpret_cast<Ptr>(tag & ptr);  // NOLINT(performance-no-int-to-ptr)
     }
 
+    template <std::integral Int> 
+    static Int get_value(std::size_t tag) {
+      return (tag & ptr) >> 3;  // NOLINT(performance-no-int-to-ptr)
+    }
+
     template <typename T> 
     static void set_ptr(std::size_t& tag, const T* pointer) {
       tag = reinterpret_cast<size_t>(pointer);
     }
 
-    template <typename T> 
-    static void set_ptr_bit(std::size_t& tag, const T* p) {
-      tag = reinterpret_cast<size_t>(p) | bit;
-    }
+    // template <typename T> 
+    // static void set_ptr_bit(std::size_t& tag, const T* p) {
+    //   tag = reinterpret_cast<size_t>(p) | bit;
+    // }
 
     static bool get_bit(std::size_t tag) {
       return tag & bit;
@@ -122,15 +130,20 @@ namespace dpl::graph
       tag = reinterpret_cast<size_t>(p) | (tag & balance);
     }
 
-    template <typename T> 
-    static void set_ptr_bit(std::size_t& tag, const T* p) {
-      tag = reinterpret_cast<size_t>(p) | bit | (tag & balance);
+    // template <typename T> 
+    // static void set_ptr_bit(std::size_t& tag, const T* p) {
+    //   tag = reinterpret_cast<size_t>(p) | bit | (tag & balance);
+    // }
+
+    template <std::integral Int> 
+    static void set_value_bit(std::size_t& tag, Int v) {
+      tag = v << 3 | bit | (tag & balance);
     }
 
-    template <typename T> 
-    static void set_ptr_balance(std::size_t& tag, const T* p, std::size_t b) {
-      tag = reinterpret_cast<size_t>(p) | b;
-    }
+    // template <typename T> 
+    // static void set_ptr_balance(std::size_t& tag, const T* p, std::size_t b) {
+    //   tag = reinterpret_cast<size_t>(p) | b;
+    // }
   };
 
 

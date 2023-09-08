@@ -4,6 +4,40 @@
 
 namespace dpl::graph::internal
 {
+  template<typename Integral>
+  class iterator_deference_integral
+  {
+    Integral value_;
+
+  public:
+    iterator_deference_integral() = default;
+    iterator_deference_integral(Integral value) : value_(value) {}
+
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = Integral;
+    
+    // using distance_type = std::ptrdiff_t;
+    // using pointer = Pointer;
+    // using reference = Pointer;
+
+    Integral operator*() const { return value_; }
+    // Pointer operator->() { return ptr; }
+
+    auto& operator++() {
+      ++value_;
+      return *this;
+    }  
+
+    auto operator++(int) {
+      auto temp = *this;
+      ++*this;
+      return temp;
+    }
+
+    friend bool operator==(const iterator_deference_integral& l, const iterator_deference_integral& r) { return l.value_ == r.value_; }
+  };
+
   template<typename Ptr>
   class iterator_deference_pointer
   {
@@ -43,23 +77,26 @@ namespace dpl::graph::internal
 
 namespace dpl::graph
 {
-  class vertex
-  {
-    friend class dc_properties;
+  // class vertex
+  // {
+  //   friend class dc_properties;
+  //
+  // public:
+  //   vertex() = default;
+  //   vertex(const vertex& other) = delete;
+  //   vertex(vertex&& other) noexcept = delete;
+  //   vertex& operator=(const vertex& other) = delete;
+  //   vertex& operator=(vertex&& other) noexcept = delete;
+  // };
 
-  public:
-    vertex() = default;
-    vertex(const vertex& other) = delete;
-    vertex(vertex&& other) noexcept = delete;
-    vertex& operator=(const vertex& other) = delete;
-    vertex& operator=(vertex&& other) noexcept = delete;
-  };
+  using TEST_VERTEX_DESC_TYPE = int32_t;
 
   class directed_edge
   {
     friend class dc_properties;
 
     std::size_t entry_ = 0;
+
 
   public:
     directed_edge() = default;
@@ -69,11 +106,11 @@ namespace dpl::graph
     directed_edge& operator=(directed_edge&& other) noexcept = delete;
 
     directed_edge* opposite;
-    vertex* v1;  // pointing-to vertex  
+    TEST_VERTEX_DESC_TYPE v1;  // pointing-to vertex  
   };
 
 
-  using vertex_iterator = internal::iterator_deference_pointer<vertex*>;
+  using vertex_iterator = internal::iterator_deference_integral<TEST_VERTEX_DESC_TYPE>;//TEST_VERTEX_DESC_TYPE;  // TODO // internal::iterator_deference_pointer<vertex*>;
   using out_edge_iterator = internal::iterator_deference_pointer<directed_edge*>;
 
   class dc_graph
@@ -81,14 +118,13 @@ namespace dpl::graph
     std::size_t vertex_count_;
     std::size_t edge_count_;
 
-    std::unique_ptr<vertex[]> vertices_;
     std::unique_ptr<void*[]> vertex_entry_;
 
     std::unique_ptr<directed_edge[]> directed_edges_;
     std::unique_ptr<std::size_t[]> directed_edges_end_;
 
   public:
-    using vertex_descriptor = vertex*;
+    using vertex_descriptor = TEST_VERTEX_DESC_TYPE;
     using edge_descriptor = directed_edge*;
 
     using vertices_size_type = std::size_t;
@@ -99,7 +135,6 @@ namespace dpl::graph
 
     explicit dc_graph(std::integral auto vertex_count)
       : vertex_count_(vertex_count),
-        vertices_{std::make_unique<vertex[]>(vertex_count)},
         vertex_entry_{std::make_unique<void*[]>(vertex_count_)},
         directed_edges_end_{std::make_unique<std::size_t[]>(vertex_count)} {}
 
@@ -118,28 +153,20 @@ namespace dpl::graph
     }
 
 
-    void* vertex_entry(std::integral auto i) const {
+    void* vertex_entry(vertex_descriptor i) const {
       return vertex_entry_[i];
     }
 
-    void set_vertex_entry(std::integral auto i, void* entry) const {
+    void set_vertex_entry(vertex_descriptor i, void* entry) const {
       vertex_entry_[i] = entry;
     }
 
-    auto idx(const vertex* v) const {
-      return v - vertices_.get();
-    }
-
-    vertex_descriptor get_vertex(std::integral auto v_idx) const {
-      return vertices_.get() + v_idx;
-    }
-
     vertex_iterator begin() const {
-      return vertices_.get();
+      return 0;
     }
 
     vertex_iterator end() const {
-      return vertices_.get() + vertex_count_;
+      return vertex_count_;
     }
 
     auto vertices() const {
@@ -172,20 +199,16 @@ namespace dpl::graph
       return directed_edges_end_;
     }
 
-    out_edge_iterator out_edges_begin(std::integral auto v_idx) const {
-      return &directed_edges_[v_idx == 0 ? 0 : directed_edges_end_[v_idx - 1]];
+    out_edge_iterator out_edges_begin(vertex_descriptor v) const {
+      return &directed_edges_[v == 0 ? 0 : directed_edges_end_[v - 1]];
     }
 
-    out_edge_iterator out_edges_end(std::integral auto v_idx) const {
-      return &directed_edges_[directed_edges_end_[v_idx]];
-    }
-
-    auto edges(std::integral auto v_idx) const {
-      return std::ranges::subrange{out_edges_begin(v_idx), out_edges_end(v_idx)};
+    out_edge_iterator out_edges_end(vertex_descriptor v) const {
+      return &directed_edges_[directed_edges_end_[v]];
     }
 
     auto edges(vertex_descriptor v) const {
-      return edges(idx(v));
+      return std::ranges::subrange{out_edges_begin(v), out_edges_end(v)};
     }
   };
 
@@ -199,17 +222,16 @@ namespace dpl::graph
     return {g.begin(), g.end()};
   }
 
-  inline vertex* target(const directed_edge* e, const dc_graph&) {
+  inline dc_graph::vertex_descriptor target(const directed_edge* e, const dc_graph&) {
     return e->v1;
   }
 
-  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const vertex* v, const dc_graph& g) {
-    auto idx = g.idx(v);
-    return {g.out_edges_begin(idx), g.out_edges_end(idx)};
+  inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const dc_graph::vertex_descriptor v, const dc_graph& g) {
+    return {g.out_edges_begin(v), g.out_edges_end(v)};
   }
   
-  inline vertex* source(const directed_edge*, const dc_graph&) {}
-  inline dc_graph::degree_size_type out_degree(const vertex* u, const dc_graph&) {}
+  inline dc_graph::vertex_descriptor source(const directed_edge*, const dc_graph&) {}
+  inline dc_graph::degree_size_type out_degree(const dc_graph::vertex_descriptor u, const dc_graph&) {}
 
 
   
@@ -252,7 +274,7 @@ namespace dpl::graph
     }
 
     void set(Index l, Index r) {
-      auto set_pair = [](vertex* v, vertex* u, directed_edge* vu, directed_edge* uv) {            
+      auto set_pair = [](dc_graph::vertex_descriptor v, dc_graph::vertex_descriptor u, directed_edge* vu, directed_edge* uv) {            
         vu->v1 = u;
         uv->v1 = v;
 
@@ -261,8 +283,8 @@ namespace dpl::graph
       };
 
       set_pair(
-        g_.get_vertex(traits::get(l)),
-        g_.get_vertex(traits::get(r)),
+        traits::get(l),
+        traits::get(r),
         g_.get_directed_edge(shift_[traits::get(l)]++),
         g_.get_directed_edge(shift_[traits::get(r)]++));
     }

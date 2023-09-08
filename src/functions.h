@@ -256,16 +256,14 @@ namespace xpm
 
       auto print_clusters = [&]() {
         for (int i = 0; i < g.vertex_count(); ++i) {
-          auto v = g.get_vertex(i);
-
-          auto hdr = et_algo::get_header(dc_properties::get_entry(v, g));
+          auto hdr = et_algo::get_header(dc_properties::get_entry(i, g));
 
           auto v_ref = dc_properties::get_vertex(
             *std::ranges::find_if(
               range<et_traits>(hdr),
               dc_properties::is_loop_edge));
 
-          std::cout << fmt::format("vertex {} : root {}\n", props.get_idx(v), props.get_idx(v_ref));
+          std::cout << fmt::format("vertex {} : root {}\n", i, v_ref);
         }
       };
 
@@ -313,7 +311,7 @@ namespace xpm
       using algo = dpl::graph::et_algo;
       using cyclic_op = dpl::graph::cyclic<algo>;
 
-      using vertex = dpl::graph::vertex;
+      // using vertex = dpl::graph::vertex;
       
       random_device rand_seed;
       auto random_engine = default_random_engine(rand_seed());
@@ -343,10 +341,9 @@ namespace xpm
 
 
       t0 = system_clock::now();
-      vector<vertex> vertices(total_size);
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::dc_properties::set_vertex(&input[i], &vertices[i]);
+        dpl::graph::dc_properties::set_vertex(&input[i], i);
         algo::push_back(header_a, &input[i]);
       }
 
