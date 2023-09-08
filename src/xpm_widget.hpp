@@ -483,7 +483,7 @@ namespace xpm
 
       auto t0 = clock::now();
       std::cout << "graph...";
-      dc_graph_ = pni_.generate_dc_graph();
+      dc_graph_ = pni_.generate_dc_graph<true>();
       std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
         duration_cast<seconds>(clock::now() - t0).count(),
         dc_graph_.vertex_count(),
@@ -503,12 +503,11 @@ namespace xpm
         auto theta = 0.0;
 
         auto index_count = *pni_.connected_count();
-        // auto indices = std::make_unique<idx1d_t[]>(index_count);
-        // std::iota(indices.get(), indices.get() + index_count, 0);
-        //
-        // std::random_device rd;
-        // std::shuffle(indices.get(), indices.get() + index_count, std::mt19937(3192/*rd()*/));
-        // std::reverse(indices.get(), indices.get() + index_count);
+
+        // auto connected_macro_count = 0;
+        // for (macro_idx i{0}; i < pn_.node_count(); ++i)
+        //   if (pni_.connected(i))
+        //     ++connected_macro_count;
 
         using props = hydraulic_properties::equilateral_triangle_properties;
 
@@ -530,21 +529,13 @@ namespace xpm
         auto processed = std::make_shared<processed_t>(index_count, pn_.node_count(), pn_.throat_count());
 
         displ_queue queue;
-        // for (macro_idx i{0}; i < pn_.node_count(); ++i) {
-        //   if (pni_.connected(i))
-        //     queue.insert(
-        //       displ_elem::macro,
-        //       *i,
-        //       props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*i]));
-        // }
 
         for (size_t i{0}; i < pn_.throat_count(); ++i)
           if (auto [l, r] = pn_.throat_[attribs::adj][i];
-            pn_.inlet() == r)
+            pn_.inlet() == r) // inlet macro nodes
             if (pni_.connected(l)) {
               queue.insert(
-                displ_elem::macro,
-                *l,
+                displ_elem::macro, *l,
                 props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
 
               processed->added_node[*l] = true;
@@ -552,25 +543,22 @@ namespace xpm
 
 
 
-        using BoostGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS>;
+        // using BoostGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS>;
+        //
+        // auto bad_graph = std::make_shared<BoostGraph>(pn_.node_count());
+        // for (auto [l, r] : pn_.throat_.range(attribs::adj))
+        //   if (pn_.inner_node(r))
+        //     add_edge(*l, *r, *bad_graph);
 
-        auto bad_graph = std::make_shared<BoostGraph>(pn_.node_count());
-        for (auto [l, r] : pn_.throat_.range(attribs::adj))
-          if (pn_.inner_node(r))
-            add_edge(*l, *r, *bad_graph);
 
         // Graph G(N);
+
 
         // macro_generator gen{pn_.node_count()};
         // for (auto [l, r] : pn_.throat_.range(attribs::adj))
         //   if (pn_.inner_node(r))
         //     gen.reserve(l, r);
         // std::shared_ptr<std::size_t[]> throat_adjacency(gen.allocate_and_acquire().release());
-
-
-
-        
-
 
 
         auto update_3d = [this, processed/*, theta*/](double r_cap) {
@@ -626,7 +614,7 @@ namespace xpm
 
         auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
 
-        constexpr auto delay = std::chrono::milliseconds{250};
+        constexpr auto delay = std::chrono::milliseconds{50};
         auto last = clock::now() - delay;
         
 
@@ -668,8 +656,18 @@ namespace xpm
             macro_idx macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
             auto net_idx = pni_.net(macro_idx);
 
-            dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
-            processed->node_voxel[*net_idx] = true;
+
+            if (
+              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(*net_idx))) ==
+              et_algo::get_header(outlet_entry)
+              // true
+              )
+            {
+              dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
+              processed->node_voxel[*net_idx] = true;
+            }
+
+            
 
             last_r_cap = std::min(last_r_cap, queue.front().radius_cap);
 
@@ -680,7 +678,6 @@ namespace xpm
               pn_.node_[attribs::volume][*macro_idx]*
               -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][*macro_idx]);
             
-
             queue.pop();
 
             // auto [iter, end] = out_edges(local_idx, *bad_graph);
@@ -690,22 +687,36 @@ namespace xpm
             // }
 
 
+
+
+            // for (auto de : dc_graph_.edges(*net_idx)) {
+            //   if (auto net_adj = dc_graph_.get_idx(de->v1); net_adj < connected_macro_count) {
+            //     if (l == local_idx && !processed->added_node[*r]) {
+            //       queue.insert(
+            //         displ_elem::macro, *r,
+            //         props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
+            //
+            //       processed->added_node[*r] = true;
+            //     }
+            //   }
+            // }
+
+
+
             for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
               if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
                 pn_.inner_node(r)) {
 
                 if (l == local_idx && !processed->added_node[*r]) {
                   queue.insert(
-                    displ_elem::macro,
-                    *r,
+                    displ_elem::macro, *r,
                     props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
 
                   processed->added_node[*r] = true;
                 }
                 else if (r == local_idx && !processed->added_node[*l]) {
                   queue.insert(
-                    displ_elem::macro,
-                    *l,
+                    displ_elem::macro, *l,
                     props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
 
                   processed->added_node[*l] = true;
@@ -721,14 +732,7 @@ namespace xpm
           }
 
 
-          // if (auto idx = indices[displ_idx];
-          //   et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(idx))) ==
-          //   et_algo::get_header(outlet_entry))
-          // {
-          //   dc_context_.adjacent_edges_remove(idx, dc_graph_);
-          //
-          //   (*processed)[idx] = true;
-          // }
+          
         }
 
         

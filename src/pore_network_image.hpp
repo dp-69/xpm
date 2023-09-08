@@ -627,7 +627,7 @@ R"(image voxels
     /**
      * \brief effective porosity elements count
      */
-    net_idx connected_count_{0};
+    net_idx connected_vertex_count_{0};
 
 
     
@@ -641,7 +641,7 @@ R"(image voxels
     // idx1d_t inlet() const { return pn_->node_count() + img_->size_microporous; }
     // idx1d_t outlet() const { return inlet() + 1; }
 
-    auto connected_count() const { return connected_count_; }
+    auto connected_count() const { return connected_vertex_count_; }
 
     auto total(macro_idx i) const { return total_idx{*i}; }
     auto total(voxel_idx i) const { return total_idx{pn_->node_count() + *i}; }
@@ -719,7 +719,7 @@ R"(image voxels
 
       for (auto i : dpl::range(gross_total_size)) {
         auto rep = ds.find_set(i); 
-        net_map_[total_idx{i}] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
+        net_map_[total_idx{i}] = inlet[rep] && outlet[rep] ? connected_vertex_count_++ : isolated_idx_;
       }
     }
 
@@ -729,7 +729,7 @@ R"(image voxels
 
       using pair = std::pair<idx1d_t, int>;
 
-      std::vector<pair> net_idx_block(*connected_count_);
+      std::vector<pair> net_idx_block(*connected_vertex_count_);
 
       auto map_idx = idx_mapper(blocks);
 
@@ -773,8 +773,8 @@ R"(image voxels
 
       row_decomposition mapping;
 
-      mapping.net_to_decomposed = std::make_unique<idx1d_t[]>(*connected_count_);
-      mapping.decomposed_to_net = std::make_unique<idx1d_t[]>(*connected_count_);
+      mapping.net_to_decomposed = std::make_unique<idx1d_t[]>(*connected_vertex_count_);
+      mapping.decomposed_to_net = std::make_unique<idx1d_t[]>(*connected_vertex_count_);
 
       auto block_count = blocks.prod();
       auto row_count_per_block = std::make_unique<idx1d_t[]>(block_count);
@@ -783,7 +783,7 @@ R"(image voxels
       for (auto i : dpl::range(block_count))
         row_count_per_block[i] = 0;
       
-      for (auto i : dpl::range(*connected_count_)) {
+      for (auto i : dpl::range(*connected_vertex_count_)) {
         mapping.net_to_decomposed[net_idx_block[i].first] = i;
         mapping.decomposed_to_net[i] = net_idx_block[i].first;
         ++row_count_per_block[net_idx_block[i].second];
@@ -799,23 +799,28 @@ R"(image voxels
     }
 
 
+    template<bool Outlet = false>
     dpl::graph::dc_graph generate_dc_graph() const {
       using namespace dpl::graph;
       using namespace presets;
       auto map_idx = img_->idx1d_mapper();
 
-      net_idx vertex_count = connected_count_ + 1; // last is outlet
-      net_idx outlet_idx = vertex_count - 1;
+      net_idx vertex_count = connected_vertex_count_; // last is outlet
+
+      if constexpr (Outlet)
+        ++vertex_count;
+
 
       graph_generator<net_idx> gen(*vertex_count);
 
-      for (auto [l, r] : pn_->throat_.range(attribs::adj)/* | std::ranges::views::filter([](auto pair) { return true; })*/)
+      for (auto [l, r] : pn_->throat_.range(attribs::adj))
         if (connected(l))
           if (pn_->inner_node(r)) // macro-macro
             gen.reserve(net(l), net(r));
-          else if (pn_->outlet() == r) // macro-outlet
-            gen.reserve(net(l), outlet_idx);
-
+          else if constexpr (Outlet) {
+            if (pn_->outlet() == r) // macro-outlet
+              gen.reserve(net(l), vertex_count - 1);
+          }
 
       {
         idx3d_t ijk;
@@ -824,8 +829,9 @@ R"(image voxels
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j) {
-            if (voxel_idx adj_idx1d{map_idx(img_->dim.x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
-              gen.reserve(net(adj_idx1d), outlet_idx);
+            if constexpr (Outlet) 
+              if (voxel_idx adj_idx1d{map_idx(img_->dim.x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+                gen.reserve(net(adj_idx1d), vertex_count - 1);
 
             for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
               if (connected(idx1d)) {
@@ -847,8 +853,10 @@ R"(image voxels
         if (connected(l))
           if (pn_->inner_node(r)) // macro-macro
             gen.set(net(l), net(r));
-          else if (pn_->outlet() == r) // macro-outlet
-            gen.set(net(l), outlet_idx);
+          else if constexpr (Outlet) {
+            if (pn_->outlet() == r) // macro-outlet
+              gen.set(net(l), vertex_count - 1);
+          }
 
       {
         idx3d_t ijk;
@@ -857,8 +865,9 @@ R"(image voxels
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j) {
-            if (voxel_idx adj_idx1d{map_idx(img_->dim.x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
-              gen.set(net(adj_idx1d), outlet_idx);
+            if constexpr (Outlet)
+              if (voxel_idx adj_idx1d{map_idx(img_->dim.x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+                gen.set(net(adj_idx1d), vertex_count - 1);
 
             for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
               if (connected(idx1d)) {
@@ -889,7 +898,7 @@ R"(image voxels
       
       dpl::hypre::ls_known_storage_builder builder;
 
-      builder.allocate_rows(*connected_count_);
+      builder.allocate_rows(*connected_vertex_count_);
       
       for (auto [l, r] : pn_->throat_.range(adj))
         if (pn_->inner_node(r) && connected(l)) // macro-macro
@@ -1016,7 +1025,7 @@ R"(image voxels
           }
       }
 
-      return {*connected_count_, builder.nvalues(), builder.acquire_storage()};
+      return {*connected_vertex_count_, builder.nvalues(), builder.acquire_storage()};
     }
 
 
