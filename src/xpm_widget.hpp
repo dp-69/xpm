@@ -612,7 +612,7 @@ namespace xpm
 
         std::future<void> update_future;
 
-        auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count));
+        auto outlet_entry = dc_properties::get_entry(dc_graph_.get_vertex(index_count), dc_graph_);
 
         constexpr auto delay = std::chrono::milliseconds{50};
         auto last = clock::now() - delay;
@@ -658,7 +658,7 @@ namespace xpm
 
 
             if (
-              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(*net_idx))) ==
+              et_algo::get_header(dc_properties::get_entry(dc_graph_.get_vertex(*net_idx), dc_graph_)) ==
               et_algo::get_header(outlet_entry)
               // true
               )

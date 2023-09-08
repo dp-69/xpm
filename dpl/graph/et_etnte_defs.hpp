@@ -94,7 +94,7 @@ namespace dpl::graph
   void print(etnte_traits::node_ptr hdr, const Props& c) {
     for (etnte_traits::node_ptr etnte : range<etnte_traits>(hdr)) {
       auto de = Props::get_directed_edge(etnte);
-      std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));
+      std::cout << fmt::format(" ({}, {})", c.idx(Props::get_opposite(de)->v1), c.idx(de->v1));
     }
     std::cout << '\n';
   }
@@ -354,36 +354,30 @@ namespace dpl::graph
     // etnte_node_ptr etnte_hdr_;
 
     helper::smart_pool<et_traits::node>* et_pool_;
-    helper::smart_pool<etnte_traits::node>* etnte_pool_;
 
     et_ptr* tree_edge_stack_empty_;
     et_ptr* tree_edge_stack_top_;
     
   public:
     euler_tour_visitor(
-      helper::smart_pool<et_traits::node>* et_pool
-    , helper::smart_pool<etnte_traits::node>* etnte_pool
-    , et_ptr* tree_edge_stack
+      helper::smart_pool<et_traits::node>* et_pool,
+      et_ptr* tree_edge_stack
     )
-      : et_pool_(et_pool)
-      , etnte_pool_(etnte_pool)
-      , tree_edge_stack_empty_(tree_edge_stack)
-      , tree_edge_stack_top_(tree_edge_stack)
+      : et_pool_(et_pool),
+        tree_edge_stack_empty_(tree_edge_stack),
+        tree_edge_stack_top_(tree_edge_stack)
     {}
 
 
     void start_vertex(vertex_t, const Graph&) {            
       et_hdr_ = et_pool_->acquire();
-      etnte_ptr etnte_hdr = etnte_pool_->acquire();
       et_algo::init_header(et_hdr_);      
-      etnte_algo::init_header(etnte_hdr);      
-      Props::set_etnte_header(et_hdr_, etnte_hdr);             
     }
 
-    void discover_vertex(vertex_t v, const Graph&) {     
+    void discover_vertex(vertex_t v, const Graph& g) {     
       et_ptr entry = et_pool_->acquire();        
       Props::set_vertex(entry, v);
-      Props::set_entry(v, entry);
+      Props::set_entry(v, entry, g);
       et_algo::push_back(et_hdr_, entry);            
     }
 
@@ -405,23 +399,6 @@ namespace dpl::graph
       et_algo::push_back(et_hdr_, entry);      
       *++tree_edge_stack_top_ = entry;
     }
-
-    // non-tree edge    
-    // void forward_or_cross_edge(edge_t de, const Graph&) {
-    //   etnte_node_ptr entry = etnte_pool_->acquire();
-    //   etnte_node_ptr entry_opp = etnte_pool_->acquire();
-    //   
-    //   edge_t de_opp = Props::get_opposite(de);
-    //
-    //   Props::set_non_tree_edge_entry(de, entry); 
-    //   Props::set_non_tree_edge_entry(de_opp, entry_opp);
-    //   
-    //   Props::set_directed_edge(entry, de);
-    //   Props::set_directed_edge(entry_opp, de_opp);
-    //         
-    //   etnte_context_operations<Props>::insert(etnte_hdr_, entry);
-    //   etnte_context_operations<Props>::insert(etnte_hdr_, entry_opp);                    
-    // }
   }; 
 }
 

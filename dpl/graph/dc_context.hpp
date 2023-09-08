@@ -57,7 +57,7 @@ namespace dpl::graph
           return;
 
         if (dc_properties::is_loop_edge(*et_iter)) {
-          auto v_idx = graph_->get_idx(dc_properties::get_vertex(*et_iter));
+          auto v_idx = graph_->idx(dc_properties::get_vertex(*et_iter));
 
           for (edge_iter = graph_->out_edges_begin(v_idx), edge_end = graph_->out_edges_end(v_idx); edge_iter != edge_end; ++edge_iter)
             if (!dc_properties::is_null_entry(*edge_iter) && !dc_properties::is_tree_edge(*edge_iter))
@@ -85,7 +85,7 @@ namespace dpl::graph
           return *this;
 
         if (dc_properties::is_loop_edge(*et_iter)) {
-          auto v_idx = graph_->get_idx(dc_properties::get_vertex(*et_iter));
+          auto v_idx = graph_->idx(dc_properties::get_vertex(*et_iter));
 
           for (edge_iter = graph_->out_edges_begin(v_idx), edge_end = graph_->out_edges_end(v_idx); edge_iter != edge_end; ++edge_iter)
             if (!dc_properties::is_null_entry(*edge_iter) && !dc_properties::is_tree_edge(*edge_iter))
@@ -121,7 +121,6 @@ namespace dpl::graph
     // std::size_t quick_replacement_idx = 0;
 
     helper::smart_pool<et_traits::node> et_pool_;
-    helper::smart_pool<etnte_traits::node> etnte_pool_;
 
     /**
      * \brief dfs for et-only, fast direct etnte
@@ -141,7 +140,7 @@ namespace dpl::graph
       };
 
       auto tree_edge_stack = std::vector<et_ptr>(vertex_count + 1);     
-      euler_tour_visitor<dc_graph, dc_properties> visitor{&et_pool_, &etnte_pool_, tree_edge_stack.data()};
+      euler_tour_visitor<dc_graph, dc_properties> visitor{&et_pool_, tree_edge_stack.data()};
 
       for (std::size_t i = 0; i < g.vertex_count(); ++i) {
         vertex_t v = g.get_vertex(i);
@@ -149,7 +148,7 @@ namespace dpl::graph
         if (color_map[v] != color_t::two_bit_black) {
           boost::depth_first_visit(g, v, visitor, color_map); // tree edges
 
-          for (et_ptr et : range<et_nt>(et_algo::get_header(dc_properties::get_entry(v))))
+          for (et_ptr et : range<et_nt>(et_algo::get_header(dc_properties::get_entry(v, g))))
             if (dc_properties::is_loop_edge(et))
               for (edge_t de : g.edges(dc_properties::get_vertex(et)))
                 if (dc_properties::is_null_entry(de)) // non-tree edges
@@ -187,7 +186,7 @@ namespace dpl::graph
           if (dc_properties::is_loop_edge(et_entry)) {
             for (edge_t ab : graph_->edges(dc_properties::get_vertex(et_entry)))
               if (!dc_properties::is_null_entry(ab) && !dc_properties::is_tree_edge(ab))
-                if (et_algo::get_header(Props::get_entry(ab->v1)) == hdr_b)
+                if (et_algo::get_header(Props::get_entry(ab->v1, *graph_)) == hdr_b)
                   return ab;
           }
         }
@@ -196,7 +195,7 @@ namespace dpl::graph
           if (dc_properties::is_loop_edge(et_entry)) {
             for (edge_t ba : graph_->edges(dc_properties::get_vertex(et_entry)))
               if (!dc_properties::is_null_entry(ba) && !dc_properties::is_tree_edge(ba))
-                if (et_algo::get_header(Props::get_entry(ba->v1)) == hdr_a)
+                if (et_algo::get_header(Props::get_entry(ba->v1, *graph_)) == hdr_a)
                   return Props::get_opposite(ba);
           }
         }
@@ -319,8 +318,8 @@ namespace dpl::graph
       if (ab = find_replacement(et_hdr_a, et_hdr_b); ab) {                                
         ba = Props::get_opposite(ab);        
 
-        et_ptr replace_a_entry = Props::get_ordering_vertex_entry(ab);
-        et_ptr replace_b_entry = Props::get_ordering_vertex_entry(ba);                                        
+        et_ptr replace_a_entry = Props::get_ordering_vertex_entry(ab, *graph_);
+        et_ptr replace_b_entry = Props::get_ordering_vertex_entry(ba, *graph_);                                        
 
         Props::set_directed_edge(et_ab, ab);
         Props::set_directed_edge(et_ba, ba);
@@ -359,11 +358,7 @@ namespace dpl::graph
         Props::set_null_entry(de);
         etnte_ptr prev = etnte_node;
         etnte_node = etnte_algo::next_node(etnte_node);
-        etnte_pool_.release(prev);
       }
-
-      etnte_pool_.release(etnte_hdr);
-
 
       et_ptr et_node = et_nt::get_left(hdr);      
       while (et_node != hdr) {

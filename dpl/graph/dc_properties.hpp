@@ -20,10 +20,6 @@ namespace dpl::graph
     explicit dc_properties(dc_graph& graph)
       : graph_(&graph) {}
 
-
-    static etnte_ptr get_etnte_header(et_cptr hdr) { return mask_bit_balance::get_ptr<etnte_ptr>(hdr->tag); }
-    static void set_etnte_header(et_ptr hdr, etnte_cptr etnte_header) { mask_bit_balance::set_ptr_balance(hdr->tag, etnte_header, mask_bit_balance::balance); }
-
     static directed_edge* get_directed_edge(et_cptr n) { return mask_bit_balance::get_ptr<directed_edge*>(n->tag); }
     static void set_directed_edge(et_ptr n, const directed_edge* de) { mask_bit_balance::set_ptr(n->tag, de); }
 
@@ -50,15 +46,15 @@ namespace dpl::graph
      *   ordering of non-tree edges
      *   sorted by a pointing-in vertex, the pointing-out works as well
      */
-    static et_ptr get_ordering_vertex_entry(const directed_edge* de) { return get_entry(get_opposite(de)->v1); }
+    static et_ptr get_ordering_vertex_entry(const directed_edge* de, const dc_graph& g) { return get_entry(get_opposite(de)->v1, g); }
     // static et_ptr get_ordering_vertex_entry(etnte_cptr n) { return get_ordering_vertex_entry(get_directed_edge(n)); }
 
     // ---------------
 
-    static et_ptr get_entry(vertex* v) { return static_cast<et_ptr>(v->entry_); }
-    static void set_entry(vertex* v, et_ptr et) { v->entry_ = et; }
+    static et_ptr get_entry(vertex* v, const dc_graph& g) { return static_cast<et_ptr>(g.vertex_entry(g.idx(v))); }
+    static void set_entry(vertex* v, et_ptr et, const dc_graph& g) { g.set_vertex_entry(g.idx(v), et); }
 
-    auto get_idx(const vertex* v) const { return graph_->get_idx(v); }
+    auto get_idx(const vertex* v) const { return graph_->idx(v); }
 
     // ---------------
 

@@ -240,7 +240,7 @@ namespace xpm
       context.init_with_dfs(g, props);
 
 
-      auto etnte_hdr = dc_properties::get_etnte_header(et_algo::get_header(dc_properties::get_entry(g.get_vertex(0))));
+      // auto etnte_hdr = dc_properties::get_etnte_header(et_algo::get_header(dc_properties::get_entry(g.get_vertex(0), g)));
 
       #ifndef ETNTE_AS_AVL_ONLY
       for (auto etnte_entry : range<etnte_traits>(etnte_hdr))
@@ -249,16 +249,16 @@ namespace xpm
       etnte_algo::populate_sizes(etnte_hdr);
       #endif
 
-      if (!etnte_algo::verify(etnte_hdr)) {
-        std::cout << "Invalid recalc\n";
-      }
+      // if (!etnte_algo::verify(etnte_hdr)) {
+      //   std::cout << "Invalid recalc\n";
+      // }
 
 
       auto print_clusters = [&]() {
         for (int i = 0; i < g.vertex_count(); ++i) {
           auto v = g.get_vertex(i);
 
-          auto hdr = et_algo::get_header(dc_properties::get_entry(v));
+          auto hdr = et_algo::get_header(dc_properties::get_entry(v, g));
 
           auto v_ref = dc_properties::get_vertex(
             *std::ranges::find_if(
