@@ -382,7 +382,7 @@ namespace dpl::graph
       et_algo::push_back(et_hdr_, entry);            
     }
 
-    void finish_vertex(vertex_t v, const Graph& g) {
+    void finish_vertex(vertex_t, const Graph& g) {
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_ptr entry = et_pool_->acquire();
         et_ptr top = *tree_edge_stack_top_--;

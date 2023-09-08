@@ -117,6 +117,8 @@ namespace dpl::graph
     dc_properties props_; // TODO: INIT
     // std::unique_ptr<std::list<edge_t>[]> nte_edges;
 
+    static inline constexpr auto null_edge_ = std::numeric_limits<edge_t>::max();
+
   public:
     // std::vector<std::size_t> saved_replacement_indices;
     // std::size_t quick_replacement_idx = 0;
@@ -201,7 +203,7 @@ namespace dpl::graph
           }
         }
     
-      return nullptr;
+      return null_edge_;
     }
 
 
@@ -316,7 +318,7 @@ namespace dpl::graph
       
 
 
-      if (ab = find_replacement(et_hdr_a, et_hdr_b); ab) {                                
+      if (ab = find_replacement(et_hdr_a, et_hdr_b); ab != null_edge_) {                                
         ba = opposite(ab, *g_);        
 
         et_ptr replace_a_entry = props_.get_ordering_vertex_entry(ab);

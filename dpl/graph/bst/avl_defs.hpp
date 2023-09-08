@@ -37,7 +37,7 @@ namespace dpl::graph
      *  has to be the first field for the smart_pool
      *
      *  must be 8 bytes (64 bits)
-     *  61 bits - context data, e.g. pointer
+     *  61 bits - context data, e.g. pointer or index
      *  1 bit   - boolean flag
      *  2 bits  - avl balance
      */
@@ -46,9 +46,6 @@ namespace dpl::graph
     avl_node* parent;
     avl_node* left;
     avl_node* right;
-
-    TEST_VERTEX_DESC_TYPE _TO_DEL_vertex = 0;
-    bool _TO_DEL_bit = 0;
   };
 
 
@@ -64,7 +61,7 @@ namespace dpl::graph
      *  has to be the first field for the smart_pool
      *
      *  must be 8 bytes (64 bits)
-     *  61 bits - context data, e.g. pointer
+     *  61 bits - context data, e.g. pointer or index
      *  1 bit   - boolean flag
      *  2 bits  - avl balance
      */
@@ -86,11 +83,6 @@ namespace dpl::graph
     template <typename Ptr> 
     static Ptr get_ptr(std::size_t tag) {
       return reinterpret_cast<Ptr>(tag & ptr);  // NOLINT(performance-no-int-to-ptr)
-    }
-
-    template <std::integral Int> 
-    static Int get_value(std::size_t tag) {
-      return (tag & ptr) >> 3;  // NOLINT(performance-no-int-to-ptr)
     }
 
     template <typename T> 
@@ -125,15 +117,25 @@ namespace dpl::graph
       tag = (tag & ~balance) | b;
     }
 
-    template <typename T> 
-    static void set_ptr(std::size_t& tag, const T* p) {
-      tag = reinterpret_cast<size_t>(p) | (tag & balance);
-    }
+    // template <typename T> 
+    // static void set_ptr(std::size_t& tag, const T* p) {
+    //   tag = reinterpret_cast<size_t>(p) | (tag & balance);
+    // }
 
     // template <typename T> 
     // static void set_ptr_bit(std::size_t& tag, const T* p) {
     //   tag = reinterpret_cast<size_t>(p) | bit | (tag & balance);
     // }
+    
+    template <std::integral Int> 
+    static Int get_value(std::size_t tag) {
+      return (tag & ptr) >> 3;  // NOLINT(performance-no-int-to-ptr)
+    }
+
+    template <std::integral Int> 
+    static void set_value(std::size_t& tag, Int v) {
+      tag = v << 3 | (tag & balance);
+    }
 
     template <std::integral Int> 
     static void set_value_bit(std::size_t& tag, Int v) {

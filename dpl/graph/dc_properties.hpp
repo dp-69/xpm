@@ -17,6 +17,7 @@ namespace dpl::graph
     const dc_graph* g_;
 
     using vertex_desc = dc_graph::vertex_descriptor;
+    using edge_desc = dc_graph::edge_descriptor;
 
   public:
     dc_properties() = default;
@@ -24,12 +25,12 @@ namespace dpl::graph
     explicit dc_properties(const dc_graph& graph)
       : g_(&graph) {}
 
-    static directed_edge* get_directed_edge(et_cptr n) {
-      return mask_bit_balance::get_ptr<directed_edge*>(n->tag);
+    static edge_desc get_directed_edge(et_cptr n) {
+      return mask_bit_balance::get_value<edge_desc>(n->tag);
     }
 
-    static void set_directed_edge(et_ptr n, const directed_edge* de) {
-      mask_bit_balance::set_ptr(n->tag, de);
+    static void set_directed_edge(et_ptr n, edge_desc de) {
+      mask_bit_balance::set_value(n->tag, de);
     }
 
     static vertex_desc get_vertex(et_cptr n) {
@@ -47,18 +48,14 @@ namespace dpl::graph
       return mask_bit_balance::get_bit(n->tag);
     }
 
-    // ---------------
-
     /**
      * \brief
      *   ordering of non-tree edges
      *   sorted by a pointing-in vertex, the pointing-out works as well
      */
-    et_ptr get_ordering_vertex_entry(const directed_edge* de) const {
+    et_ptr get_ordering_vertex_entry(edge_desc de) const {
       return get_entry(target(opposite(de, *g_), *g_));
     }
-
-    // ---------------
 
     et_ptr get_entry(vertex_desc v) const {
       return static_cast<et_ptr>(g_->vertex_entry(v));
@@ -68,20 +65,29 @@ namespace dpl::graph
       g_->vertex_entry(v) = et;
     }
 
-    // ---------------
-
-    bool is_tree_edge(directed_edge* x) const {
+    bool is_tree_edge(edge_desc x) const {
       return !mask_bit::get_bit(g_->directed_edge_entry(x));
     }
 
-    et_ptr get_tree_edge_entry(directed_edge* x) const { return mask_bit::get_ptr<et_ptr>(g_->directed_edge_entry(x)); }
-    void set_tree_edge_entry(directed_edge* x, et_ptr y) { mask_bit::set_ptr(g_->directed_edge_entry(x), y); }
+    et_ptr get_tree_edge_entry(edge_desc x) const {
+      return mask_bit::get_ptr<et_ptr>(g_->directed_edge_entry(x));
+    }
 
-    // static etnte_ptr get_non_tree_edge_entry(const directed_edge* x) { return mask_bit::get_ptr<etnte_ptr>(x->entry_); }
-    void set_non_tree_edge(directed_edge* x) { return mask_bit::set_bit(g_->directed_edge_entry(x)); }
+    void set_tree_edge_entry(edge_desc x, et_ptr y) {
+      mask_bit::set_ptr(g_->directed_edge_entry(x), y);
+    }
 
-    bool is_null_entry(directed_edge* x) const { return g_->directed_edge_entry(x) == 0; }
-    void set_null_entry(directed_edge* x) { g_->directed_edge_entry(x) = 0; }
+    void set_non_tree_edge(edge_desc x) { // TODO
+      return mask_bit::set_bit(g_->directed_edge_entry(x));
+    }
+
+    bool is_null_entry(edge_desc x) const {
+      return g_->directed_edge_entry(x) == 0;
+    }
+
+    void set_null_entry(edge_desc x) {
+      g_->directed_edge_entry(x) = 0;
+    }
 
     // static bool less_than(etnte_cptr hdr_l, etnte_cptr hdr_r) {
     //   etnte_ptr root_l = etnte_traits::get_parent(hdr_l);

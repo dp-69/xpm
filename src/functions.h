@@ -456,7 +456,7 @@ namespace xpm
       using cyclic_op = dpl::graph::cyclic<algo>;
 
       // using vertex = dpl::graph::vertex;
-      using directed_edge = dpl::graph::directed_edge;
+      // using directed_edge = dpl::graph::directed_edge;
       
        //dpl::graph::et_cyclic_op;
 
@@ -496,7 +496,7 @@ namespace xpm
 
 
       t0 = system_clock::now();
-      vector<directed_edge> edges(total_size);
+      // vector<directed_edge> edges(total_size);
 
       for (int i = 0; i < total_size; i++) {
         // dpl::graph::dc_properties::set_directed_edge(&input[i], &edges[i]);
