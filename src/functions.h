@@ -256,7 +256,7 @@ namespace xpm
 
       auto print_clusters = [&]() {
         for (int i = 0; i < g.vertex_count(); ++i) {
-          auto hdr = et_algo::get_header(dc_properties::get_entry(i, g));
+          auto hdr = et_algo::get_header(props.get_entry(i));
 
           auto v_ref = dc_properties::get_vertex(
             *std::ranges::find_if(

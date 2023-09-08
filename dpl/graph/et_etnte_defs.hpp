@@ -90,31 +90,31 @@ namespace dpl::graph
 
 
 
-  template <typename Props>
-  void print(etnte_traits::node_ptr hdr, const Props& c) {
-    for (etnte_traits::node_ptr etnte : range<etnte_traits>(hdr)) {
-      auto de = Props::get_directed_edge(etnte);
-      std::cout << fmt::format(" ({}, {})", c.idx(Props::get_opposite(de)->v1), c.idx(de->v1));
-    }
-    std::cout << '\n';
-  }
+  // template <typename Props>
+  // void print(etnte_traits::node_ptr hdr, const Props& c) {
+  //   for (etnte_traits::node_ptr etnte : range<etnte_traits>(hdr)) {
+  //     auto de = Props::get_directed_edge(etnte);
+  //     std::cout << fmt::format(" ({}, {})", c.idx(Props::get_opposite(de)->v1), c.idx(de->v1));
+  //   }
+  //   std::cout << '\n';
+  // }
 
-  #ifndef ETNTE_AS_AVL_ONLY
-    template <typename Props>
-    void print(et_traits::node_ptr hdr, const Props& c) {
-      for (et_traits::node_ptr et : range<et_traits>(hdr)) {
-        if (Props::is_loop_edge(et)) {
-          auto v = Props::get_vertex(et);
-          std::cout << fmt::format(" [{}]", c.get_idx(v));  
-        }
-        else {
-          auto de = Props::get_directed_edge(et);
-          std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
-        }
-      }
-      std::cout << '\n';
-    }
-  #endif
+  // #ifndef ETNTE_AS_AVL_ONLY
+  //   template <typename Props>
+  //   void print(et_traits::node_ptr hdr, const Props& c) {
+  //     for (et_traits::node_ptr et : range<et_traits>(hdr)) {
+  //       if (Props::is_loop_edge(et)) {
+  //         auto v = Props::get_vertex(et);
+  //         std::cout << fmt::format(" [{}]", c.get_idx(v));  
+  //       }
+  //       else {
+  //         auto de = Props::get_directed_edge(et);
+  //         std::cout << fmt::format(" ({}, {})", c.get_idx(Props::get_opposite(de)->v1), c.get_idx(de->v1));  
+  //       }
+  //     }
+  //     std::cout << '\n';
+  //   }
+  // #endif
 
 
 
@@ -345,13 +345,13 @@ namespace dpl::graph
   class euler_tour_visitor : public boost::default_dfs_visitor
   {
     using et_ptr = et_traits::node_ptr;
-    using etnte_ptr = etnte_traits::node_ptr;
 
     using vertex_t = typename boost::graph_traits<Graph>::vertex_descriptor;
     using edge_t = typename boost::graph_traits<Graph>::edge_descriptor;
 
+    Props props_;
+
     et_ptr et_hdr_;
-    // etnte_node_ptr etnte_hdr_;
 
     helper::smart_pool<et_traits::node>* et_pool_;
 
@@ -360,10 +360,11 @@ namespace dpl::graph
     
   public:
     euler_tour_visitor(
+      Props props,
       helper::smart_pool<et_traits::node>* et_pool,
       et_ptr* tree_edge_stack
-    )
-      : et_pool_(et_pool),
+    ) : props_{props},
+        et_pool_(et_pool),
         tree_edge_stack_empty_(tree_edge_stack),
         tree_edge_stack_top_(tree_edge_stack)
     {}
@@ -377,17 +378,17 @@ namespace dpl::graph
     void discover_vertex(vertex_t v, const Graph& g) {     
       et_ptr entry = et_pool_->acquire();        
       Props::set_vertex(entry, v);
-      Props::set_entry(v, entry, g);
+      props_.set_entry(v, entry);
       et_algo::push_back(et_hdr_, entry);            
     }
 
-    void finish_vertex(vertex_t v, const Graph&) {
+    void finish_vertex(vertex_t v, const Graph& g) {
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_ptr entry = et_pool_->acquire();
         et_ptr top = *tree_edge_stack_top_--;
-        edge_t top_de_opposite = Props::get_opposite(Props::get_directed_edge(top));
+        edge_t top_de_opposite = opposite(Props::get_directed_edge(top), g);
         Props::set_directed_edge(entry, top_de_opposite);        
-        Props::set_tree_edge_entry(top_de_opposite, entry);
+        props_.set_tree_edge_entry(top_de_opposite, entry);
         et_algo::push_back(et_hdr_, entry);        
       }
     }    
@@ -395,7 +396,7 @@ namespace dpl::graph
     void tree_edge(edge_t e, const Graph&) {
       et_ptr entry = et_pool_->acquire();
       Props::set_directed_edge(entry, e);
-      Props::set_tree_edge_entry(e, entry);
+      props_.set_tree_edge_entry(e, entry);
       et_algo::push_back(et_hdr_, entry);      
       *++tree_edge_stack_top_ = entry;
     }

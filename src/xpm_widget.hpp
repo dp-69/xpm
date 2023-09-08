@@ -479,8 +479,6 @@ namespace xpm
       
       using namespace dpl::graph;
       
-      auto dc_props = dc_properties{dc_graph_};
-
       auto t0 = clock::now();
       std::cout << "graph...";
       dc_graph_ = pni_.generate_dc_graph<true>();
@@ -491,7 +489,7 @@ namespace xpm
 
       auto t1 = clock::now();
       std::cout << "euler tour...";
-      dc_context_.init_with_dfs(dc_graph_, dc_props);
+      dc_context_.init_with_dfs(dc_graph_, dc_properties{dc_graph_});
       std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
 
       
@@ -612,7 +610,9 @@ namespace xpm
 
         std::future<void> update_future;
 
-        auto outlet_entry = dc_properties::get_entry(index_count, dc_graph_);
+        dc_properties dc_props{dc_graph_};
+
+        auto outlet_entry = dc_props.get_entry(index_count);
 
         constexpr auto delay = std::chrono::milliseconds{50};
         auto last = clock::now() - delay;
@@ -660,9 +660,9 @@ namespace xpm
             auto net_idx = pni_.net(macro_idx);
 
             if (
-              // et_algo::get_header(dc_properties::get_entry(*net_idx, dc_graph_)) ==
-              // et_algo::get_header(outlet_entry)
-              true
+              et_algo::get_header(dc_props.get_entry(*net_idx)) ==
+              et_algo::get_header(outlet_entry)
+              // true
               )
             {
               dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);

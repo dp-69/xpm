@@ -77,18 +77,6 @@ namespace dpl::graph::internal
 
 namespace dpl::graph
 {
-  // class vertex
-  // {
-  //   friend class dc_properties;
-  //
-  // public:
-  //   vertex() = default;
-  //   vertex(const vertex& other) = delete;
-  //   vertex(vertex&& other) noexcept = delete;
-  //   vertex& operator=(const vertex& other) = delete;
-  //   vertex& operator=(vertex&& other) noexcept = delete;
-  // };
-
   using TEST_VERTEX_DESC_TYPE = int32_t;
 
   class directed_edge
@@ -97,35 +85,50 @@ namespace dpl::graph
 
     std::size_t entry_ = 0;
 
-
   public:
     directed_edge() = default;
     directed_edge(const directed_edge& other) = delete;
     directed_edge(directed_edge&& other) noexcept = delete;
     directed_edge& operator=(const directed_edge& other) = delete;
     directed_edge& operator=(directed_edge&& other) noexcept = delete;
-
-    directed_edge* opposite;
-    TEST_VERTEX_DESC_TYPE v1;  // pointing-to vertex  
   };
 
 
-  using vertex_iterator = internal::iterator_deference_integral<TEST_VERTEX_DESC_TYPE>;//TEST_VERTEX_DESC_TYPE;  // TODO // internal::iterator_deference_pointer<vertex*>;
+  using vertex_iterator = internal::iterator_deference_integral<TEST_VERTEX_DESC_TYPE>;  // TODO
   using out_edge_iterator = internal::iterator_deference_pointer<directed_edge*>;
+
 
   class dc_graph
   {
-    std::size_t vertex_count_;
-    std::size_t edge_count_;
-
-    std::unique_ptr<void*[]> vertex_entry_;
-
-    std::unique_ptr<directed_edge[]> directed_edges_;
-    std::unique_ptr<std::size_t[]> directed_edges_end_;
-
   public:
     using vertex_descriptor = TEST_VERTEX_DESC_TYPE;
     using edge_descriptor = directed_edge*;
+
+  private:
+
+    std::size_t vertex_count_;
+    std::unique_ptr<void*[]> vertex_entry_;
+    /**
+     * \brief for sparse 
+     */
+    std::unique_ptr<std::size_t[]> directed_edges_end_;
+
+
+    std::size_t edge_count_;
+    std::unique_ptr<directed_edge[]> directed_edges_;
+    std::unique_ptr<directed_edge*[]> opposite_;
+    std::unique_ptr<TEST_VERTEX_DESC_TYPE[]> target_;
+    std::unique_ptr<std::size_t[]> directed_edge_entry_;
+
+
+
+    friend directed_edge* opposite(const directed_edge* ab, const dc_graph& g);
+    friend void set_opposite(directed_edge* ab, directed_edge* ba, dc_graph& g);
+
+    friend vertex_descriptor target(edge_descriptor ab, const dc_graph& g);
+    friend void set_target(directed_edge* ab, vertex_descriptor b, const dc_graph& g);
+
+  public:
 
     using vertices_size_type = std::size_t;
     using edges_size_type = std::size_t;
@@ -133,7 +136,7 @@ namespace dpl::graph
 
     dc_graph() = default;
 
-    explicit dc_graph(std::integral auto vertex_count)
+    explicit dc_graph(std::integral auto vertex_count)  // NOLINT(cppcoreguidelines-pro-type-member-init)
       : vertex_count_(vertex_count),
         vertex_entry_{std::make_unique<void*[]>(vertex_count_)},
         directed_edges_end_{std::make_unique<std::size_t[]>(vertex_count)} {}
@@ -146,19 +149,21 @@ namespace dpl::graph
     void allocate_edges(std::size_t edge_count) {
       edge_count_ = edge_count;
       directed_edges_ = std::make_unique<directed_edge[]>(edge_count*2);
+      opposite_ = std::make_unique<directed_edge*[]>(edge_count*2);
+      target_ = std::make_unique<vertex_descriptor[]>(edge_count*2);
+      directed_edge_entry_ = std::make_unique<std::size_t[]>(edge_count*2);
+    }
+
+    void*& vertex_entry(vertex_descriptor i) const {
+      return vertex_entry_[i];
+    }
+
+    std::size_t& directed_edge_entry(edge_descriptor i) const {
+      return directed_edge_entry_[idx(i)];
     }
 
     auto vertex_count() const {
       return vertex_count_;
-    }
-
-
-    void* vertex_entry(vertex_descriptor i) const {
-      return vertex_entry_[i];
-    }
-
-    void set_vertex_entry(vertex_descriptor i, void* entry) const {
-      vertex_entry_[i] = entry;
     }
 
     vertex_iterator begin() const {
@@ -183,17 +188,9 @@ namespace dpl::graph
       return edge_count_;
     }
 
-    // const auto& directed_edges() const {
-    //   return directed_edges_;
-    // }
-
     edge_descriptor get_directed_edge(std::integral auto de_idx) const {
       return directed_edges_.get() + de_idx;
     }
-
-    // const auto& directed_edges_end() const {
-    //   return directed_edges_end_;
-    // }
 
     auto& directed_edges_end() {
       return directed_edges_end_;
@@ -212,25 +209,56 @@ namespace dpl::graph
     }
   };
 
+
+  /**
+   * \brief Boost
+   */
   inline dc_graph::vertices_size_type num_vertices(const dc_graph& g) {    
     return g.vertex_count();
   }
 
-  
-
+  /**
+   * \brief Boost
+   */
   inline std::pair<vertex_iterator, vertex_iterator> vertices(const dc_graph& g) {
     return {g.begin(), g.end()};
   }
 
-  inline dc_graph::vertex_descriptor target(const directed_edge* e, const dc_graph&) {
-    return e->v1;
+  /**
+   * \brief Boost
+   */
+  inline dc_graph::vertex_descriptor target(dc_graph::edge_descriptor ab, const dc_graph& g) {
+    return g.target_[g.idx(ab)];
   }
 
+  inline void set_target(directed_edge* ab, dc_graph::vertex_descriptor b, const dc_graph& g) {
+    g.target_[g.idx(ab)] = b;
+  }
+
+  inline directed_edge* opposite(const directed_edge* ab, const dc_graph& g) {
+    return g.opposite_[g.idx(ab)];
+  }
+
+  inline void set_opposite(directed_edge* ab, directed_edge* ba, dc_graph& g) {
+    g.opposite_[g.idx(ab)] = ba;
+    g.opposite_[g.idx(ba)] = ab;
+  }
+
+  /**
+   * \brief Boost
+   */
   inline std::pair<out_edge_iterator, out_edge_iterator> out_edges(const dc_graph::vertex_descriptor v, const dc_graph& g) {
     return {g.out_edges_begin(v), g.out_edges_end(v)};
   }
-  
+
+  /**
+   * \brief Boost
+   */
   inline dc_graph::vertex_descriptor source(const directed_edge*, const dc_graph&) {}
+
+  /**
+   * \brief Boost
+   */
   inline dc_graph::degree_size_type out_degree(const dc_graph::vertex_descriptor u, const dc_graph&) {}
 
 
@@ -274,12 +302,10 @@ namespace dpl::graph
     }
 
     void set(Index l, Index r) {
-      auto set_pair = [](dc_graph::vertex_descriptor v, dc_graph::vertex_descriptor u, directed_edge* vu, directed_edge* uv) {            
-        vu->v1 = u;
-        uv->v1 = v;
-
-        vu->opposite = uv;
-        uv->opposite = vu;
+      auto set_pair = [this](dc_graph::vertex_descriptor v, dc_graph::vertex_descriptor u, directed_edge* vu, directed_edge* uv) {            
+        set_target(vu, u, g_);
+        set_target(uv, v, g_);
+        set_opposite(vu, uv, g_);
       };
 
       set_pair(
@@ -305,7 +331,7 @@ struct boost::graph_traits<dpl::graph::dc_graph>
   using out_edge_iterator = dpl::graph::out_edge_iterator;
 
   using traversal_category = incidence_graph_tag;
-  using directed_category = directed_tag;
+  using directed_category = undirected_tag;
 
   using edge_parallel_category = disallow_parallel_edge_tag;
 
