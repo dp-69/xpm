@@ -206,7 +206,7 @@ namespace xpm
     pore_network pn_;
     image_data img_;
     pore_network_image pni_;
-    occupancy_arrays occupancy_arrays_;
+    // occupancy_arrays occupancy_arrays_;
 
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
@@ -462,13 +462,13 @@ namespace xpm
       tidy_axes_.Build(bounds_.data());
 
 
-      {
-        net_idx connected = pni_.connected_count();
-
-        occupancy_arrays_.macro.resize(*connected);
-        for (net_idx i{0}; i < connected; ++i)
-          occupancy_arrays_.macro[i] = 0;
-      }
+      // {
+      //   net_idx_t connected = pni_.connected_total_count();
+      //
+      //   occupancy_arrays_.macro.resize(*connected);
+      //   for (net_idx_t i{0}; i < connected; ++i)
+      //     occupancy_arrays_.macro[i] = 0;
+      // }
 
       LaunchInvasion();
     }
@@ -500,7 +500,7 @@ namespace xpm
 
         auto theta = 0.0;
 
-        auto index_count = *pni_.connected_count();
+        auto index_count = *pni_.connected_total_count();
 
         // auto connected_macro_count = 0;
         // for (macro_idx i{0}; i < pn_.node_count(); ++i)
@@ -512,15 +512,19 @@ namespace xpm
         struct processed_t
         {
           // connected_count
-          std::vector<bool> node_voxel;
+          dpl::strong_array<net_tag, bool> invaded_node_voxel;
 
           // local
           std::vector<bool> throat;
-          std::vector<bool> added_node;
+
+          // macro count
+          dpl::strong_array<macro_tag, bool> explored_node;
+
+          // throat count
           std::vector<bool> added_throat;
 
           processed_t(size_t connected_count, size_t node_count, size_t throat_count)
-            : node_voxel(connected_count), throat(throat_count), added_node(node_count), added_throat(throat_count) {}
+            : invaded_node_voxel(connected_count), throat(throat_count), explored_node(node_count), added_throat(throat_count) {}
         };
 
 
@@ -528,7 +532,9 @@ namespace xpm
 
         displ_queue queue;
 
-        for (size_t i{0}; i < pn_.throat_count(); ++i)
+        
+
+        for (std::size_t i{0}; i < pn_.throat_count(); ++i)
           if (auto [l, r] = pn_.throat_[attribs::adj][i];
             pn_.inlet() == r) // inlet macro nodes
             if (pni_.connected(l)) {
@@ -536,9 +542,8 @@ namespace xpm
                 displ_elem::macro, *l,
                 props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
 
-              processed->added_node[*l] = true;
+              processed->explored_node[l] = true;
             }
-
 
 
         // using BoostGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS>;
@@ -564,14 +569,14 @@ namespace xpm
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
             
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (pni_.connected(voxel_idx{idx1d}) && processed->node_voxel[*pni_.net(voxel_idx{idx1d})])
+              if (pni_.connected(voxel_idx_t{idx1d}) && processed->invaded_node_voxel[pni_.net(voxel_idx_t{idx1d})])
                 face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
               ++i;
             }
           });
       
-          for (macro_idx i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && processed->node_voxel[*pni_.net(macro_idx{i})])
+          for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+            if (pni_.connected(i) && processed->invaded_node_voxel[pni_.net(macro_idx_t{i})])
               macro_colors->SetTypedComponent(*i, 0,
                 // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
                 0.5
@@ -580,8 +585,8 @@ namespace xpm
           for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
             if (pn_.inner_node(r)) {
               if (pni_.connected(l)
-                && processed->node_voxel[*pni_.net(l)]
-                && processed->node_voxel[*pni_.net(r)])
+                && processed->invaded_node_voxel[pni_.net(l)]
+                && processed->invaded_node_voxel[pni_.net(r)])
                 throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
 
               ++throat_net_idx;
@@ -612,9 +617,10 @@ namespace xpm
 
         dc_properties dc_props{dc_graph_};
 
-        auto outlet_entry = dc_props.get_entry(index_count);
+        net_idx_t outlet_idx{index_count};
+        auto outlet_entry = dc_props.get_entry(*outlet_idx);
 
-        constexpr auto delay = std::chrono::milliseconds{50};
+        constexpr auto delay = std::chrono::milliseconds{0};
         auto last = clock::now() - delay;
         
 
@@ -623,10 +629,9 @@ namespace xpm
 
         auto total_volume = 0.0;
 
-        auto last_r_cap = std::numeric_limits<double>::max();
+        auto last_r_cap = queue.front().radius_cap;
 
-
-        for (macro_idx i{0}; i < pn_.node_count(); ++i)
+        for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
           if (pni_.connected(i))
             total_volume += pn_.node_[attribs::volume][*i];
 
@@ -656,19 +661,19 @@ namespace xpm
 
             queue.pop();
 
-            macro_idx macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+            macro_idx_t macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
             auto net_idx = pni_.net(macro_idx);
 
             if (
-              et_algo::get_header(dc_props.get_entry(*net_idx)) ==
-              et_algo::get_header(outlet_entry)
-              // true
+              // et_algo::get_header(dc_props.get_entry(*net_idx)) ==
+              // et_algo::get_header(outlet_entry)
+              true
               )
             {
               dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
-              processed->node_voxel[*net_idx] = true;
+              processed->invaded_node_voxel[net_idx] = true;
 
-              last_r_cap = std::min(last_r_cap, r_cap);
+              last_r_cap = std::min(r_cap, last_r_cap);
 
               inv_volume_a0 += 
                 pn_.node_[attribs::volume][*macro_idx];
@@ -677,26 +682,41 @@ namespace xpm
                 pn_.node_[attribs::volume][*macro_idx]*
                 -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][*macro_idx]);
 
-              for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
-                if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
-                  pn_.inner_node(r)) {
 
-                  if (l == local_idx && !processed->added_node[*r]) {
+
+
+              for (auto ab : dc_graph_.edges(*net_idx))
+                if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx && pni_.is_macro(b_net_idx))
+                  if (auto b_macro_idx = pni_.macro(b_net_idx); !processed->explored_node[b_macro_idx]) {
                     queue.insert(
-                      displ_elem::macro, *r,
-                      props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
-
-                    processed->added_node[*r] = true;
+                      displ_elem::macro, *b_macro_idx,
+                      props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*b_macro_idx]));
+              
+                    processed->explored_node[b_macro_idx] = true;
                   }
-                  else if (r == local_idx && !processed->added_node[*l]) {
-                    queue.insert(
-                      displ_elem::macro, *l,
-                      props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
 
-                    processed->added_node[*l] = true;
-                  }
-                }
-              }
+
+              // for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
+              //   if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
+              //     pn_.inner_node(r)) {
+              //
+              //     if (l == local_idx && !processed->added_node[*r]) {
+              //       queue.insert(
+              //         displ_elem::macro, *r,
+              //         props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
+              //
+              //       processed->added_node[*r] = true;
+              //     }
+              //     else if (r == local_idx && !processed->added_node[*l]) {
+              //       queue.insert(
+              //         displ_elem::macro, *l,
+              //         props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
+              //
+              //       processed->added_node[*l] = true;
+              //     }
+              //   }
+              // }
+
             }
 
             
@@ -840,7 +860,7 @@ namespace xpm
 
         auto mapped_range =
           std::ranges::subrange{img_.velem.get(), img_.velem.get() + img_.size}
-        | std::views::transform([](voxel_property::velem x) { return *x; });
+        | std::views::transform([](voxel_property::velem_t x) { return *x; });
 
         InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range));
 
@@ -918,7 +938,8 @@ namespace xpm
           std::tie(decomposed_pressure, residual, iters) = dpl::hypre::mpi::load_values(nrows);
 
           pressure.resize(nrows);
-          for (auto i : dpl::range(nrows))
+
+          for (HYPRE_BigInt i = 0; i < nrows; ++i)
             pressure[decomposed.decomposed_to_net[i]] = decomposed_pressure[i];
         }
 
@@ -942,7 +963,7 @@ namespace xpm
       {
         vtkSmartPointer<vtkActor> macro_actor;
         std::tie(macro_actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
-          [&](macro_idx i) {
+          [&](macro_idx_t i) {
             return pni_.connected(i) ? 0/*pressure[pni_.net(i)]*/ : std::numeric_limits<double>::quiet_NaN();
           });
            
@@ -1001,7 +1022,7 @@ namespace xpm
             idx1d_t i = 0;
             for (auto idx1d : face.GetIndices())
               face.GetColorArray()->SetTypedComponent(i++, 0, 
-                pni_.connected(voxel_idx{idx1d})
+                pni_.connected(voxel_idx_t{idx1d})
                   ? /*pressure[pni_.net(v_idx)]*/ 0
                   : std::numeric_limits<double>::quiet_NaN()
               );

@@ -6,20 +6,20 @@
 
 namespace xpm
 {
-  struct occupancy_arrays
-  {
-    dpl::strong_array<net_tag, dpl::vector2d> macro;
-
-    /**
-     * \brief total, i.e. normal throat index
-     */
-    dpl::strong_array<size_t, double> throat; // TODO: if size_t, then should be simple array
-
-    double occupancy(net_idx idx, double r_cap) {
-      auto [c0, c1] = macro[idx];
-      return c0 + c1*r_cap;
-    }
-  };
+  // struct occupancy_arrays
+  // {
+  //   dpl::strong_array<net_tag, dpl::vector2d> macro;
+  //
+  //   /**
+  //    * \brief total, i.e. normal throat index
+  //    */
+  //   dpl::strong_array<size_t, double> throat; // TODO: if size_t, then should be simple array
+  //
+  //   double occupancy(net_idx_t idx, double r_cap) {
+  //     auto [c0, c1] = macro[idx];
+  //     return c0 + c1*r_cap;
+  //   }
+  // };
 
   enum struct displ_elem : unsigned char {
     macro,

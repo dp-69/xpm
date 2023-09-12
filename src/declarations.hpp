@@ -91,39 +91,39 @@ namespace xpm
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
   struct voxel_tag {};
-  using voxel_idx = dpl::strong_integer<idx1d_t, voxel_tag>;
+  using voxel_idx_t = dpl::strong_integer<idx1d_t, voxel_tag>;
 
   struct macro_tag {};
-  using macro_idx = dpl::strong_integer<idx1d_t, macro_tag>;
+  using macro_idx_t = dpl::strong_integer<idx1d_t, macro_tag>;
 
   struct total_tag {};
-  using total_idx = dpl::strong_integer<idx1d_t, total_tag>;
+  using total_idx_t = dpl::strong_integer<idx1d_t, total_tag>;
 
   struct net_tag {};
-  using net_idx = dpl::strong_integer<idx1d_t, net_tag>;
+  using net_idx_t = dpl::strong_integer<idx1d_t, net_tag>;
 
   namespace voxel_property
   {
-    struct phase_t {};
-    using phase = dpl::strong_integer<std::uint8_t, phase_t>;
+    struct phase_tag {};
+    using phase_t = dpl::strong_integer<std::uint8_t, phase_tag>;
 
     /**
      * \brief
      *   -1  : for a non-void voxel
      *   >=0 : macro node of a void voxel
      */
-    struct velem_t {};
-    struct velem : dpl::strong_integer<std::int32_t, velem_t>
+    struct velem_tag {};
+    struct velem_t : dpl::strong_integer<std::int32_t, velem_tag>
     {
-      constexpr operator macro_idx() const { return macro_idx{value}; }
+      constexpr operator macro_idx_t() const { return macro_idx_t{value}; }
     };
   }
 
   namespace presets
   {
-    static inline constexpr auto pore = voxel_property::phase{0};
-    static inline constexpr auto solid = voxel_property::phase{1};
-    static inline constexpr auto microporous = voxel_property::phase{2};
+    static inline constexpr auto pore = voxel_property::phase_t{0};
+    static inline constexpr auto solid = voxel_property::phase_t{1};
+    static inline constexpr auto microporous = voxel_property::phase_t{2};
 
     static constexpr auto darcy_to_m2 = 9.869233e-13;
   }
@@ -169,7 +169,7 @@ namespace xpm
   };
 
   inline auto idx_mapper(idx3d_t dim) {
-    return map_idx3_t<voxel_idx>{dim};
+    return map_idx3_t<voxel_idx_t>{dim};
   }
   
   namespace parse

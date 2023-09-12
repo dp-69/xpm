@@ -105,10 +105,7 @@ namespace dpl::graph
   class dc_context
   {
     using et_ptr = et_traits::node_ptr;
-    using etnte_ptr = etnte_traits::node_ptr;
-
     using et_nt = et_traits;
-    using etnte_nt = etnte_traits;
 
     using vertex_t = dc_graph::vertex_descriptor;
     using edge_t = dc_graph::edge_descriptor;
@@ -353,16 +350,6 @@ namespace dpl::graph
 
 
     void release_component(et_ptr hdr) { // TODO: check consistency
-      etnte_ptr etnte_hdr = Props::get_etnte_header(hdr);
-
-      etnte_ptr etnte_node = etnte_nt::get_left(etnte_hdr);
-      while (etnte_node != etnte_hdr) {
-        edge_t de = Props::get_directed_edge(etnte_node);
-        Props::set_null_entry(de);
-        etnte_ptr prev = etnte_node;
-        etnte_node = etnte_algo::next_node(etnte_node);
-      }
-
       et_ptr et_node = et_nt::get_left(hdr);      
       while (et_node != hdr) {
         if (Props::is_loop_edge(et_node))

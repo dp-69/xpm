@@ -64,6 +64,7 @@ namespace dpl
     auto& operator*() { return value; }
 
     constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
+    friend constexpr bool operator<(std::integral auto lhs, const strong_integer& rhs) { return lhs < *rhs; }
     constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
     constexpr bool operator==(std::integral auto rhs) const { return value == rhs; }
     constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
@@ -104,26 +105,52 @@ namespace dpl
   template <typename KeyTag, typename ValueType>
   class strong_array<KeyTag, ValueType>
   {
-    std::unique_ptr<ValueType[]> array_;
+    std::unique_ptr<ValueType[]> uptr_;
 
   public:
     strong_array() = default;
 
     explicit strong_array(std::size_t size)
-      : array_{std::make_unique<ValueType[]>(size)} {}
+      : uptr_{std::make_unique<ValueType[]>(size)} {}
 
     void resize(std::size_t size) {
-      array_ = std::make_unique<ValueType[]>(size);
+      uptr_ = std::make_unique<ValueType[]>(size);
     }
 
     template <std::integral T>
     auto& operator[](strong_integer<T, KeyTag> index) {
-      return array_[*index];
+      return uptr_[*index];
     }
 
     template <std::integral T>
     auto& operator[](strong_integer<T, KeyTag> index) const {
-      return array_[*index];
+      return uptr_[*index];
+    }
+  };
+
+  template <typename KeyTag>
+  class strong_array<KeyTag, bool>
+  {
+    std::vector<bool> vec_;
+
+  public:
+    strong_array() = default;
+
+    explicit strong_array(std::size_t size)
+      : vec_(size) {}
+
+    void resize(std::size_t size) {
+      vec_.resize(size);
+    }
+
+    template <std::integral T>
+    auto operator[](strong_integer<T, KeyTag> index) {
+      return vec_[*index];
+    }
+
+    template <std::integral T>
+    auto operator[](strong_integer<T, KeyTag> index) const {
+      return vec_[*index];
     }
   };
 
@@ -314,14 +341,6 @@ namespace dpl
   //     return std::integral_constant<int, next<Idx>()>{};
   //   }  
   // };
-
-
-  #ifdef __cpp_lib_concepts
-  template<std::integral T>
-  constexpr auto range(T size) { return std::ranges::iota_view{static_cast<T>(0), size}; }
-  #endif
-
-
 
   struct extrapolant
   {

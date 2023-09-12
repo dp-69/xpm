@@ -10,14 +10,10 @@ namespace dpl::graph
     using et_ptr = et_traits::node_ptr;
     using et_cptr = et_traits::const_node_ptr;
 
-    using etnte = etnte_traits::node;
-    using etnte_ptr = etnte_traits::node_ptr;
-    using etnte_cptr = etnte_traits::const_node_ptr;
-
-    const dc_graph* g_;
-
     using vertex_desc = dc_graph::vertex_descriptor;
     using edge_desc = dc_graph::edge_descriptor;
+
+    const dc_graph* g_;
 
   public:
     dc_properties() = default;

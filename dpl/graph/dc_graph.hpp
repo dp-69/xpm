@@ -2,44 +2,42 @@
 
 #include "../general.hpp"
 
-namespace dpl::graph::internal
-{
-  template<typename Integral>
-  class iterator_deference_integral
-  {
-    Integral value_;
-
-  public:
-    iterator_deference_integral() = default;
-    iterator_deference_integral(Integral value) : value_(value) {}
-
-    using iterator_category = std::forward_iterator_tag;
-    using difference_type = std::ptrdiff_t;
-    using value_type = Integral;
-
-    Integral operator*() const { return value_; }
-
-    auto& operator++() {
-      ++value_;
-      return *this;
-    }  
-
-    auto operator++(int) {
-      auto temp = *this;
-      ++*this;
-      return temp;
-    }
-
-    friend bool operator==(const iterator_deference_integral& l, const iterator_deference_integral& r) { return l.value_ == r.value_; }
-  };
-}
-
-
-
 namespace dpl::graph
 {
   class dc_graph
   {
+    template<typename Int>
+    class iterator
+    {
+      Int value_;
+
+    public:
+      iterator() = default;
+      iterator(Int value) : value_(value) {}
+
+      using iterator_category = std::forward_iterator_tag;
+      using difference_type = std::ptrdiff_t;
+      using value_type = Int;
+
+      Int operator*() const {
+        return value_;
+      }
+
+      auto& operator++() {
+        ++value_;
+        return *this;
+      }  
+
+      auto operator++(int) {
+        auto temp = *this;
+        ++*this;
+        return temp;
+      }
+
+      friend bool operator==(const iterator& l, const iterator& r) { return l.value_ == r.value_; }
+    };
+
+
   public:
     using vertex_descriptor = std::int32_t;
     using edge_descriptor = std::size_t;
@@ -59,7 +57,6 @@ namespace dpl::graph
     std::unique_ptr<edge_descriptor[]> opposite_;
     std::unique_ptr<vertex_descriptor[]> target_;
 
-
     /*
      * Euler tour related
      */
@@ -72,8 +69,8 @@ namespace dpl::graph
     friend class graph_generator_base;
 
   public:
-    using vertex_iterator = internal::iterator_deference_integral<vertex_descriptor>;
-    using out_edge_iterator = internal::iterator_deference_integral<edge_descriptor>;
+    using vertex_iterator = iterator<vertex_descriptor>;
+    using out_edge_iterator = iterator<edge_descriptor>;
 
     using vertices_size_type = std::size_t;
     using edges_size_type = std::size_t;
@@ -160,9 +157,6 @@ namespace dpl::graph
   inline dc_graph::edge_descriptor opposite(dc_graph::edge_descriptor ab, const dc_graph& g) {
     return g.opposite_[ab];
   }
-
-
-
 
   class graph_generator_base
   {
