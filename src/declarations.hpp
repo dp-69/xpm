@@ -22,6 +22,19 @@ struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
   }
 };
 
+template <typename T, typename Tag>
+struct fmt::formatter<dpl::strong_integer<T, Tag>> : formatter<T>
+{
+  template <typename FormatContext>
+  auto format(dpl::strong_integer<T, Tag> si, FormatContext& ctx) {
+    return formatter<T>::format(*si, ctx);
+  }
+};
+
+  
+  
+
+
 namespace xpm
 {
   namespace hydraulic_properties
@@ -190,6 +203,10 @@ namespace xpm
 
   struct startup_settings
   {
+    bool use_cache = true;
+    bool save_cache = true;
+    bool loaded = false;
+
     struct {
       std::filesystem::path path;
       dpl::vector3i size;
@@ -205,6 +222,7 @@ namespace xpm
     } image;
 
     double microporous_perm; /* mD */
+    double microporous_poro; /* fraction */
 
     struct
     {
@@ -223,8 +241,11 @@ namespace xpm
 
     void load(const nlohmann::json& j) {
       image.load(j["image"]);
-      microporous_perm = j["properties"]["microporosity"]["permeability"].get<double>();
+      auto& j_microporosity = j["properties"]["microporosity"];
+      microporous_perm = j_microporosity["permeability"].get<double>();
+      microporous_poro = j_microporosity["porosity"].get<double>();
       solver.load(j["solver"]);
+      loaded = true;
     }
   };
 }

@@ -30,11 +30,7 @@ namespace xpm
   struct displ_event
   {
     displ_elem elem;
-
-    /**
-     * \brief local, i.e. macro_idx or voxel_idx
-     */
-    size_t local_idx;
+    std::size_t local_idx; // local, i.e. macro_idx or voxel_idx
     double radius_cap;
 
     double pressure_cap() const {
@@ -54,7 +50,7 @@ namespace xpm
     std::multiset<displ_event, pressure_compare> set_;
 
   public:
-    void insert(displ_elem elem, size_t local_idx, double r_cap) {
+    void insert(displ_elem elem, std::size_t local_idx, double r_cap) {
       set_.emplace(elem, local_idx, r_cap);
     }
 

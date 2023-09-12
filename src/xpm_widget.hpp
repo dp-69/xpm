@@ -210,9 +210,7 @@ namespace xpm
 
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
-
-    bool use_cache = true;
-    bool save_cache = true;
+    startup_settings startup_;
 
     dpl::graph::dc_graph dc_graph_;
     dpl::graph::dc_context<dpl::graph::dc_properties> dc_context_;
@@ -445,6 +443,9 @@ namespace xpm
     void Init() {
       std::locale::global(std::locale("en_US.UTF-8"));
 
+      if (std::filesystem::exists("config.json"))
+        startup_.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
+
       InitGUI();
 
       ComputePressure();
@@ -502,66 +503,50 @@ namespace xpm
 
         auto index_count = *pni_.connected_total_count();
 
-        // auto connected_macro_count = 0;
-        // for (macro_idx i{0}; i < pn_.node_count(); ++i)
-        //   if (pni_.connected(i))
-        //     ++connected_macro_count;
-
         using props = hydraulic_properties::equilateral_triangle_properties;
 
         struct processed_t
         {
           // connected_count
-          dpl::strong_array<net_tag, bool> invaded_node_voxel;
+          dpl::strong_array<net_tag, bool> invaded_macro_voxel;
 
-          // local
-          std::vector<bool> throat;
+          // // local
+          // std::vector<bool> throat;
 
           // macro count
-          dpl::strong_array<macro_tag, bool> explored_node;
+          dpl::strong_array<net_tag, bool> explored_macro_voxel;
 
-          // throat count
-          std::vector<bool> added_throat;
+          // // throat count
+          // std::vector<bool> added_throat;
 
           processed_t(size_t connected_count, size_t node_count, size_t throat_count)
-            : invaded_node_voxel(connected_count), throat(throat_count), explored_node(node_count), added_throat(throat_count) {}
+            : invaded_macro_voxel(connected_count)/*, throat(throat_count)*/, explored_macro_voxel(connected_count)/*, added_throat(throat_count)*/ {}
         };
 
+
+
+
+        double darcy_r_cap_const = 
+          props::r_cap_piston_with_films(theta, std::ranges::min(pn_.node_.range(attribs::r_ins)))*0.95;
+
+        std::cout << fmt::format("darcy capillary pressure {}\n", 1/darcy_r_cap_const);
 
         auto processed = std::make_shared<processed_t>(index_count, pn_.node_count(), pn_.throat_count());
 
         displ_queue queue;
 
-        
-
         for (std::size_t i{0}; i < pn_.throat_count(); ++i)
-          if (auto [l, r] = pn_.throat_[attribs::adj][i];
-            pn_.inlet() == r) // inlet macro nodes
+          if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inlet() == r) // inlet macro nodes TODO: voxels inlet needed
             if (pni_.connected(l)) {
               queue.insert(
                 displ_elem::macro, *l,
                 props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
 
-              processed->explored_node[l] = true;
+              processed->explored_macro_voxel[pni_.net(l)] = true;
             }
 
+        
 
-        // using BoostGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS>;
-        //
-        // auto bad_graph = std::make_shared<BoostGraph>(pn_.node_count());
-        // for (auto [l, r] : pn_.throat_.range(attribs::adj))
-        //   if (pn_.inner_node(r))
-        //     add_edge(*l, *r, *bad_graph);
-
-
-        // Graph G(N);
-
-
-        // macro_generator gen{pn_.node_count()};
-        // for (auto [l, r] : pn_.throat_.range(attribs::adj))
-        //   if (pn_.inner_node(r))
-        //     gen.reserve(l, r);
-        // std::shared_ptr<std::size_t[]> throat_adjacency(gen.allocate_and_acquire().release());
 
 
         auto update_3d = [this, processed/*, theta*/](double r_cap) {
@@ -569,14 +554,14 @@ namespace xpm
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
             
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (pni_.connected(voxel_idx_t{idx1d}) && processed->invaded_node_voxel[pni_.net(voxel_idx_t{idx1d})])
+              if (pni_.connected(voxel_idx_t{idx1d}) && processed->invaded_macro_voxel[pni_.net(voxel_idx_t{idx1d})])
                 face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
               ++i;
             }
           });
       
           for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && processed->invaded_node_voxel[pni_.net(macro_idx_t{i})])
+            if (pni_.connected(i) && processed->invaded_macro_voxel[pni_.net(macro_idx_t{i})])
               macro_colors->SetTypedComponent(*i, 0,
                 // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
                 0.5
@@ -585,8 +570,8 @@ namespace xpm
           for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
             if (pn_.inner_node(r)) {
               if (pni_.connected(l)
-                && processed->invaded_node_voxel[pni_.net(l)]
-                && processed->invaded_node_voxel[pni_.net(r)])
+                && processed->invaded_macro_voxel[pni_.net(l)]
+                && processed->invaded_macro_voxel[pni_.net(r)])
                 throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
 
               ++throat_net_idx;
@@ -622,28 +607,34 @@ namespace xpm
 
         constexpr auto delay = std::chrono::milliseconds{0};
         auto last = clock::now() - delay;
-        
 
-        auto inv_volume_a0 = 0.0;
-        auto inv_volume_a2 = 0.0;
-
-        auto total_volume = 0.0;
+        v3d inv_volume_coefs{0};
 
         auto last_r_cap = queue.front().radius_cap;
 
+        auto total_pore_volume = 0.0;
+
         for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
           if (pni_.connected(i))
-            total_volume += pn_.node_[attribs::volume][*i];
+            total_pore_volume += pn_.node_[attribs::volume][*i];
+
+        auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
+
+        for (voxel_idx_t i{0}; i < img_.size; ++i)
+          if (pni_.connected(i))
+            total_pore_volume += unit_darcy_pore_volume;
 
 
         for (idx1d_t displ_idx = 0; displ_idx < index_count; ++displ_idx) {
           if (displ_idx % ((index_count - 1)/200) == 0)
             QMetaObject::invokeMethod(this, [=, this] {
-              auto inv_volume = inv_volume_a0 + inv_volume_a2*last_r_cap*last_r_cap;
+              auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
 
               if (displ_idx % ((index_count - 1)/200*10) == 0)
-                sweep_series_->append(1 - inv_volume/total_volume, 1/last_r_cap/*10000*progress*/);
-              
+                sweep_series_->append(1 - inv_volume/total_pore_volume, 1/last_r_cap/*10000*progress*/);
+
+              // std::cout << 1/last_r_cap << "\n";
+
               UpdateStatus(fmt::format("{:.1f} %", 100.*displ_idx/index_count));
             });
 
@@ -656,13 +647,16 @@ namespace xpm
           }
 
           if (!queue.empty()) {
-            auto local_idx = queue.front().local_idx;
-            auto r_cap = queue.front().radius_cap;
+            auto [elem, local_idx, r_cap] = queue.front();
 
             queue.pop();
 
-            macro_idx_t macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-            auto net_idx = pni_.net(macro_idx);
+            net_idx_t net_idx; // TODO
+            if (elem == displ_elem::macro)
+              net_idx = pni_.net(macro_idx_t(local_idx));
+            else if (elem == displ_elem::voxel)
+              net_idx = pni_.net(voxel_idx_t(local_idx));
+
 
             if (
               // et_algo::get_header(dc_props.get_entry(*net_idx)) ==
@@ -671,94 +665,46 @@ namespace xpm
               )
             {
               dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
-              processed->invaded_node_voxel[net_idx] = true;
+              processed->invaded_macro_voxel[net_idx] = true;
 
               last_r_cap = std::min(r_cap, last_r_cap);
 
-              inv_volume_a0 += 
-                pn_.node_[attribs::volume][*macro_idx];
+              if (elem == displ_elem::macro) {
+                inv_volume_coefs[0] += 
+                  pn_.node_[attribs::volume][local_idx];
 
-              inv_volume_a2 += 
-                pn_.node_[attribs::volume][*macro_idx]*
-                -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][*macro_idx]);
-
-
-
+                inv_volume_coefs[2] += 
+                  pn_.node_[attribs::volume][local_idx]*
+                  -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][local_idx]);
+              }
+              else if (elem == displ_elem::voxel) {
+                inv_volume_coefs[0] += unit_darcy_pore_volume;
+              }
 
               for (auto ab : dc_graph_.edges(*net_idx))
-                if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx && pni_.is_macro(b_net_idx))
-                  if (auto b_macro_idx = pni_.macro(b_net_idx); !processed->explored_node[b_macro_idx]) {
-                    queue.insert(
-                      displ_elem::macro, *b_macro_idx,
-                      props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*b_macro_idx]));
-              
-                    processed->explored_node[b_macro_idx] = true;
+                if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx) { // not outlet
+                  if (!processed->explored_macro_voxel[b_net_idx]) {
+                    if (pni_.is_macro(b_net_idx)) { // macro
+                      auto b_macro_idx = pni_.macro(b_net_idx);
+
+                      queue.insert(
+                        displ_elem::macro, *b_macro_idx,
+                        props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*b_macro_idx]));
+                    }
+                    else { // darcy
+                      auto b_voxel_idx = pni_.voxel(b_net_idx);
+
+                      queue.insert(displ_elem::voxel, *b_voxel_idx, darcy_r_cap_const);
+                    }
+
+                    processed->explored_macro_voxel[b_net_idx] = true;
                   }
-
-
-              // for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
-              //   if (auto [l, r] = pn_.throat_[attribs::adj][i]; 
-              //     pn_.inner_node(r)) {
-              //
-              //     if (l == local_idx && !processed->added_node[*r]) {
-              //       queue.insert(
-              //         displ_elem::macro, *r,
-              //         props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
-              //
-              //       processed->added_node[*r] = true;
-              //     }
-              //     else if (r == local_idx && !processed->added_node[*l]) {
-              //       queue.insert(
-              //         displ_elem::macro, *l,
-              //         props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
-              //
-              //       processed->added_node[*l] = true;
-              //     }
-              //   }
-              // }
-
+                }
+                // else {
+                //   std::cout << "OUTLET";
+                // }
             }
-
-            
-
-            
-            
-           
-
-            // auto [iter, end] = out_edges(local_idx, *bad_graph);
-            // for (; iter != end; ++iter) {
-            //   auto adj_macro_local_idx = target(*iter, *bad_graph);
-            //   if ()
-            // }
-
-
-
-
-            // for (auto de : dc_graph_.edges(*net_idx)) {
-            //   if (auto net_adj = dc_graph_.get_idx(de->v1); net_adj < connected_macro_count) {
-            //     if (l == local_idx && !processed->added_node[*r]) {
-            //       queue.insert(
-            //         displ_elem::macro, *r,
-            //         props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*r]));
-            //
-            //       processed->added_node[*r] = true;
-            //     }
-            //   }
-            // }
-
-
-
-            
-
-
-            // auto begin = throat_adjacency[queue.front().local_idx];
-            // for ()
-
-            
           }
-
-
-          
         }
 
         
@@ -788,16 +734,9 @@ namespace xpm
       using clock = std::chrono::high_resolution_clock;
       using seconds = std::chrono::seconds;
 
-      startup_settings startup;
+      std::cout << fmt::format("image path: {}\n\n", startup_.image.path);
 
-      auto has_config = std::filesystem::exists("config.json");
-      if (has_config)
-        startup.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
-
-
-      std::cout << fmt::format("image path: {}\n\n", startup.image.path);
-
-      auto pnm_path = ProcessImage(startup.image.path)/"";
+      auto pnm_path = ProcessImage(startup_.image.path)/"";
 
       auto begin_init_time = clock::now();
 
@@ -805,8 +744,8 @@ namespace xpm
 
       v3i processors{1};
 
-      if (startup.solver.decomposition)
-        processors = *startup.solver.decomposition;
+      if (startup_.solver.decomposition)
+        processors = *startup_.solver.decomposition;
       else {
         if (auto proc_count = std::thread::hardware_concurrency();
           proc_count == 12)
@@ -819,11 +758,11 @@ namespace xpm
           processors = {4, 4, 3};
       }
 
-      auto const_permeability = startup.microporous_perm*0.001*presets::darcy_to_m2;
+      auto const_permeability = startup_.microporous_perm*0.001*presets::darcy_to_m2;
 
       
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
-        startup.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
+        startup_.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
 
 
 
@@ -840,12 +779,12 @@ namespace xpm
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout
-          << "network\n  "
+          << fmt::format("network\n  nodes: {}\n  throats: {}\n", pn_.node_count(), pn_.throat_count())
           << (pn_.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
       #endif
 
       #ifdef _WIN32
-        pn_.connectivity_flow_summary(startup.solver.tolerance, startup.solver.max_iterations);
+        pn_.connectivity_flow_summary(startup_.solver.tolerance, startup_.solver.max_iterations);
       #else
         pn_.connectivity_flow_summary_MPI(startup.solver.tolerance, startup.solver.max_iterations);
       #endif
@@ -853,8 +792,8 @@ namespace xpm
       std::cout << '\n';
 
       {
-        img_.read_image(startup.image.path, startup.image.phases);
-        img_.dim = has_config ? startup.image.size : std::round(std::cbrt(img_.size));
+        img_.read_image(startup_.image.path, startup_.image.phases);
+        img_.dim = startup_.loaded ? startup_.image.size : std::round(std::cbrt(img_.size));
 
         img_.read_icl_velems(pnm_path);
 
@@ -873,7 +812,9 @@ namespace xpm
 
       pni_.evaluate_isolated();
 
-      std::cout << " done\n\n";
+      std::cout << fmt::format(" done\n  macro: {}\n  voxel: {}\n\n",
+        pni_.connected_macro_count(),
+        pni_.connected_total_count() - pni_.connected_macro_count());
 
       using namespace presets;
 
@@ -882,7 +823,7 @@ namespace xpm
       HYPRE_Int iters = 0;
 
 
-      if (use_cache && std::filesystem::exists(cache_path)) {
+      if (startup_.use_cache && std::filesystem::exists(cache_path)) {
         std::cout << "using cached pressure\n\n";
 
         std::ifstream is(cache_path, std::ifstream::binary);
@@ -917,7 +858,7 @@ namespace xpm
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
-        dpl::hypre::mpi::save(input, nrows, nvalues, decomposed.blocks, startup.solver.tolerance, startup.solver.max_iterations);
+        dpl::hypre::mpi::save(input, nrows, nvalues, decomposed.blocks, startup_.solver.tolerance, startup_.solver.max_iterations);
 
         std::cout
           << " done\n\n"
@@ -945,7 +886,7 @@ namespace xpm
 
         std::cout << "pressure solved\n\n";
 
-        if (save_cache) {
+        if (startup_.save_cache) {
           std::filesystem::create_directory("cache");
           std::ofstream cache_stream(cache_path, std::ofstream::binary);
           cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*pressure.size());

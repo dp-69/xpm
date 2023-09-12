@@ -631,8 +631,8 @@ R"(image voxels
     net_idx_t connected_macro_count_{0};
     net_idx_t connected_total_count_{0};
 
-    auto total(macro_idx_t i) const { return total_idx_t{*i}; }
-    auto total(voxel_idx_t i) const { return total_idx_t{pn_->node_count() + *i}; }
+    total_idx_t total(macro_idx_t i) const { return total_idx_t{*i}; }
+    total_idx_t total(voxel_idx_t i) const { return total_idx_t{pn_->node_count() + *i}; }
 
   public:
     void init(pore_network* pn, image_data* img) {
@@ -643,17 +643,22 @@ R"(image voxels
     // idx1d_t inlet() const { return pn_->node_count() + img_->size_microporous; }
     // idx1d_t outlet() const { return inlet() + 1; }
 
-    auto connected_total_count() const { return connected_total_count_; }
+    net_idx_t connected_macro_count() const { return connected_macro_count_; }
+    net_idx_t connected_total_count() const { return connected_total_count_; }
 
-    auto net(macro_idx_t i) const { return total_to_net_map_[total(i)]; }
-    auto net(voxel_idx_t i) const { return total_to_net_map_[total(i)]; }
+    net_idx_t net(macro_idx_t i) const { return total_to_net_map_[total(i)]; }
+    net_idx_t net(voxel_idx_t i) const { return total_to_net_map_[total(i)]; }
 
-    auto is_macro(net_idx_t i) const {
+    bool is_macro(net_idx_t i) const {
       return i < connected_macro_count_;
     }
 
-    auto macro(net_idx_t i) const {
+    macro_idx_t macro(net_idx_t i) const {
       return macro_idx_t{*net_to_total_map_[i]};
+    }
+
+    voxel_idx_t voxel(net_idx_t i) const {
+      return voxel_idx_t{*net_to_total_map_[i] - pn_->node_count()};
     }
 
     bool connected(macro_idx_t i) const {
