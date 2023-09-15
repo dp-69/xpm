@@ -35,7 +35,8 @@
   },
   "properties": {
     "microporosity": {
-      "permeability": 1.0 /* mD */
+      "permeability": 1.0, /* mD */
+      "porosity": 0.02 /* fraction */
     }
   },
   "solver" : {
@@ -59,7 +60,8 @@
 //   },
 //   "properties": {
 //     "microporosity": {
-//       "permeability": 1.0 /* mD */
+//       "permeability": 1.0, /* mD */
+//       "porosity": 0.02 /* fraction */
 //     }
 //   },
 //   "solver" : {

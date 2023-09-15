@@ -3,6 +3,8 @@
 
 #include "functions.h"
 #include "displ_queue.hpp"
+#include "invasion_task.hpp"
+
 
 #include <dpl/units.hpp>
 #include <dpl/hypre/InputDeprec.hpp>
@@ -205,15 +207,15 @@ namespace xpm
 
     pore_network pn_;
     image_data img_;
-    pore_network_image pni_;
+    pore_network_image pni_{pn_, img_};
     // occupancy_arrays occupancy_arrays_;
 
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
     startup_settings startup_;
 
-    dpl::graph::dc_graph dc_graph_;
-    dpl::graph::dc_context<dpl::graph::dc_properties> dc_context_;
+    invasion_task invasion_task_{pni_};
+
 
     std::string status_ = "<nothing>";
     dpl::qt::property_editor::PropertyItem* status_property_item_;
@@ -226,7 +228,7 @@ namespace xpm
       tree_view_->model()->dataChanged(idx, idx);
     }
 
-    std::future<void> invasion_future_;
+    std::future<void> consumer_future_;
     
 
 
@@ -475,259 +477,329 @@ namespace xpm
     }
 
     void LaunchInvasion() {
-      using clock = std::chrono::high_resolution_clock;
-      using seconds = std::chrono::seconds;
-      
-      using namespace dpl::graph;
-      
-      auto t0 = clock::now();
-      std::cout << "graph...";
-      dc_graph_ = pni_.generate_dc_graph<true>();
-      std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
-        duration_cast<seconds>(clock::now() - t0).count(),
-        dc_graph_.vertex_count(),
-        dc_graph_.edge_count());
+      invasion_task_.init();
 
-      auto t1 = clock::now();
-      std::cout << "euler tour...";
-      dc_context_.init_with_dfs(dc_graph_, dc_properties{dc_graph_});
-      std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
+      consumer_future_ = std::async(std::launch::async, [this] {
+        auto start = std::chrono::system_clock::now();
 
-      
-      std::cout << "full decremental connectivity... (async)\n";
+        auto invasion_future = std::async(std::launch::async,
+          &invasion_task::launch, &invasion_task_, startup_.microporous_poro);
 
-      invasion_future_ = std::async(std::launch::async, [this] {
-        auto t2 = clock::now();
+        auto update = [this, start] {
+          auto invaded = invasion_task_.invaded_array();
 
-        auto theta = 0.0;
-
-        auto index_count = *pni_.connected_total_count();
-
-        using props = hydraulic_properties::equilateral_triangle_properties;
-
-        struct processed_t
-        {
-          // connected_count
-          dpl::strong_array<net_tag, bool> invaded_macro_voxel;
-
-          // // local
-          // std::vector<bool> throat;
-
-          // macro count
-          dpl::strong_array<net_tag, bool> explored_macro_voxel;
-
-          // // throat count
-          // std::vector<bool> added_throat;
-
-          processed_t(size_t connected_count, size_t node_count, size_t throat_count)
-            : invaded_macro_voxel(connected_count)/*, throat(throat_count)*/, explored_macro_voxel(connected_count)/*, added_throat(throat_count)*/ {}
-        };
-
-
-
-
-        double darcy_r_cap_const = 
-          props::r_cap_piston_with_films(theta, std::ranges::min(pn_.node_.range(attribs::r_ins)))*0.95;
-
-        std::cout << fmt::format("darcy capillary pressure {}\n", 1/darcy_r_cap_const);
-
-        auto processed = std::make_shared<processed_t>(index_count, pn_.node_count(), pn_.throat_count());
-
-        displ_queue queue;
-
-        for (std::size_t i{0}; i < pn_.throat_count(); ++i)
-          if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inlet() == r) // inlet macro nodes TODO: voxels inlet needed
-            if (pni_.connected(l)) {
-              queue.insert(
-                displ_elem::macro, *l,
-                props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
-
-              processed->explored_macro_voxel[pni_.net(l)] = true;
-            }
-
-        
-
-
-
-        auto update_3d = [this, processed/*, theta*/](double r_cap) {
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
             
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (pni_.connected(voxel_idx_t{idx1d}) && processed->invaded_macro_voxel[pni_.net(voxel_idx_t{idx1d})])
+              if (pni_.connected(voxel_idx_t{idx1d}) && invaded[pni_.net(voxel_idx_t{idx1d})])
                 face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
               ++i;
             }
           });
-      
+          
           for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && processed->invaded_macro_voxel[pni_.net(macro_idx_t{i})])
+            if (pni_.connected(i) && invaded[pni_.net(macro_idx_t{i})])
               macro_colors->SetTypedComponent(*i, 0,
                 // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
                 0.5
               );
-
+          
           for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
             if (pn_.inner_node(r)) {
               if (pni_.connected(l)
-                && processed->invaded_macro_voxel[pni_.net(l)]
-                && processed->invaded_macro_voxel[pni_.net(r)])
+                && invaded[pni_.net(l)]
+                && invaded[pni_.net(r)])
                 throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
-
+          
               ++throat_net_idx;
             }
-
+          
           QMetaObject::invokeMethod(this,
-            [this] {
+            [this, start] {
+              using namespace std::chrono;
+
+              UpdateStatus(invasion_task_.finished()
+                ? fmt::format("done {}s", duration_cast<seconds>(system_clock::now() - start).count())
+                : fmt::format("{:.1f} %", 100.*invasion_task_.inv_idx()/(*pni_.connected_count())));
+
+              sweep_series_->clear();
+              
+              for (auto p : invasion_task_.pc_curve())
+                sweep_series_->append(p.x(), p.y());
+
               dpl::sfor<6>([&](auto face_idx) {
                 std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
               });
               throat_colors->Modified();
               macro_colors->Modified();
-      
+          
               render_window_->Render();
             });
         };
 
-        // {
-        //   std::ifstream is("cache/replacement_indices.bin", std::ifstream::binary);
-        //   is.seekg(0, std::ios_base::end);
-        //   auto count = is.tellg()/sizeof(std::size_t);
-        //   is.seekg(0, std::ios_base::beg);
-        //   dc_context_.saved_replacement_indices.resize(count);          
-        //   is.read(reinterpret_cast<char*>(dc_context_.saved_replacement_indices.data()), count*sizeof(std::size_t));
-        // }
 
-        std::future<void> update_future;
-
-        dc_properties dc_props{dc_graph_};
-
-        net_idx_t outlet_idx{index_count};
-        auto outlet_entry = dc_props.get_entry(*outlet_idx);
-
-        constexpr auto delay = std::chrono::milliseconds{0};
-        auto last = clock::now() - delay;
-
-        v3d inv_volume_coefs{0};
-
-        auto last_r_cap = queue.front().radius_cap;
-
-        auto total_pore_volume = 0.0;
-
-        for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-          if (pni_.connected(i))
-            total_pore_volume += pn_.node_[attribs::volume][*i];
-
-        auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
-
-        for (voxel_idx_t i{0}; i < img_.size; ++i)
-          if (pni_.connected(i))
-            total_pore_volume += unit_darcy_pore_volume;
-
-
-        for (idx1d_t displ_idx = 0; displ_idx < index_count; ++displ_idx) {
-          if (displ_idx % ((index_count - 1)/200) == 0)
-            QMetaObject::invokeMethod(this, [=, this] {
-              auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
-
-              if (displ_idx % ((index_count - 1)/200*10) == 0)
-                sweep_series_->append(1 - inv_volume/total_pore_volume, 1/last_r_cap/*10000*progress*/);
-
-              // std::cout << 1/last_r_cap << "\n";
-
-              UpdateStatus(fmt::format("{:.1f} %", 100.*displ_idx/index_count));
-            });
-
-          if (displ_idx % ((index_count - 1)/100/*40*/) == 0) {
-            using namespace std::chrono;
-            if (auto diff = duration_cast<seconds>(clock::now() - last); diff < delay)
-              std::this_thread::sleep_for(delay - diff);
-            last = clock::now();
-            update_future = std::async(std::launch::async, update_3d, last_r_cap);
-          }
-
-          if (!queue.empty()) {
-            auto [elem, local_idx, r_cap] = queue.front();
-
-            queue.pop();
-
-            net_idx_t net_idx; // TODO
-            if (elem == displ_elem::macro)
-              net_idx = pni_.net(macro_idx_t(local_idx));
-            else if (elem == displ_elem::voxel)
-              net_idx = pni_.net(voxel_idx_t(local_idx));
-
-
-            if (
-              // et_algo::get_header(dc_props.get_entry(*net_idx)) ==
-              // et_algo::get_header(outlet_entry)
-              true
-              )
-            {
-              dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
-              processed->invaded_macro_voxel[net_idx] = true;
-
-              last_r_cap = std::min(r_cap, last_r_cap);
-
-              if (elem == displ_elem::macro) {
-                inv_volume_coefs[0] += 
-                  pn_.node_[attribs::volume][local_idx];
-
-                inv_volume_coefs[2] += 
-                  pn_.node_[attribs::volume][local_idx]*
-                  -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][local_idx]);
-              }
-              else if (elem == displ_elem::voxel) {
-                inv_volume_coefs[0] += unit_darcy_pore_volume;
-              }
-
-              for (auto ab : dc_graph_.edges(*net_idx))
-                if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx) { // not outlet
-                  if (!processed->explored_macro_voxel[b_net_idx]) {
-                    if (pni_.is_macro(b_net_idx)) { // macro
-                      auto b_macro_idx = pni_.macro(b_net_idx);
-
-                      queue.insert(
-                        displ_elem::macro, *b_macro_idx,
-                        props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*b_macro_idx]));
-                    }
-                    else { // darcy
-                      auto b_voxel_idx = pni_.voxel(b_net_idx);
-
-                      queue.insert(displ_elem::voxel, *b_voxel_idx, darcy_r_cap_const);
-                    }
-
-                    processed->explored_macro_voxel[b_net_idx] = true;
-                  }
-                }
-                // else {
-                //   std::cout << "OUTLET";
-                // }
-            }
-          }
-        }
-
-        
-
-        QMetaObject::invokeMethod(this,
-          [this, t2, update_3d, last_r_cap] {
-            update_3d(last_r_cap);
-
-            UpdateStatus(fmt::format("done {}s", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/));
-          });
+        while (invasion_future.wait_for(std::chrono::milliseconds{1500}) != std::future_status::ready)
+          update();
+        update();
       });
 
-      
 
 
-      // {
-      //   auto ptr = dc_context_.saved_replacement_indices.data();
-      //   std::filesystem::create_directory("cache");
-      //   std::ofstream cache_stream("cache/replacement_indices.bin", std::ofstream::binary);
-      //   cache_stream.write(reinterpret_cast<const char*>(ptr), sizeof(std::size_t)*dc_context_.saved_replacement_indices.size());
-      //   std::cout << "pressure cached\n\n";
-      // }
-      
+
+      // using clock = std::chrono::high_resolution_clock;
+      // using seconds = std::chrono::seconds;
+      //
+      // using namespace dpl::graph;
+      //
+      // auto t0 = clock::now();
+      // std::cout << "graph...";
+      // dc_graph_ = pni_.generate_dc_graph<true>();
+      // std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
+      //   duration_cast<seconds>(clock::now() - t0).count(),
+      //   dc_graph_.vertex_count(),
+      //   dc_graph_.edge_count());
+      //
+      // auto t1 = clock::now();
+      // std::cout << "euler tour...";
+      // dc_context_.init_with_dfs(dc_graph_, dc_properties{dc_graph_});
+      // std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
+      //
+      //
+      // std::cout << "full decremental connectivity... (async)\n";
+      //
+      // invasion_future_ = std::async(std::launch::async, [this] {
+      //   auto t2 = clock::now();
+      //
+      //   auto theta = 0.0;
+      //
+      //   auto index_count = *pni_.connected_count();
+      //
+      //   using props = hydraulic_properties::equilateral_triangle_properties;
+      //
+      //   struct processed_t
+      //   {
+      //     dpl::strong_array<net_tag, bool> invaded_macro_voxel;
+      //     dpl::strong_array<net_tag, bool> explored_macro_voxel;
+      //
+      //     processed_t(net_idx_t connected_count)
+      //       : invaded_macro_voxel(connected_count), explored_macro_voxel(connected_count) {}
+      //   };
+      //
+      //   double darcy_r_cap_const = 
+      //     props::r_cap_piston_with_films(theta, std::ranges::min(pn_.node_.range(attribs::r_ins)))*0.95;
+      //
+      //   auto processed = std::make_shared<processed_t>(pni_.connected_count());
+      //
+      //   displ_queue queue;
+      //
+      //   for (std::size_t i{0}; i < pn_.throat_count(); ++i)
+      //     if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inlet() == r) // inlet macro nodes TODO: voxels inlet needed
+      //       if (pni_.connected(l)) {
+      //         queue.insert(
+      //           displ_elem::macro, *l, props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
+      //          
+      //         processed->explored_macro_voxel[pni_.net(l)] = true;
+      //       }
+      //
+      //   auto update_3d = [this, processed/*, theta*/](double r_cap) {
+      //     dpl::sfor<6>([&](auto face_idx) {
+      //       dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+      //       
+      //       for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
+      //         if (pni_.connected(voxel_idx_t{idx1d}) && processed->invaded_macro_voxel[pni_.net(voxel_idx_t{idx1d})])
+      //           face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
+      //         ++i;
+      //       }
+      //     });
+      //
+      //     for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+      //       if (pni_.connected(i) && processed->invaded_macro_voxel[pni_.net(macro_idx_t{i})])
+      //         macro_colors->SetTypedComponent(*i, 0,
+      //           // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
+      //           0.5
+      //         );
+      //
+      //     for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
+      //       if (pn_.inner_node(r)) {
+      //         if (pni_.connected(l)
+      //           && processed->invaded_macro_voxel[pni_.net(l)]
+      //           && processed->invaded_macro_voxel[pni_.net(r)])
+      //           throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
+      //
+      //         ++throat_net_idx;
+      //       }
+      //
+      //     QMetaObject::invokeMethod(this,
+      //       [this] {
+      //         dpl::sfor<6>([&](auto face_idx) {
+      //           std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
+      //         });
+      //         throat_colors->Modified();
+      //         macro_colors->Modified();
+      //
+      //         render_window_->Render();
+      //       });
+      //   };
+      //
+      //   std::future<void> update_future;
+      //
+      //   dc_properties dc_props{dc_graph_};
+      //
+      //   net_idx_t outlet_idx{index_count};
+      //   et_traits::node_ptr outlet_entry = dc_props.get_entry(*outlet_idx);
+      //
+      //   constexpr auto delay = std::chrono::milliseconds{250};
+      //   auto last = clock::now() - delay;
+      //
+      //   v3d inv_volume_coefs{0};
+      //
+      //   auto last_r_cap = queue.front().radius_cap;
+      //
+      //   auto total_pore_volume = 0.0;
+      //
+      //   for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+      //     if (pni_.connected(i))
+      //       total_pore_volume += pn_.node_[attribs::volume][*i];
+      //
+      //   auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
+      //
+      //   for (voxel_idx_t i{0}; i < img_.size; ++i)
+      //     if (pni_.connected(i))
+      //       total_pore_volume += unit_darcy_pore_volume;
+      //
+      //   dpl::vector2d last_pc_point{2, -1};
+      //
+      //   bool darcy_invaded = false;
+      //
+      //   auto add_to_plot = [this](dpl::vector2d p) {
+      //     QMetaObject::invokeMethod(this, [=, this] {
+      //       if (const auto& pts = sweep_series_->points(); pts.size() > 1
+      //         && std::abs(pts[pts.size() - 1].y() - p.y()) < 1e-6
+      //         && std::abs(pts[pts.size() - 2].y() - p.y()) < 1e-6)
+      //         sweep_series_->replace(pts.size() - 1, p.x(), p.y());  // NOLINT(cppcoreguidelines-narrowing-conversions)
+      //       else
+      //         sweep_series_->append(p.x(), p.y());
+      //     });
+      //   };
+      //
+      //   for (idx1d_t inv_idx = 0; !queue.empty(); ++inv_idx) {
+      //     auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
+      //
+      //     if (dpl::vector2d pc_point{1 - inv_volume/total_pore_volume, 1/last_r_cap};
+      //       std::abs(last_pc_point.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point.y() - pc_point.y()) > 1e4) {
+      //       last_pc_point = pc_point;
+      //       add_to_plot(pc_point);
+      //     }
+      //
+      //
+      //     if (darcy_invaded) {
+      //       if (inv_idx % ((index_count - 1)/50) == 0) {
+      //         // if (reference_count == pni_.connected_macro_count())
+      //         //   if (auto diff = duration_cast<seconds>(clock::now() - last); diff < delay)
+      //         //     std::this_thread::sleep_for(delay - diff);
+      //         // last = clock::now();
+      //         update_future = std::async(std::launch::async, update_3d, last_r_cap);
+      //       }
+      //
+      //       if (inv_idx % ((index_count - 1)/100) == 0)
+      //         QMetaObject::invokeMethod(this, [=, this] {
+      //           UpdateStatus(fmt::format("{:.1f} %", 100.*inv_idx/index_count));
+      //         });
+      //     }
+      //     else {
+      //       if (inv_idx % ((*pni_.connected_macro_count() - 1)/20) == 0) {
+      //         // if (reference_count == pni_.connected_macro_count())
+      //           if (auto diff = duration_cast<seconds>(clock::now() - last); diff < delay)
+      //             std::this_thread::sleep_for(delay - diff);
+      //         last = clock::now();
+      //         /*update_future = */
+      //         std::async(std::launch::async, update_3d, last_r_cap).wait();
+      //       }
+      //
+      //       if (inv_idx % ((*pni_.connected_macro_count() - 1)/200) == 0)
+      //         QMetaObject::invokeMethod(this, [=, this] {
+      //           UpdateStatus(fmt::format("{:.1f} %", 100.*inv_idx/index_count));
+      //         });
+      //     }
+      //
+      //     
+      //
+      //
+      //
+      //
+      //
+      //     auto [elem, local_idx, r_cap] = queue.front();
+      //
+      //     queue.pop();
+      //
+      //     net_idx_t net_idx; // TODO
+      //     if (elem == displ_elem::macro)
+      //       net_idx = pni_.net(macro_idx_t(local_idx));
+      //     else if (elem == displ_elem::voxel) {
+      //       net_idx = pni_.net(voxel_idx_t(local_idx));
+      //       darcy_invaded = true;
+      //     }
+      //
+      //
+      //     if (
+      //       // et_algo::get_header(dc_props.get_entry(*net_idx)) ==
+      //       // et_algo::get_header(outlet_entry)
+      //       true
+      //     )
+      //     {
+      //       // dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
+      //       processed->invaded_macro_voxel[net_idx] = true;
+      //
+      //       last_r_cap = std::min(r_cap, last_r_cap);
+      //
+      //       if (elem == displ_elem::macro) {
+      //         inv_volume_coefs[0] += 
+      //           pn_.node_[attribs::volume][local_idx];
+      //
+      //         inv_volume_coefs[2] += 
+      //           pn_.node_[attribs::volume][local_idx]*
+      //           -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][local_idx]);
+      //       }
+      //       else if (elem == displ_elem::voxel) {
+      //         inv_volume_coefs[0] += unit_darcy_pore_volume;
+      //       }
+      //
+      //       for (auto ab : dc_graph_.edges(*net_idx))
+      //         if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx) { // not outlet
+      //           if (!processed->explored_macro_voxel[b_net_idx]) {
+      //             if (pni_.is_macro(b_net_idx)) { // macro
+      //               auto b_macro_idx = pni_.macro(b_net_idx);
+      //
+      //               queue.insert(
+      //                 displ_elem::macro, *b_macro_idx,
+      //                 props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*b_macro_idx]));
+      //             }
+      //             else { // darcy
+      //               auto b_voxel_idx = pni_.voxel(b_net_idx);
+      //
+      //               queue.insert(displ_elem::voxel, *b_voxel_idx, darcy_r_cap_const);
+      //             }
+      //
+      //             processed->explored_macro_voxel[b_net_idx] = true;
+      //           }
+      //         }
+      //     }
+      //   }
+      //
+      //   
+      //
+      //   QMetaObject::invokeMethod(this,
+      //     [=, this] {
+      //       update_3d(last_r_cap);
+      //
+      //       UpdateStatus(fmt::format("done {}s", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/));
+      //
+      //       auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
+      //
+      //       add_to_plot({1 - inv_volume/total_pore_volume, 1/last_r_cap/*10000*progress*/});
+      //     });
+      // });
     }
 
     void ComputePressure() {
@@ -806,15 +878,13 @@ namespace xpm
         img_.eval_microporous();
       }
       
-      pni_.init(&pn_, &img_);
-
       std::cout << "connectivity (isolated components)...";
 
       pni_.evaluate_isolated();
 
       std::cout << fmt::format(" done\n  macro: {}\n  voxel: {}\n\n",
         pni_.connected_macro_count(),
-        pni_.connected_total_count() - pni_.connected_macro_count());
+        pni_.connected_count() - pni_.connected_macro_count());
 
       using namespace presets;
 

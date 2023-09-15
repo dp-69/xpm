@@ -139,8 +139,17 @@ namespace dpl
     explicit strong_array(std::size_t size)
       : vec_(size) {}
 
+    template <std::integral T>
+    explicit strong_array(strong_integer<T, KeyTag> size)
+      : vec_(*size) {}
+
     void resize(std::size_t size) {
       vec_.resize(size);
+    }
+
+    template <std::integral T>
+    void resize(strong_integer<T, KeyTag> size) {
+      vec_.resize(*size);
     }
 
     template <std::integral T>

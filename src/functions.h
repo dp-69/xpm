@@ -85,7 +85,7 @@ namespace xpm
       
     vtkNew<vtkPoints> points;
       
-    for (idx1d_t i = 0, count = pnm.node_count(); i < count; ++i) {
+    for (idx1d_t i = 0; i < pnm.node_count(); ++i) {
       points->InsertNextPoint(pnm.node_[pos][i]);
       scale_array->InsertNextTuple1(pnm.node_[r_ins][i]);
       color_array->InsertNextTuple1(color_map(macro_idx_t{i}));

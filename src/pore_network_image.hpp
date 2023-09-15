@@ -140,14 +140,14 @@ namespace xpm
     // }
     
     
-    idx1d_t parse_statoil_text_idx(std::integral auto idx) const {
+    macro_idx_t parse_statoil_text_idx(std::integral auto idx) const {
       if (idx == -1)
         return node_count();
   
       if (idx == 0)
         return node_count() + 1;
     
-      return idx - 1;
+      return macro_idx_t{idx - 1};
     }
 
   public:
@@ -201,8 +201,8 @@ namespace xpm
 
     
     
-    idx1d_t node_count() const {
-      return static_cast<idx1d_t>(node_.size());
+    macro_idx_t node_count() const {
+      return macro_idx_t(node_.size());
     }
 
     std::size_t throat_count() const {
@@ -298,10 +298,10 @@ namespace xpm
           auto& [left, right] = throat_[adj][i];
 
           parse_text(throat1_ptr, value);
-          *left = parse_statoil_text_idx(value); 
+          left = parse_statoil_text_idx(value); 
 
           parse_text(throat1_ptr, value);
-          *right = parse_statoil_text_idx(value);        
+          right = parse_statoil_text_idx(value);        
           
           parse_text(throat1_ptr, throat_[r_ins][i]);
           // parse_text(throat1_ptr, shapeFactor[i]); //TODO
@@ -366,7 +366,7 @@ namespace xpm
     }
 
     bool eval_inlet_outlet_connectivity() const {
-      disjoint_sets ds(node_count() + 2);
+      disjoint_sets ds(*node_count() + 2);
 
       for (auto [l, r] : throat_.range(attribs::adj))
         ds.union_set(*l, *r);
@@ -377,7 +377,7 @@ namespace xpm
     std::pair<dpl::hypre::ls_known_storage, size_t> generate_pressure_input() const {
       dpl::hypre::ls_known_storage_builder builder;
 
-      builder.allocate_rows(node_count());
+      builder.allocate_rows(*node_count());
 
       for (std::size_t i = 0; i < throat_count(); ++i)
         if (auto [l, r] = throat_[attribs::adj][i]; inner_node(r))
@@ -412,9 +412,9 @@ namespace xpm
     void connectivity_flow_summary(const dpl::hypre::mpi::solve_result& solve  /*const std::unique_ptr<double[]>& pressure*/) const {
       auto& [pressure, residual, iter] = solve; 
 
-      disjoint_sets ds(node_count());
-      std::vector<bool> connected_inlet(node_count());
-      std::vector<bool> connected_outlet(node_count());
+      disjoint_sets ds(*node_count());
+      std::vector<bool> connected_inlet(*node_count());
+      std::vector<bool> connected_outlet(*node_count());
       
       auto connected = [&](macro_idx_t i) {
         auto rep = ds.find_set(*i);
@@ -469,7 +469,7 @@ namespace xpm
 
     void connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations) const {
       auto [input, nvalues] = generate_pressure_input();
-      auto nrows = node_count();
+      auto nrows = *node_count();
 
       dpl::hypre::mpi::save(input, nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations);
 
@@ -481,9 +481,9 @@ namespace xpm
 
 
     void connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
-      auto pressure = std::make_unique<double[]>(node_count());
+      auto pressure = std::make_unique<double[]>(*node_count());
       auto [residual, iters] = dpl::hypre::solve(
-        {0, node_count() - 1}, generate_pressure_input().first, pressure.get(), tolerace, max_iterations); // gross solve (with isolated)
+        {0, *node_count() - 1}, generate_pressure_input().first, pressure.get(), tolerace, max_iterations); // gross solve (with isolated)
       connectivity_flow_summary({std::move(pressure), residual, iters});
     }
   };
@@ -629,22 +629,25 @@ R"(image voxels
      * \brief connected/flowing
      */
     net_idx_t connected_macro_count_{0};
-    net_idx_t connected_total_count_{0};
+    net_idx_t connected_count_{0};
 
     total_idx_t total(macro_idx_t i) const { return total_idx_t{*i}; }
-    total_idx_t total(voxel_idx_t i) const { return total_idx_t{pn_->node_count() + *i}; }
+    total_idx_t total(voxel_idx_t i) const { return total_idx_t{*pn_->node_count() + *i}; }
 
   public:
-    void init(pore_network* pn, image_data* img) {
-      pn_ = pn;
-      img_ = img;
+    pore_network_image(pore_network& pn, image_data& img)
+      : pn_(&pn), img_(&img) {}
+
+    auto& pn() const {
+      return *pn_;
     }
 
-    // idx1d_t inlet() const { return pn_->node_count() + img_->size_microporous; }
-    // idx1d_t outlet() const { return inlet() + 1; }
+    auto& img() const {
+      return *img_;
+    }
 
     net_idx_t connected_macro_count() const { return connected_macro_count_; }
-    net_idx_t connected_total_count() const { return connected_total_count_; }
+    net_idx_t connected_count() const { return connected_count_; }
 
     net_idx_t net(macro_idx_t i) const { return total_to_net_map_[total(i)]; }
     net_idx_t net(voxel_idx_t i) const { return total_to_net_map_[total(i)]; }
@@ -658,7 +661,7 @@ R"(image voxels
     }
 
     voxel_idx_t voxel(net_idx_t i) const {
-      return voxel_idx_t{*net_to_total_map_[i] - pn_->node_count()};
+      return voxel_idx_t{*net_to_total_map_[i] - *pn_->node_count()};
     }
 
     bool connected(macro_idx_t i) const {
@@ -673,7 +676,7 @@ R"(image voxels
     }
 
     void evaluate_isolated() {
-      auto gross_total_size = pn_->node_count() + img_->size;
+      auto gross_total_size = *pn_->node_count() + img_->size;
 
       disjoint_sets ds(gross_total_size);
 
@@ -735,15 +738,15 @@ R"(image voxels
         total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_macro_count_++ : isolated_idx_;
       }
       
-      connected_total_count_ = connected_macro_count_;
+      connected_count_ = connected_macro_count_;
 
       for (voxel_idx_t i{0}; i < img_->size; ++i) {
         auto total_idx = total(i);
         auto rep = ds.find_set(*total_idx); 
-        total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_total_count_++ : isolated_idx_;
+        total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
       }
 
-      net_to_total_map_.resize(*connected_total_count_);
+      net_to_total_map_.resize(*connected_count_);
 
       for (total_idx_t i{0}; i < gross_total_size; ++i)
         if (total_to_net_map_[i] != isolated_idx_)
@@ -756,7 +759,7 @@ R"(image voxels
 
       using pair = std::pair<idx1d_t, int>;
 
-      std::vector<pair> net_idx_block(*connected_total_count_);
+      std::vector<pair> net_idx_block(*connected_count_);
 
       auto map_idx = idx_mapper(blocks);
 
@@ -800,8 +803,8 @@ R"(image voxels
 
       row_decomposition mapping;
 
-      mapping.net_to_decomposed = std::make_unique<idx1d_t[]>(*connected_total_count_);
-      mapping.decomposed_to_net = std::make_unique<idx1d_t[]>(*connected_total_count_);
+      mapping.net_to_decomposed = std::make_unique<idx1d_t[]>(*connected_count_);
+      mapping.decomposed_to_net = std::make_unique<idx1d_t[]>(*connected_count_);
 
       auto block_count = blocks.prod();
       auto row_count_per_block = std::make_unique<idx1d_t[]>(block_count);
@@ -811,7 +814,7 @@ R"(image voxels
         row_count_per_block[i] = 0;
 
       
-      for (idx1d_t i{0}; i < connected_total_count_; ++i) {
+      for (idx1d_t i{0}; i < connected_count_; ++i) {
         mapping.net_to_decomposed[net_idx_block[i].first] = i;
         mapping.decomposed_to_net[i] = net_idx_block[i].first;
         ++row_count_per_block[net_idx_block[i].second];
@@ -833,7 +836,7 @@ R"(image voxels
       using namespace presets;
       auto map_idx = img_->idx1d_mapper();
 
-      net_idx_t vertex_count = connected_total_count_; // last is outlet
+      net_idx_t vertex_count = connected_count_; // last is outlet
 
       if constexpr (Outlet)
         ++vertex_count;
@@ -926,7 +929,7 @@ R"(image voxels
       
       dpl::hypre::ls_known_storage_builder builder;
 
-      builder.allocate_rows(*connected_total_count_);
+      builder.allocate_rows(*connected_count_);
       
       for (auto [l, r] : pn_->throat_.range(adj))
         if (pn_->inner_node(r) && connected(l)) // macro-macro
@@ -1052,7 +1055,7 @@ R"(image voxels
           }
       }
 
-      return {*connected_total_count_, builder.nvalues(), builder.acquire_storage()};
+      return {*connected_count_, builder.nvalues(), builder.acquire_storage()};
     }
 
 
