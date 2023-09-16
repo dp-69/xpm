@@ -505,26 +505,24 @@ namespace dpl
   using vector3d_map = vector_n_map<double, 3>;
 
 
-  template<typename T, typename U>
-  auto lerp_solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, U arg) {
+  template<typename T>
+  auto solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, const auto arg) {
     return p0.y() + (p1 - p0).slope()*(arg - p0.x());
   }
   
-  template<typename T, typename U>
-  auto lerp_solve(const std::vector<vector_n<T, 2>>& curve, U arg) {
+  template<typename T>
+  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg) {
     auto begin = curve.begin();
     auto end = curve.end();
 
     if (arg < begin->x())
-      return lerp_solve(*begin, *(begin + 1), arg);        
+      return solve(*begin, *(begin + 1), arg);        
 
-    auto iter = std::lower_bound(begin, end, arg,
-      [](const vector_n<T, 2>& l, T r) { return l.x() < r; });
+    auto iter = std::lower_bound(begin, end, arg, [](const vector_n<T, 2>& l, T r) { return l.x() < r; });
 
-    if (iter == end - 1 || iter == end)
-      return lerp_solve(*(end - 2), *(end - 1), arg);
-    
-    return lerp_solve(*iter, *(iter + 1), arg);
+    return iter == end - 1 || iter == end
+      ? solve(*(end - 2), *(end - 1), arg)
+      : solve(*iter, *(iter + 1), arg);
   }
 }
 

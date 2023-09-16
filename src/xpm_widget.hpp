@@ -220,7 +220,8 @@ namespace xpm
     std::string status_ = "<nothing>";
     dpl::qt::property_editor::PropertyItem* status_property_item_;
 
-    QLineSeries* sweep_series_;
+    QChartView* chart_view_;
+    QLineSeries* line_series_;
     
     void UpdateStatus(std::string text) {
       status_ = std::move(text);
@@ -339,18 +340,20 @@ namespace xpm
 
 
 
-        auto sweep_chart_view_ = new QChartView;
-        sweep_chart_view_->setRenderHint(QPainter::Antialiasing);
-        sweep_chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+        chart_view_ = new QChartView;
+        chart_view_->setRenderHint(QPainter::Antialiasing);
+        chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
 
-        sweep_series_ = new QLineSeries;
+        line_series_ = new QLineSeries;
+        line_series_->setName("total");
 
         auto sweep_chart_ = new QChart;
         // sweep_chart_->legend()->hide();
-        sweep_chart_->addSeries(sweep_series_);
+        sweep_chart_->addSeries(line_series_);
         sweep_chart_->createDefaultAxes();
 
-        sweep_chart_view_->setChart(sweep_chart_);
+        chart_view_->setChart(sweep_chart_);
+        
 
         auto* axis_x = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Horizontal)[0]);
         // axis_x->setLabelsFont(scaled_font);
@@ -372,7 +375,7 @@ namespace xpm
         // axis_y->setLabelsBrush(black_brush);
         // axis_y->setTitleBrush(black_brush);
 
-        sweep_series_->clear();
+        line_series_->clear();
         // sweep_series_->append(1, 0);
 
         // sweep_series_->append(0.95, 100);
@@ -380,7 +383,7 @@ namespace xpm
         // sweep_series_->append(0.85, 1000);
         // sweep_series_->append(0.80, 5000);
 
-        sweep_series_->setPointsVisible(true);
+        line_series_->setPointsVisible(true);
 
 
 
@@ -393,7 +396,7 @@ namespace xpm
           << (
             splitter{dir::vertical}
             << tree_view_ << stretch{1}
-            << sweep_chart_view_ << stretch{0}) << stretch{0}
+            << chart_view_ << stretch{0}) << stretch{0}
           << qvtk_widget_ << stretch{1}
         );
       }
@@ -448,6 +451,25 @@ namespace xpm
       if (std::filesystem::exists("config.json"))
         startup_.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
 
+      // auto val0 = solve(std::span{startup_.capillary_pressure}, -0.2);
+      // auto val  = solve(startup_.capillary_pressure, 0.0);
+      // auto val1 = solve(startup_.capillary_pressure, 0.5);
+      // auto val2 = solve(std::span{startup_.capillary_pressure.data(), startup_.capillary_pressure.size()}, 1.0);
+      // auto val3 = solve(startup_.capillary_pressure, 2.0);
+
+      // using namespace std::views;
+
+      // std::vector<dpl::vector2d> transf  
+      // {
+      //   
+      // };
+      
+      
+
+      
+
+
+
       InitGUI();
 
       ComputePressure();
@@ -477,13 +499,57 @@ namespace xpm
     }
 
     void LaunchInvasion() {
+      // auto macro_pore_volume = 0.0;
+      //
+      // for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+      //   if (pni_.connected(i))
+      //     macro_pore_volume += pn_.node_[attribs::volume][*i];
+      //   
+      // auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
+      //
+      // idx1d_t micro_voxels = 0;
+      //
+      // for (voxel_idx_t i{0}; i < img_.size; ++i)
+      //   if (pni_.connected(i))
+      //     ++micro_voxels;
+
+      {
+        auto* chart = chart_view_->chart();
+        auto* microporous_pc_series = new QLineSeries;
+        chart->addSeries(microporous_pc_series);
+
+        // auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
+
+        for (auto& p : startup_.capillary_pressure)
+          microporous_pc_series->append(p.x(), p.y());
+        microporous_pc_series->setName("microporous");
+        microporous_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
+        microporous_pc_series->attachAxis(chart->axes(Qt::Vertical)[0]);
+      }
+
+
+
+      // chart_view_ = new QChartView;
+        // chart_view_->setRenderHint(QPainter::Antialiasing);
+        // chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+        //
+        // line_series_ = new QLineSeries;
+        //
+        // auto sweep_chart_ = new QChart;
+        // // sweep_chart_->legend()->hide();
+        // sweep_chart_->addSeries(line_series_);
+        // sweep_chart_->createDefaultAxes();
+        //
+        // chart_view_->setChart(sweep_chart_);
+
+
       invasion_task_.init();
 
       consumer_future_ = std::async(std::launch::async, [this] {
         auto start = std::chrono::system_clock::now();
 
         auto invasion_future = std::async(std::launch::async,
-          &invasion_task::launch, &invasion_task_, startup_.microporous_poro);
+          &invasion_task::launch, &invasion_task_, startup_.microporous_poro, std::span{startup_.capillary_pressure});
 
         auto update = [this, start] {
           auto invaded = invasion_task_.invaded_array();
@@ -523,10 +589,10 @@ namespace xpm
                 ? fmt::format("done {}s", duration_cast<seconds>(system_clock::now() - start).count())
                 : fmt::format("{:.1f} %", 100.*invasion_task_.inv_idx()/(*pni_.connected_count())));
 
-              sweep_series_->clear();
+              line_series_->clear();
               
               for (auto p : invasion_task_.pc_curve())
-                sweep_series_->append(p.x(), p.y());
+                line_series_->append(p.x(), p.y());
 
               dpl::sfor<6>([&](auto face_idx) {
                 std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();

@@ -223,6 +223,7 @@ namespace xpm
 
     double microporous_perm; /* mD */
     double microporous_poro; /* fraction */
+    std::vector<dpl::vector2d> capillary_pressure;
 
     struct
     {
@@ -242,8 +243,9 @@ namespace xpm
     void load(const nlohmann::json& j) {
       image.load(j["image"]);
       auto& j_microporosity = j["properties"]["microporosity"];
-      microporous_perm = j_microporosity["permeability"].get<double>();
-      microporous_poro = j_microporosity["porosity"].get<double>();
+      microporous_perm = j_microporosity["permeability"];
+      microporous_poro = j_microporosity["porosity"];
+      capillary_pressure = j_microporosity["capillary_pressure"];
       solver.load(j["solver"]);
       loaded = true;
     }

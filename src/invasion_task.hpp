@@ -66,9 +66,7 @@ namespace xpm {
       pc_curve_.reserve(1000);
     }
 
-    void launch(double microporous_porosity) {
-      auto t2 = std::chrono::high_resolution_clock::now();
-
+    void launch(double microprs_porosity, std::span<dpl::vector2d> microprs_pc) {
       auto theta = 0.0;
 
       auto index_count = *pni_->connected_count();
@@ -79,6 +77,8 @@ namespace xpm {
 
       double darcy_r_cap_const = 
         props::r_cap_piston_with_films(theta, std::ranges::min(pni_->pn().node_.range(attribs::r_ins)))*0.95;
+
+      std::cout << fmt::format("micro pc: {}\n", 1/darcy_r_cap_const);
 
       dpl::strong_array<net_tag, bool> explored(pni_->connected_count());
 
@@ -93,46 +93,6 @@ namespace xpm {
             explored[pni_->net(l)] = true;
           }
 
-                                                                                  // auto update_3d = [this, processed/*, theta*/](double r_cap) {
-                                                                                  //   dpl::sfor<6>([&](auto face_idx) {
-                                                                                  //     dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-                                                                                  //     
-                                                                                  //     for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-                                                                                  //       if (pni_->connected(voxel_idx_t{idx1d}) && processed->invaded_macro_voxel[pni_->net(voxel_idx_t{idx1d})])
-                                                                                  //         face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
-                                                                                  //       ++i;
-                                                                                  //     }
-                                                                                  //   });
-                                                                                  //
-                                                                                  //   for (macro_idx_t i{0}; i < pni_->pn().node_count(); ++i)
-                                                                                  //     if (pni_->connected(i) && processed->invaded_macro_voxel[pni_->net(macro_idx_t{i})])
-                                                                                  //       macro_colors->SetTypedComponent(*i, 0,
-                                                                                  //         // 1 - props::area_of_films(theta, r_cap)/props::area(pni_->pn().node_[attribs::r_ins][*i])
-                                                                                  //         0.5
-                                                                                  //       );
-                                                                                  //
-                                                                                  //   for (vtkIdType throat_net_idx = 0; auto [l, r] : pni_->pn().throat_.range(attribs::adj))
-                                                                                  //     if (pni_->pn().inner_node(r)) {
-                                                                                  //       if (pni_->connected(l)
-                                                                                  //         && processed->invaded_macro_voxel[pni_->net(l)]
-                                                                                  //         && processed->invaded_macro_voxel[pni_->net(r)])
-                                                                                  //         throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
-                                                                                  //
-                                                                                  //       ++throat_net_idx;
-                                                                                  //     }
-                                                                                  //
-                                                                                  //   QMetaObject::invokeMethod(this,
-                                                                                  //     [this] {
-                                                                                  //       dpl::sfor<6>([&](auto face_idx) {
-                                                                                  //         std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
-                                                                                  //       });
-                                                                                  //       throat_colors->Modified();
-                                                                                  //       macro_colors->Modified();
-                                                                                  //
-                                                                                  //       render_window_->Render();
-                                                                                  //     });
-                                                                                  // };
-
       std::future<void> update_future;
 
       dpl::graph::dc_properties dc_props{dc_graph_};
@@ -140,10 +100,8 @@ namespace xpm {
       net_idx_t outlet_idx{index_count};
       dpl::graph::et_traits::node_ptr outlet_entry = dc_props.get_entry(*outlet_idx);
 
-      constexpr auto delay = std::chrono::milliseconds{250};
-      auto last = std::chrono::high_resolution_clock::now() - delay;
-
       v3d inv_volume_coefs{0};
+      idx1d_t inv_darcy_count{0};
 
       auto last_r_cap = queue.front().radius_cap;
 
@@ -152,9 +110,8 @@ namespace xpm {
       for (macro_idx_t i{0}; i < pni_->pn().node_count(); ++i)
         if (pni_->connected(i))
           total_pore_volume += pni_->pn().node_[attribs::volume][*i];
-
         
-      auto unit_darcy_pore_volume = (pni_->pn().physical_size/pni_->img().dim).prod()*microporous_porosity;
+      auto unit_darcy_pore_volume = (pni_->pn().physical_size/pni_->img().dim).prod()*microprs_porosity;
 
       for (voxel_idx_t i{0}; i < pni_->img().size; ++i)
         if (pni_->connected(i))
@@ -172,18 +129,26 @@ namespace xpm {
           pc_curve_.push_back(p);
       };
 
+
+      using namespace std::ranges::views;
+      auto query = microprs_pc | reverse | transform([](dpl::vector2d p) { return dpl::vector2d{p.y(), p.x()}; });
+      const std::vector<dpl::vector2d> pc_inverse{query.begin(), query.end()};
+
+      auto eval_inv_volume = [&]() {
+        return
+          inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap
+        + (1 - solve(std::span{pc_inverse}, 1/last_r_cap))*unit_darcy_pore_volume*inv_darcy_count;
+      };
+
       for (inv_idx_ = 0; !queue.empty(); ++inv_idx_) {
         // std::this_thread::sleep_for(std::chrono::milliseconds{1});
 
-        auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
+        auto inv_volume = eval_inv_volume();
 
         if (dpl::vector2d pc_point{1 - inv_volume/total_pore_volume, 1/last_r_cap};
           std::abs(last_pc_point.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point.y() - pc_point.y()) > 1e4) {
           last_pc_point = pc_point;
           add_to_plot(pc_point);
-        }
-        else {
-          // pc_curve_[pc_curve_.size() - 1] = pc_point;
         }
 
 
@@ -232,12 +197,12 @@ namespace xpm {
 
 
         if (
-          dpl::graph::et_algo::get_header(dc_props.get_entry(*net_idx)) ==
-          dpl::graph::et_algo::get_header(outlet_entry)
-          // true
+          // dpl::graph::et_algo::get_header(dc_props.get_entry(*net_idx)) ==
+          // dpl::graph::et_algo::get_header(outlet_entry)
+          true
         )
         {
-          dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
+          // dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
           invaded_macro_voxel_[net_idx] = true;
 
           last_r_cap = std::min(r_cap, last_r_cap);
@@ -251,7 +216,8 @@ namespace xpm {
               -props::area_of_films(theta)/props::area(pni_->pn().node_[attribs::r_ins][local_idx]);
           }
           else if (elem == displ_elem::voxel) {
-            inv_volume_coefs[0] += unit_darcy_pore_volume;
+            // inv_volume_coefs[0] += unit_darcy_pore_volume;
+            ++inv_darcy_count;
           }
 
           for (auto ab : dc_graph_.edges(*net_idx))
@@ -276,17 +242,11 @@ namespace xpm {
         }
       }
 
-        
-
-      // QMetaObject::invokeMethod(this,
-      //   [=, this] {
-      //     update_3d(last_r_cap);
-      //
-      //     UpdateStatus(fmt::format("done {}s", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/));
-      //
-      auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
-      add_to_plot({1 - inv_volume/total_pore_volume, 1/last_r_cap/*10000*progress*/});
-      //   });
+      for (auto i = 0; i < 4; ++i) {
+        auto inv_volume = eval_inv_volume();
+        add_to_plot({1 - inv_volume/total_pore_volume, 1/last_r_cap});
+        last_r_cap *= 0.9;
+      }
 
       finished_ = true;
     }

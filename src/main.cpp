@@ -1,10 +1,21 @@
 #include "xpm_widget.hpp"
+#include "xpm_widget.hpp"
 
 #include <QWidget>
 
 
 int main(int argc, char* argv[])
 {
+  // auto input = std::initializer_list<dpl::vector2d>{{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
+  // auto k = solve(std::span{input}, 3);
+
+
+  // xpm::idx1d_t size = 10;
+  //
+  // for (auto qwe : std::views::iota(0, size)) {
+  //   std::cout << qwe << '\n';
+  // }
+
   // std::ranges::min(pn_.node_.range(attribs::r_ins), {},
   //           [theta](double r_ins) { return props::r_cap_piston_with_films(theta, r_ins); })*0.95
 

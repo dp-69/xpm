@@ -690,7 +690,7 @@ R"(image voxels
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d;
+        voxel_idx_t idx1d{0};
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j)
@@ -786,7 +786,7 @@ R"(image voxels
 
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d;
+        voxel_idx_t idx1d{0};
 
         using namespace presets;
 
@@ -856,7 +856,7 @@ R"(image voxels
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d;
+        voxel_idx_t idx1d{0};
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j) {
@@ -892,7 +892,7 @@ R"(image voxels
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d;
+        voxel_idx_t idx1d{0};
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j) {
@@ -940,7 +940,7 @@ R"(image voxels
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d;
+        voxel_idx_t idx1d{0};
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j)
@@ -989,7 +989,7 @@ R"(image voxels
         
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d;
+        voxel_idx_t idx1d{0};
 
         for (k = 0; k < img_->dim.z(); ++k)
           for (j = 0; j < img_->dim.y(); ++j) {

@@ -46,7 +46,8 @@ namespace dpl
 
     value_type value;
 
-    constexpr explicit strong_integer(value_type v = 0) : value{v} {}
+    strong_integer() = default;
+    constexpr explicit strong_integer(value_type v) : value{v} {}
     constexpr explicit operator value_type() const { return value; }
 
     constexpr auto& operator++() {
