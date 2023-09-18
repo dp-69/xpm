@@ -78,7 +78,7 @@ namespace xpm {
       double darcy_r_cap_const = 
         props::r_cap_piston_with_films(theta, std::ranges::min(pni_->pn().node_.range(attribs::r_ins)))*0.95;
 
-      std::cout << fmt::format("micro pc: {}\n", 1/darcy_r_cap_const);
+      std::cout << fmt::format("max macro Pc: {}\n", 1/darcy_r_cap_const);
 
       dpl::strong_array<net_tag, bool> explored(pni_->connected_count());
 
@@ -225,15 +225,13 @@ namespace xpm {
               if (!explored[b_net_idx]) {
                 if (pni_->is_macro(b_net_idx)) { // macro
                   auto b_macro_idx = pni_->macro(b_net_idx);
-
                   queue.insert(
                     displ_elem::macro, *b_macro_idx,
                     props::r_cap_piston_with_films(theta, pni_->pn().node_[attribs::r_ins][*b_macro_idx]));
                 }
                 else { // darcy
                   auto b_voxel_idx = pni_->voxel(b_net_idx);
-
-                  queue.insert(displ_elem::voxel, *b_voxel_idx, darcy_r_cap_const);
+                  queue.insert(displ_elem::voxel, *b_voxel_idx, 1/microprs_pc.back().y()/*darcy_r_cap_const*/);
                 }
 
                 explored[b_net_idx] = true;
@@ -242,10 +240,10 @@ namespace xpm {
         }
       }
 
-      for (auto i = 0; i < 4; ++i) {
+      for (auto i = 0; i < 5; ++i) {
         auto inv_volume = eval_inv_volume();
         add_to_plot({1 - inv_volume/total_pore_volume, 1/last_r_cap});
-        last_r_cap *= 0.9;
+        last_r_cap *= 0.925;
       }
 
       finished_ = true;

@@ -521,10 +521,13 @@ namespace xpm
         // auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
 
         for (auto& p : startup_.capillary_pressure)
-          microporous_pc_series->append(p.x(), p.y());
+          microporous_pc_series->append(/*frac**/p.x(), p.y());
         microporous_pc_series->setName("microporous");
         microporous_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         microporous_pc_series->attachAxis(chart->axes(Qt::Vertical)[0]);
+        auto pen = microporous_pc_series->pen();
+        pen.setWidth(pen.width() + 1);
+        microporous_pc_series->setPen(pen);
       }
 
 
