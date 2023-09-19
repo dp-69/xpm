@@ -47,7 +47,7 @@ namespace dpl::graph
     /**
      * \brief sparse ranges 
      */
-    std::unique_ptr<std::size_t[]> directed_edges_end_;
+    std::unique_ptr<edge_descriptor[]> directed_edges_end_;
 
     std::size_t edge_count_;
 
@@ -209,12 +209,20 @@ namespace dpl::graph
       edge_count_ += 1;
     }
 
-    void set(Index l, Index r) {
-      set_dual(
+    std::pair<dc_graph::edge_descriptor, dc_graph::edge_descriptor> set(Index l, Index r) {
+      auto lr = shift_[traits::get(l)];
+      auto rl = shift_[traits::get(r)];
+
+      graph_generator_base::set_dual(
         traits::get(l),
         traits::get(r),
-        shift_[traits::get(l)]++,
-        shift_[traits::get(r)]++);
+        lr,
+        rl);
+
+      ++shift_[traits::get(l)];
+      ++shift_[traits::get(r)];
+
+      return {lr, rl};
     }
   };
 }

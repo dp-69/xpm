@@ -371,8 +371,8 @@ namespace xpm
         axis_y->setTitleText("Capillary pressure, Pa");
         // axis_y->setTitleFont(font);
         
-        axis_y->setRange(0, 400000);
-        // axis_y->setLabelsBrush(black_brush);
+        axis_y->setRange(0, 800000);
+        // axis_y->setLabelsBrush(black_brush);s
         // axis_y->setTitleBrush(black_brush);
 
         line_series_->clear();
@@ -555,7 +555,8 @@ namespace xpm
           &invasion_task::launch, &invasion_task_, startup_.microporous_poro, std::span{startup_.capillary_pressure});
 
         auto update = [this, start] {
-          auto invaded = invasion_task_.invaded_array();
+          auto& invaded = invasion_task_.invaded_array();
+          auto& invaded_throat = invasion_task_.invaded_throat();
 
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
@@ -573,16 +574,32 @@ namespace xpm
                 // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
                 0.5
               );
-          
-          for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
-            if (pn_.inner_node(r)) {
-              if (pni_.connected(l)
-                && invaded[pni_.net(l)]
-                && invaded[pni_.net(r)])
-                throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
-          
-              ++throat_net_idx;
+
+
+          {
+            vtkIdType throat_net_idx = 0;
+
+            for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
+              if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
+                if (pni_.connected(l) && invaded_throat[i])
+                  throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
+
+                ++throat_net_idx;
+              }
             }
+          }
+          
+
+          // for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
+          //   if (pn_.inner_node(r)) {
+          //     if (pni_.connected(l) && invaded_throat[throat_net_idx]
+          //       // && invaded[pni_.net(l)]
+          //       // && invaded[pni_.net(r)]
+          //       )
+          //       throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
+          //
+          //     ++throat_net_idx;
+          //   }
           
           QMetaObject::invokeMethod(this,
             [this, start] {

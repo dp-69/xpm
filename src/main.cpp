@@ -6,13 +6,18 @@
 
 int main(int argc, char* argv[])
 {
+        
+
   // auto input = std::initializer_list<dpl::vector2d>{{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
   // auto k = solve(std::span{input}, 3);
 
 
   // xpm::idx1d_t size = 10;
   //
-  // for (auto qwe : std::views::iota(0, size)) {
+  // std::size_t q = 0;
+  //
+  //
+  // for (auto qwe : std::ranges::iota_view{q, q} | std::views::filter([](std::size_t i) { return i%2; })) {
   //   std::cout << qwe << '\n';
   // }
 

@@ -42,6 +42,7 @@ namespace dpl
   template <std::integral T, typename Tag = void>
   struct strong_integer
   {
+    using difference_type = std::make_signed_t<T>;
     using value_type = T;
 
     value_type value;
@@ -83,6 +84,7 @@ namespace dpl
     friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
     friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
   };
+
 
   template <typename>
   struct strong_traits {};
