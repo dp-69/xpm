@@ -1110,5 +1110,25 @@ R"(microprs perm: {} mD
         -inlet_flow_sum/pn_->physical_size.x()/darcy_to_m2*1000,
         -outlet_flow_sum/pn_->physical_size.x()/darcy_to_m2*1000);
     }
+
+    double eval_total_pore_volume(double darcy_porosity) const {
+      auto volume = 0.0;
+
+      for (macro_idx_t i{0}; i < pn_->node_count(); ++i)
+        if (connected(i))
+          volume += pn_->node_[attribs::volume][*i];
+
+      for (std::size_t i{0}; i < pn_->throat_count(); ++i)
+        if (auto [l, r] = pn_->throat_[attribs::adj][i]; pn_->inner_node(r) && connected(l))
+          volume += pn_->throat_[attribs::volume][i];
+        
+      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim).prod()*darcy_porosity;
+
+      for (voxel_idx_t i{0}; i < img_->size; ++i)
+        if (connected(i))
+          volume += unit_darcy_pore_volume;
+
+      return volume;
+    }
   };
 }

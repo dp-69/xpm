@@ -42,7 +42,7 @@ namespace dpl
   template <std::integral T, typename Tag = void>
   struct strong_integer
   {
-    using difference_type = std::make_signed_t<T>;
+    // using difference_type = std::make_signed_t<T>;
     using value_type = T;
 
     value_type value;

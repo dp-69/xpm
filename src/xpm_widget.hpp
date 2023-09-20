@@ -222,6 +222,7 @@ namespace xpm
 
     QChartView* chart_view_;
     QLineSeries* line_series_;
+    QValueAxis*  axis_y;
     
     void UpdateStatus(std::string text) {
       status_ = std::move(text);
@@ -365,13 +366,13 @@ namespace xpm
         // axis_x->setTitleBrush(black_brush);
 
 
-        auto* axis_y = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Vertical)[0]);
+        axis_y = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Vertical)[0]);
         // axis_y->setLabelsFont(scaled_font);
         axis_y->setLabelFormat("%.0f");
         axis_y->setTitleText("Capillary pressure, Pa");
         // axis_y->setTitleFont(font);
         
-        axis_y->setRange(0, 800000);
+        axis_y->setRange(0, 100000);
         // axis_y->setLabelsBrush(black_brush);s
         // axis_y->setTitleBrush(black_brush);
 
@@ -499,37 +500,54 @@ namespace xpm
     }
 
     void LaunchInvasion() {
-      // auto macro_pore_volume = 0.0;
-      //
-      // for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-      //   if (pni_.connected(i))
-      //     macro_pore_volume += pn_.node_[attribs::volume][*i];
-      //   
-      // auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
-      //
-      // idx1d_t micro_voxels = 0;
-      //
-      // for (voxel_idx_t i{0}; i < img_.size; ++i)
-      //   if (pni_.connected(i))
-      //     ++micro_voxels;
+      auto macro_pore_volume = 0.0;
+      
+      for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+        if (pni_.connected(i))
+          macro_pore_volume += pn_.node_[attribs::volume][*i];
+
+      for (std::size_t i{0}; i < pn_.throat_count(); ++i)
+        if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
+          macro_pore_volume += pn_.throat_[attribs::volume][i];
+
+      auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
+
+      idx1d_t micro_voxels = 0;
+      
+      for (voxel_idx_t i{0}; i < img_.size; ++i)
+        if (pni_.connected(i))
+          ++micro_voxels;
 
       {
         auto* chart = chart_view_->chart();
         auto* microporous_pc_series = new QLineSeries;
         chart->addSeries(microporous_pc_series);
 
-        // auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
+        auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
 
         for (auto& p : startup_.capillary_pressure)
           microporous_pc_series->append(/*frac**/p.x(), p.y());
         microporous_pc_series->setName("microporous");
         microporous_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-        microporous_pc_series->attachAxis(chart->axes(Qt::Vertical)[0]);
+        microporous_pc_series->attachAxis(axis_y);
         auto pen = microporous_pc_series->pen();
         pen.setWidth(pen.width() + 1);
         microporous_pc_series->setPen(pen);
       }
 
+
+      {
+        auto min_r_cap_throat = std::numeric_limits<double>::max();
+
+        for (std::size_t i{0}; i < pn_.throat_count(); ++i)
+          if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
+            min_r_cap_throat = std::min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
+
+        using props = hydraulic_properties::equilateral_triangle_properties;
+
+        min_r_cap_throat = 0.7*props::r_cap_piston_with_films(0, min_r_cap_throat);
+        axis_y->setRange(axis_y->min(), 1/min_r_cap_throat);
+      }
 
 
       // chart_view_ = new QChartView;
