@@ -6,11 +6,20 @@
 
 int main(int argc, char* argv[])
 {
-        
+  // std::span<dpl::vector2d> s;
+  // std::span<const dpl::vector2d> s_cnst;
+  // std::span<const dpl::vector2d> s_cnst2;
+  // s_cnst = s;
 
-  // auto input = std::initializer_list<dpl::vector2d>{{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
+  // static const auto input = std::initializer_list<dpl::vector2d>{{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
+
+  // constexpr std::array<dpl::vector2d, 5> input = {dpl::vector2d{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
+  //
+  // auto spn = std::span<const dpl::vector2d>{input};
+  // auto qqq = spn.size();
+  // auto val = solve(std::span<const dpl::vector2d>{input}, 0.95, dpl::extrapolant::flat);
+
   // auto k = solve(std::span{input}, 3);
-
 
   // xpm::idx1d_t size = 10;
   //

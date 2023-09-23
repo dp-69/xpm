@@ -169,76 +169,6 @@ namespace dpl
   template <typename KeyTag, typename ValueTag, typename ValueType>
   class strong_array<KeyTag, ValueTag, ValueType> : public strong_array<KeyTag, strong_integer<ValueType, ValueTag>> {};
 
-  // template<typename KeyTag, typename ValueType>
-  // class strong_array_impl_
-  // {
-  //   std::unique_ptr<ValueType[]> array_;
-  //
-  // public:
-  //   strong_array_impl_() = default;
-  //
-  //   explicit strong_array_impl_(std::size_t size)
-  //     : array_{std::make_unique<ValueType[]>(size)} {}
-  //
-  //   void resize(std::size_t size) {
-  //     array_ = std::make_unique<ValueType[]>(size);
-  //   }
-  //
-  //   template<std::integral T>
-  //   auto& operator[](strong_integer<T, KeyTag> index) {
-  //     return array_[*index];
-  //   }
-  //   
-  //   template<std::integral T>
-  //   auto& operator[](strong_integer<T, KeyTag> index) const {
-  //     return array_[*index];
-  //   }
-  // };
-  //
-  // template<typename KeyTag, typename ValueType>
-  // using strong_array = strong_array_impl_<KeyTag, ValueType>;
-  //
-  // template<typename KeyTag, typename ValueTag, typename ValueType>
-  // using strong_array = strong_array_impl_<KeyTag, strong_integer<ValueType, ValueTag>>;
-
-
-
-  // template<typename KeyTag, typename ValueTag, typename ValueType>
-  // class strong_array<KeyTag, strong_integer<ValueType, ValueTag>>
-  // {
-  // //   using strong_type = strong_integer<ValueType, ValueTag>;
-  // //
-  // //   std::unique_ptr<strong_type[]> array_;
-  // //
-  // // public:
-  // //   strong_array() = default;
-  // //
-  // //   explicit strong_array(std::size_t size)
-  // //     : array_{std::make_unique<strong_type[]>(size)} {}
-  // //
-  // //   void resize(std::size_t size) {
-  // //     array_ = std::make_unique<strong_type[]>(size);
-  // //   }
-  // //
-  // //   template<std::integral T>
-  // //   auto& operator[](strong_integer<T, KeyTag> index) {
-  // //     return array_[*index];
-  // //   }
-  // //   
-  // //   template<std::integral T>
-  // //   auto& operator[](strong_integer<T, KeyTag> index) const {
-  // //     return array_[*index];
-  // //   }
-  // };
-
-  
-
-
-
-
-
-
-
 
   // constexpr std::size_t operator "" _uz (std::size_t x) { return x; }
 
@@ -356,8 +286,8 @@ namespace dpl
 
   struct extrapolant
   {
-    struct linear {};
-    struct flat {};
+    inline static constexpr struct linear_t {} linear;
+    inline static constexpr struct flat_t {} flat;
   };
 
   struct lerp_base
@@ -368,34 +298,34 @@ namespace dpl
   
   
   
-  template<typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear, typename T>
+  template<typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(const T& a, const T& b, double t) {
-    if constexpr (std::is_same_v<Extrapolant, extrapolant::linear> && std::is_same_v<Base, lerp_base::linear>)
+    if constexpr (std::is_same_v<Extrapolant, extrapolant::linear_t> && std::is_same_v<Base, lerp_base::linear>)
       return a + (b - a)*t;
     else if constexpr (std::is_same_v<Base, lerp_base::log10>)
       return std::pow(10., dpl::lerp<lerp_base::linear, Extrapolant>(std::log10(a), std::log10(b), t));
-    else if constexpr (std::is_same_v<Extrapolant, extrapolant::flat>)
+    else if constexpr (std::is_same_v<Extrapolant, extrapolant::flat_t>)
       return
         t < 0 ? a :
         t > 1 ? b :
-        dpl::lerp<Base, extrapolant::linear>(a, b, t);
+        dpl::lerp<Base, extrapolant::linear_t>(a, b, t);
     else
       static_assert(always_false<T>, "wrong extrapolant or base");
   }
 
-  template<typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear, typename T>
+  template<typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(T* ptr, double t) {
     return dpl::lerp<Base, Extrapolant>(ptr[0], ptr[1], t);
   }
 
-  template<typename Extrapolant = extrapolant::linear, typename T>
+  template<typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(bool log10, const T& a, const T& b, double t) {
     return log10
       ? dpl::lerp<lerp_base::log10, Extrapolant>(a, b, t)
       : dpl::lerp<lerp_base::linear, Extrapolant>(a, b, t);
   }
 
-  template<typename Extrapolant = extrapolant::linear, typename T>
+  template<typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(bool log10, T* ptr, double t) {
     return dpl::lerp<Extrapolant>(log10, ptr[0], ptr[1], t);
   }

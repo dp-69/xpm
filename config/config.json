@@ -37,7 +37,7 @@
     "microporosity": {
       "permeability": 1.0, /* mD */
       "porosity": 0.06, /* fraction */
-      "capillary_pressure": [
+      "capillary_pressure": [ /* saturation fraction, pressure Pa */
         [1.00000000e-03, 7.38602231e+05],
         [2.13877551e-02, 6.85963040e+05],
         [4.17755102e-02, 6.76451037e+05],
@@ -114,7 +114,7 @@
 //     "microporosity": {
 //       "permeability": 0.1, /* mD */
 //       "porosity": 0.08, /* fraction */
-//       "capillary_pressure": [
+//       "capillary_pressure": [ /* saturation fraction, pressure Pa */
 //         [1.00000000e-03, 1.10829135e+06],
 //         [2.13877551e-02, 1.02933256e+06],
 //         [4.17755102e-02, 1.01506456e+06],
@@ -174,9 +174,3 @@
 //     "max_iterations" : 19
 //   }
 // }
-
-
-
-
-
-

@@ -22,6 +22,7 @@
 #include <QChartView>
 #include <QLineSeries>
 #include <QValueAxis>
+#include <QClipboard>
 
 #if (VTK_MAJOR_VERSION == 8)
   #include <QVTKOpenGLWidget.h>
@@ -64,112 +65,16 @@
 
 #include <nlohmann/json.hpp>
 
-
-
-#undef LoadImage
-
-
+// #undef LoadImage
 
 namespace xpm
 {
-  
-
-
-  
-
-  
-
-
-  
   #if (VTK_MAJOR_VERSION == 8)
     using QVTKWidgetRef = QVTKOpenGLWidget;
   #elif (VTK_MAJOR_VERSION == 9)
     using QVTKWidgetRef = QVTKOpenGLNativeWidget;
   #endif
 
-
-  //   template<typename Index = std::size_t>
-  // class graph_generator
-  // {
-  //   dc_graph g_;
-  //   std::unique_ptr<std::size_t[]> shift_;
-  //   std::size_t edge_count_ = 0;
-  //
-  //   using traits = strong_traits<Index>;
-  //
-  // public:
-  //   explicit graph_generator(std::size_t vertex_count)
-  //     : g_{vertex_count} {
-  //
-  //     shift_= std::make_unique<std::size_t[]>(vertex_count + 1);
-  //     std::fill_n(shift_.get(), vertex_count + 1, 0);
-  //   }
-  //
-  //   void reserve(Index l, Index r) {
-  //     ++shift_[traits::get(l) + 1]; 
-  //     ++shift_[traits::get(r) + 1];
-  //     edge_count_ += 1;
-  //   }
-  //
-  //   void allocate() {
-  //     for (auto i = 0; i < g_.vertex_count(); ++i) {
-  //       shift_[i + 1] += shift_[i];
-  //       g_.directed_edges_end()[i] = shift_[i + 1];
-  //     }
-  //
-  //     g_.allocate_edges(edge_count_);
-  //   }
-  //
-  //   void set(Index l, Index r) {
-  //     auto set_pair = [](vertex* v, vertex* u, directed_edge* vu, directed_edge* uv) {            
-  //       vu->v1 = u;
-  //       uv->v1 = v;
-  //
-  //       vu->opposite = uv;
-  //       uv->opposite = vu;
-  //     };
-  //
-  //     set_pair(
-  //       g_.get_vertex(traits::get(l)),
-  //       g_.get_vertex(traits::get(r)),
-  //       g_.get_directed_edge(shift_[traits::get(l)]++),
-  //       g_.get_directed_edge(shift_[traits::get(r)]++));
-  //   }
-  //
-  //   auto acquire() {
-  //     return std::move(g_);
-  //   }
-  // };
-
-  // class macro_generator
-  // {
-  //   idx1d_t macro_count_;
-  //   std::unique_ptr<std::size_t[]> shift_;
-  //   std::size_t edge_count_ = 0;
-  //
-  //   using traits = dpl::strong_traits<macro_idx>;
-  //
-  // public:
-  //   explicit macro_generator(idx1d_t macro_count)
-  //     : macro_count_{macro_count}/*: g_{vertex_count}*/ {
-  //
-  //     shift_= std::make_unique<std::size_t[]>(macro_count + 1);
-  //     std::fill_n(shift_.get(), macro_count + 1, 0);
-  //   }
-  //
-  //   void reserve(macro_idx l, macro_idx r) {
-  //     ++shift_[*l + 1]; 
-  //     ++shift_[*r + 1];
-  //     edge_count_ += 1;
-  //   }
-  //
-  //   auto allocate_and_acquire() {
-  //     for (auto i = 0; i < macro_count_; ++i)
-  //       shift_[i + 1] += shift_[i];
-  //
-  //     return std::move(shift_);
-  //   }
-  // };
 
   class XPMWidget : public QMainWindow
   {
@@ -178,8 +83,6 @@ namespace xpm
     using QPropertyTreeView = dpl::qt::property_editor::QPropertyTreeView;
     
     QPropertyTreeView* tree_view_ = nullptr; 
-
-    
     
     vtkNew<vtkRenderer> renderer_; 
     vtkNew<vtkGenericOpenGLRenderWindow> render_window_;
@@ -267,8 +170,6 @@ namespace xpm
     static void InitLutVelems(vtkLookupTable* lut, std::int32_t max) {
       auto count = max - (-2)/**min*/ + 1;
 
-      
-
       lut->SetNumberOfTableValues(count);
       
       for (int32_t i = 0; i < count; ++i) {
@@ -298,7 +199,6 @@ namespace xpm
       // interactor_ = render_window_->GetInteractor();
 
       renderer_->SetBackground(v3d{1});
-
 
       {
         tree_view_ = new QPropertyTreeView;
@@ -338,59 +238,71 @@ namespace xpm
         status_property_item_ = model->AddItem(
           dpl::qt::property_editor::ItemFunctor<std::string>{"Status", [this] { return status_; }});
 
-
+        
 
 
         chart_view_ = new QChartView;
         chart_view_->setRenderHint(QPainter::Antialiasing);
         chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
 
+        {
+          auto menu = std::make_unique<QMenu>();
+          
+          auto copy_action = [this](auto format, auto sep, auto begin, auto end) {
+            return [=, this] {
+              auto view =
+                std::views::transform(invasion_task_.pc_curve(),
+                  [format](const dpl::vector2d& p) { return fmt::format(format, p.x(), p.y()); })
+                | std::views::reverse;
+
+              std::stringstream ss;
+              ss << begin << *std::begin(view);
+              for (const auto& s : view | std::views::drop(1))
+                ss << sep << s;
+              ss << end << '\n';
+
+              QApplication::clipboard()->setText(QString::fromStdString(ss.str()));
+            };
+          };
+
+          using fmt_string = fmt::format_string<const double&, const double&>;
+
+          connect(menu->addAction("Copy"), &QAction::triggered,
+            copy_action(fmt_string{"{:.6f}, {:.6e}"}, "\n", "", ""));
+
+          connect(menu->addAction("Copy JSON"), &QAction::triggered,
+            copy_action(fmt_string{"[{:.6f}, {:.6e}]"}, ", ", "[", "]")); // copy_action(fmt_string{"  [{:.6f}, {:.6e}]"}, ",\n", "[\n", "\n]\n")); 
+
+          chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
+          connect(chart_view_, &QTreeView::customContextMenuRequested,
+            [this, m = std::move(menu)](const QPoint& pos) { m->popup(chart_view_->viewport()->mapToGlobal(pos)); });
+        }
+
         line_series_ = new QLineSeries;
         line_series_->setName("total");
 
-        auto sweep_chart_ = new QChart;
+        auto* sweep_chart_ = new QChart;
         // sweep_chart_->legend()->hide();
         sweep_chart_->addSeries(line_series_);
         sweep_chart_->createDefaultAxes();
-
         chart_view_->setChart(sweep_chart_);
-        
 
         auto* axis_x = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Horizontal)[0]);
-        // axis_x->setLabelsFont(scaled_font);
         axis_x->setLabelFormat("%.2f");
         axis_x->setTitleText("Water saturation");
-        // axis_x->setTitleFont(font);
-        axis_x->setRange(0, 1);
-        // axis_x->setLabelsBrush(black_brush);
-        // axis_x->setTitleBrush(black_brush);
+        axis_x->setRange(0.0, 1);
 
 
         axis_y = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Vertical)[0]);
         // axis_y->setLabelsFont(scaled_font);
         axis_y->setLabelFormat("%.0f");
         axis_y->setTitleText("Capillary pressure, Pa");
-        // axis_y->setTitleFont(font);
-        
         axis_y->setRange(0, 100000);
-        // axis_y->setLabelsBrush(black_brush);s
-        // axis_y->setTitleBrush(black_brush);
 
         line_series_->clear();
-        // sweep_series_->append(1, 0);
-
-        // sweep_series_->append(0.95, 100);
-        // sweep_series_->append(0.90, 500);
-        // sweep_series_->append(0.85, 1000);
-        // sweep_series_->append(0.80, 5000);
-
         line_series_->setPointsVisible(true);
 
-
-
         using namespace dpl::qt::layout;
-
-
 
         setCentralWidget(
           splitter{dir::horizontal}
@@ -405,41 +317,40 @@ namespace xpm
 
 
 
-    auto ProcessImage(const std::filesystem::path& p) {
+    auto ProcessImage(const std::filesystem::path& path) {
       namespace fs = std::filesystem;
 
-      auto filename = p.filename();
+      auto filename = path.filename();
 
-      if (auto copy_fn = "pnextract"/filename; fs::absolute(copy_fn) != fs::absolute(p))
-        copy(p, copy_fn, fs::copy_options::update_existing);
+      if (fs::path copy_path = "pnextract"/filename; absolute(copy_path) != absolute(path))
+        copy(path, copy_path, fs::copy_options::update_existing);
 
       auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
       auto prev = fs::current_path();
-      fs::current_path(prev/"pnextract");
-      auto network_dir = p.stem();
+      current_path(prev/"pnextract");
+      auto network_dir = path.stem();
 
-      if (std::ranges::all_of(files, [&](const auto& file) { return fs::exists(network_dir/file); })) {
+      if (std::ranges::all_of(files, [&](std::string_view file) { return exists(network_dir/file); }))
         std::cout << "using cached network\n\n";
-      }
       else {
         std::cout << "=========== pnextract's network extraction begin ===========\n";
 
-        /*auto value = */std::system( // NOLINT(concurrency-mt-unsafe)
+        std::system( // NOLINT(concurrency-mt-unsafe)
           fmt::format("{} {}", fs::current_path()/"pnextract", filename).c_str());
       
-        fs::create_directory(network_dir);
-        for (fs::path f : files)
-          fs::rename(f, network_dir/f);
+        create_directory(network_dir);
+        for (fs::path file : files)
+          rename(file, network_dir/file);
 
-        fs::remove("_VElems.mhd");
+        remove(fs::path{"_VElems.mhd"});
 
         std::cout << "=========== pnextract's network extraction end ===========\n\n";
       }
 
-      network_dir = fs::absolute(network_dir);
+      network_dir = absolute(network_dir);
 
-      fs::current_path(prev);
+      current_path(prev);
 
       return network_dir;
     }
@@ -452,25 +363,6 @@ namespace xpm
       if (std::filesystem::exists("config.json"))
         startup_.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
 
-      // auto val0 = solve(std::span{startup_.capillary_pressure}, -0.2);
-      // auto val  = solve(startup_.capillary_pressure, 0.0);
-      // auto val1 = solve(startup_.capillary_pressure, 0.5);
-      // auto val2 = solve(std::span{startup_.capillary_pressure.data(), startup_.capillary_pressure.size()}, 1.0);
-      // auto val3 = solve(startup_.capillary_pressure, 2.0);
-
-      // using namespace std::views;
-
-      // std::vector<dpl::vector2d> transf  
-      // {
-      //   
-      // };
-      
-      
-
-      
-
-
-
       InitGUI();
 
       ComputePressure();
@@ -481,12 +373,11 @@ namespace xpm
       
       tidy_axes_.Init(renderer_.Get());
 
-      connect(qvtk_widget_, &QVTKWidgetRef::resized, this, [this]() { tidy_axes_.RefreshAxes(); });
+      connect(qvtk_widget_, &QVTKWidgetRef::resized, this, [this] { tidy_axes_.RefreshAxes(); });
 
       // tidy_axes_.SetScale(1.e-6/*startup.image.resolution*/);
       // tidy_axes_.SetFormat(".2e");
       tidy_axes_.Build(bounds_.data());
-
 
       // {
       //   net_idx_t connected = pni_.connected_total_count();
@@ -500,30 +391,30 @@ namespace xpm
     }
 
     void LaunchInvasion() {
-      auto macro_pore_volume = 0.0;
-      
-      for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-        if (pni_.connected(i))
-          macro_pore_volume += pn_.node_[attribs::volume][*i];
-
-      for (std::size_t i{0}; i < pn_.throat_count(); ++i)
-        if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
-          macro_pore_volume += pn_.throat_[attribs::volume][i];
-
-      auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
-
-      idx1d_t micro_voxels = 0;
-      
-      for (voxel_idx_t i{0}; i < img_.size; ++i)
-        if (pni_.connected(i))
-          ++micro_voxels;
+      // auto macro_pore_volume = 0.0;
+      //
+      // for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+      //   if (pni_.connected(i))
+      //     macro_pore_volume += pn_.node_[attribs::volume][*i];
+      //
+      // for (std::size_t i{0}; i < pn_.throat_count(); ++i)
+      //   if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
+      //     macro_pore_volume += pn_.throat_[attribs::volume][i];
+      //
+      // auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
+      //
+      // idx1d_t micro_voxels = 0;
+      //
+      // for (voxel_idx_t i{0}; i < img_.size; ++i)
+      //   if (pni_.connected(i))
+      //     ++micro_voxels;
 
       {
         auto* chart = chart_view_->chart();
         auto* microporous_pc_series = new QLineSeries;
         chart->addSeries(microporous_pc_series);
 
-        auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
+        // auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
 
         for (auto& p : startup_.capillary_pressure)
           microporous_pc_series->append(/*frac**/p.x(), p.y());
@@ -535,6 +426,7 @@ namespace xpm
         microporous_pc_series->setPen(pen);
       }
 
+      using props = hydraulic_properties::equilateral_triangle_properties;
 
       {
         auto min_r_cap_throat = std::numeric_limits<double>::max();
@@ -543,81 +435,74 @@ namespace xpm
           if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
             min_r_cap_throat = std::min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
 
-        using props = hydraulic_properties::equilateral_triangle_properties;
-
         min_r_cap_throat = 0.7*props::r_cap_piston_with_films(0, min_r_cap_throat);
         axis_y->setRange(axis_y->min(), 1/min_r_cap_throat);
       }
 
 
       // chart_view_ = new QChartView;
-        // chart_view_->setRenderHint(QPainter::Antialiasing);
-        // chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
-        //
-        // line_series_ = new QLineSeries;
-        //
-        // auto sweep_chart_ = new QChart;
-        // // sweep_chart_->legend()->hide();
-        // sweep_chart_->addSeries(line_series_);
-        // sweep_chart_->createDefaultAxes();
-        //
-        // chart_view_->setChart(sweep_chart_);
+      // chart_view_->setRenderHint(QPainter::Antialiasing);
+      // chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+      //
+      // line_series_ = new QLineSeries;
+      //
+      // auto sweep_chart_ = new QChart;
+      // // sweep_chart_->legend()->hide();
+      // sweep_chart_->addSeries(line_series_);
+      // sweep_chart_->createDefaultAxes();
+      //
+      // chart_view_->setChart(sweep_chart_);
 
 
       invasion_task_.init();
 
       consumer_future_ = std::async(std::launch::async, [this] {
         auto start = std::chrono::system_clock::now();
+        double theta = 0.0;
 
-        auto invasion_future = std::async(std::launch::async,
-          &invasion_task::launch, &invasion_task_, startup_.microporous_poro, std::span{startup_.capillary_pressure});
+        using namespace std::ranges::views;
+        auto query = startup_.capillary_pressure | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
+        std::vector<dpl::vector2d> pc_to_sw{query.begin(), query.end()};
+        using pc_to_sw_span = std::span<const dpl::vector2d>;
 
-        auto update = [this, start] {
-          auto& invaded = invasion_task_.invaded_array();
-          auto& invaded_throat = invasion_task_.invaded_throat();
+        auto invasion_future = std::async(std::launch::async, &invasion_task::launch, &invasion_task_,
+          startup_.microporous_poro, theta, pc_to_sw_span{pc_to_sw});
+
+        auto update = [this, theta, start, &pc_to_sw] {
+          auto r_cap = invasion_task_.last_r_cap();
+          auto darcy_saturation = 1.0 - solve(pc_to_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat);
+          auto area_of_films = props::area_of_films(theta, r_cap);
+
+          auto map_satur = [](double x) { return x/2. + 0.25; };
 
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-            
+
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (pni_.connected(voxel_idx_t{idx1d}) && invaded[pni_.net(voxel_idx_t{idx1d})])
-                face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
+              if (auto v_idx = voxel_idx_t{idx1d}; pni_.connected(v_idx) && invasion_task_.invaded(v_idx))
+                face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
               ++i;
             }
           });
           
           for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && invaded[pni_.net(macro_idx_t{i})])
+            if (pni_.connected(i) && invasion_task_.invaded(macro_idx_t{i}))
               macro_colors->SetTypedComponent(*i, 0,
-                // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
-                0.5
-              );
-
+                map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
 
           {
             vtkIdType throat_net_idx = 0;
 
             for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
               if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
-                if (pni_.connected(l) && invaded_throat[i])
-                  throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
+                if (pni_.connected(l) && invasion_task_.invaded(i))
+                  throat_colors->SetTypedComponent(throat_net_idx, 0,
+                    map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
 
                 ++throat_net_idx;
               }
             }
           }
-          
-
-          // for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
-          //   if (pn_.inner_node(r)) {
-          //     if (pni_.connected(l) && invaded_throat[throat_net_idx]
-          //       // && invaded[pni_.net(l)]
-          //       // && invaded[pni_.net(r)]
-          //       )
-          //       throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
-          //
-          //     ++throat_net_idx;
-          //   }
           
           QMetaObject::invokeMethod(this,
             [this, start] {
@@ -635,6 +520,7 @@ namespace xpm
               dpl::sfor<6>([&](auto face_idx) {
                 std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
               });
+
               throat_colors->Modified();
               macro_colors->Modified();
           
@@ -647,263 +533,6 @@ namespace xpm
           update();
         update();
       });
-
-
-
-
-      // using clock = std::chrono::high_resolution_clock;
-      // using seconds = std::chrono::seconds;
-      //
-      // using namespace dpl::graph;
-      //
-      // auto t0 = clock::now();
-      // std::cout << "graph...";
-      // dc_graph_ = pni_.generate_dc_graph<true>();
-      // std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
-      //   duration_cast<seconds>(clock::now() - t0).count(),
-      //   dc_graph_.vertex_count(),
-      //   dc_graph_.edge_count());
-      //
-      // auto t1 = clock::now();
-      // std::cout << "euler tour...";
-      // dc_context_.init_with_dfs(dc_graph_, dc_properties{dc_graph_});
-      // std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t1).count());
-      //
-      //
-      // std::cout << "full decremental connectivity... (async)\n";
-      //
-      // invasion_future_ = std::async(std::launch::async, [this] {
-      //   auto t2 = clock::now();
-      //
-      //   auto theta = 0.0;
-      //
-      //   auto index_count = *pni_.connected_count();
-      //
-      //   using props = hydraulic_properties::equilateral_triangle_properties;
-      //
-      //   struct processed_t
-      //   {
-      //     dpl::strong_array<net_tag, bool> invaded_macro_voxel;
-      //     dpl::strong_array<net_tag, bool> explored_macro_voxel;
-      //
-      //     processed_t(net_idx_t connected_count)
-      //       : invaded_macro_voxel(connected_count), explored_macro_voxel(connected_count) {}
-      //   };
-      //
-      //   double darcy_r_cap_const = 
-      //     props::r_cap_piston_with_films(theta, std::ranges::min(pn_.node_.range(attribs::r_ins)))*0.95;
-      //
-      //   auto processed = std::make_shared<processed_t>(pni_.connected_count());
-      //
-      //   displ_queue queue;
-      //
-      //   for (std::size_t i{0}; i < pn_.throat_count(); ++i)
-      //     if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inlet() == r) // inlet macro nodes TODO: voxels inlet needed
-      //       if (pni_.connected(l)) {
-      //         queue.insert(
-      //           displ_elem::macro, *l, props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*l]));
-      //          
-      //         processed->explored_macro_voxel[pni_.net(l)] = true;
-      //       }
-      //
-      //   auto update_3d = [this, processed/*, theta*/](double r_cap) {
-      //     dpl::sfor<6>([&](auto face_idx) {
-      //       dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-      //       
-      //       for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-      //         if (pni_.connected(voxel_idx_t{idx1d}) && processed->invaded_macro_voxel[pni_.net(voxel_idx_t{idx1d})])
-      //           face.GetColorArray()->SetTypedComponent(i, 0, 0.5);
-      //         ++i;
-      //       }
-      //     });
-      //
-      //     for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-      //       if (pni_.connected(i) && processed->invaded_macro_voxel[pni_.net(macro_idx_t{i})])
-      //         macro_colors->SetTypedComponent(*i, 0,
-      //           // 1 - props::area_of_films(theta, r_cap)/props::area(pn_.node_[attribs::r_ins][*i])
-      //           0.5
-      //         );
-      //
-      //     for (vtkIdType throat_net_idx = 0; auto [l, r] : pn_.throat_.range(attribs::adj))
-      //       if (pn_.inner_node(r)) {
-      //         if (pni_.connected(l)
-      //           && processed->invaded_macro_voxel[pni_.net(l)]
-      //           && processed->invaded_macro_voxel[pni_.net(r)])
-      //           throat_colors->SetTypedComponent(throat_net_idx, 0, 0.5);
-      //
-      //         ++throat_net_idx;
-      //       }
-      //
-      //     QMetaObject::invokeMethod(this,
-      //       [this] {
-      //         dpl::sfor<6>([&](auto face_idx) {
-      //           std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
-      //         });
-      //         throat_colors->Modified();
-      //         macro_colors->Modified();
-      //
-      //         render_window_->Render();
-      //       });
-      //   };
-      //
-      //   std::future<void> update_future;
-      //
-      //   dc_properties dc_props{dc_graph_};
-      //
-      //   net_idx_t outlet_idx{index_count};
-      //   et_traits::node_ptr outlet_entry = dc_props.get_entry(*outlet_idx);
-      //
-      //   constexpr auto delay = std::chrono::milliseconds{250};
-      //   auto last = clock::now() - delay;
-      //
-      //   v3d inv_volume_coefs{0};
-      //
-      //   auto last_r_cap = queue.front().radius_cap;
-      //
-      //   auto total_pore_volume = 0.0;
-      //
-      //   for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-      //     if (pni_.connected(i))
-      //       total_pore_volume += pn_.node_[attribs::volume][*i];
-      //
-      //   auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
-      //
-      //   for (voxel_idx_t i{0}; i < img_.size; ++i)
-      //     if (pni_.connected(i))
-      //       total_pore_volume += unit_darcy_pore_volume;
-      //
-      //   dpl::vector2d last_pc_point{2, -1};
-      //
-      //   bool darcy_invaded = false;
-      //
-      //   auto add_to_plot = [this](dpl::vector2d p) {
-      //     QMetaObject::invokeMethod(this, [=, this] {
-      //       if (const auto& pts = sweep_series_->points(); pts.size() > 1
-      //         && std::abs(pts[pts.size() - 1].y() - p.y()) < 1e-6
-      //         && std::abs(pts[pts.size() - 2].y() - p.y()) < 1e-6)
-      //         sweep_series_->replace(pts.size() - 1, p.x(), p.y());  // NOLINT(cppcoreguidelines-narrowing-conversions)
-      //       else
-      //         sweep_series_->append(p.x(), p.y());
-      //     });
-      //   };
-      //
-      //   for (idx1d_t inv_idx = 0; !queue.empty(); ++inv_idx) {
-      //     auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
-      //
-      //     if (dpl::vector2d pc_point{1 - inv_volume/total_pore_volume, 1/last_r_cap};
-      //       std::abs(last_pc_point.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point.y() - pc_point.y()) > 1e4) {
-      //       last_pc_point = pc_point;
-      //       add_to_plot(pc_point);
-      //     }
-      //
-      //
-      //     if (darcy_invaded) {
-      //       if (inv_idx % ((index_count - 1)/50) == 0) {
-      //         // if (reference_count == pni_.connected_macro_count())
-      //         //   if (auto diff = duration_cast<seconds>(clock::now() - last); diff < delay)
-      //         //     std::this_thread::sleep_for(delay - diff);
-      //         // last = clock::now();
-      //         update_future = std::async(std::launch::async, update_3d, last_r_cap);
-      //       }
-      //
-      //       if (inv_idx % ((index_count - 1)/100) == 0)
-      //         QMetaObject::invokeMethod(this, [=, this] {
-      //           UpdateStatus(fmt::format("{:.1f} %", 100.*inv_idx/index_count));
-      //         });
-      //     }
-      //     else {
-      //       if (inv_idx % ((*pni_.connected_macro_count() - 1)/20) == 0) {
-      //         // if (reference_count == pni_.connected_macro_count())
-      //           if (auto diff = duration_cast<seconds>(clock::now() - last); diff < delay)
-      //             std::this_thread::sleep_for(delay - diff);
-      //         last = clock::now();
-      //         /*update_future = */
-      //         std::async(std::launch::async, update_3d, last_r_cap).wait();
-      //       }
-      //
-      //       if (inv_idx % ((*pni_.connected_macro_count() - 1)/200) == 0)
-      //         QMetaObject::invokeMethod(this, [=, this] {
-      //           UpdateStatus(fmt::format("{:.1f} %", 100.*inv_idx/index_count));
-      //         });
-      //     }
-      //
-      //     
-      //
-      //
-      //
-      //
-      //
-      //     auto [elem, local_idx, r_cap] = queue.front();
-      //
-      //     queue.pop();
-      //
-      //     net_idx_t net_idx; // TODO
-      //     if (elem == displ_elem::macro)
-      //       net_idx = pni_.net(macro_idx_t(local_idx));
-      //     else if (elem == displ_elem::voxel) {
-      //       net_idx = pni_.net(voxel_idx_t(local_idx));
-      //       darcy_invaded = true;
-      //     }
-      //
-      //
-      //     if (
-      //       // et_algo::get_header(dc_props.get_entry(*net_idx)) ==
-      //       // et_algo::get_header(outlet_entry)
-      //       true
-      //     )
-      //     {
-      //       // dc_context_.adjacent_edges_remove(*net_idx, dc_graph_);
-      //       processed->invaded_macro_voxel[net_idx] = true;
-      //
-      //       last_r_cap = std::min(r_cap, last_r_cap);
-      //
-      //       if (elem == displ_elem::macro) {
-      //         inv_volume_coefs[0] += 
-      //           pn_.node_[attribs::volume][local_idx];
-      //
-      //         inv_volume_coefs[2] += 
-      //           pn_.node_[attribs::volume][local_idx]*
-      //           -props::area_of_films(theta)/props::area(pn_.node_[attribs::r_ins][local_idx]);
-      //       }
-      //       else if (elem == displ_elem::voxel) {
-      //         inv_volume_coefs[0] += unit_darcy_pore_volume;
-      //       }
-      //
-      //       for (auto ab : dc_graph_.edges(*net_idx))
-      //         if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx) { // not outlet
-      //           if (!processed->explored_macro_voxel[b_net_idx]) {
-      //             if (pni_.is_macro(b_net_idx)) { // macro
-      //               auto b_macro_idx = pni_.macro(b_net_idx);
-      //
-      //               queue.insert(
-      //                 displ_elem::macro, *b_macro_idx,
-      //                 props::r_cap_piston_with_films(theta, pn_.node_[attribs::r_ins][*b_macro_idx]));
-      //             }
-      //             else { // darcy
-      //               auto b_voxel_idx = pni_.voxel(b_net_idx);
-      //
-      //               queue.insert(displ_elem::voxel, *b_voxel_idx, darcy_r_cap_const);
-      //             }
-      //
-      //             processed->explored_macro_voxel[b_net_idx] = true;
-      //           }
-      //         }
-      //     }
-      //   }
-      //
-      //   
-      //
-      //   QMetaObject::invokeMethod(this,
-      //     [=, this] {
-      //       update_3d(last_r_cap);
-      //
-      //       UpdateStatus(fmt::format("done {}s", duration_cast<seconds>(clock::now() - t2).count()/*/60.*/));
-      //
-      //       auto inv_volume = inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap*last_r_cap;
-      //
-      //       add_to_plot({1 - inv_volume/total_pore_volume, 1/last_r_cap/*10000*progress*/});
-      //     });
-      // });
     }
 
     void ComputePressure() {
@@ -935,12 +564,9 @@ namespace xpm
       }
 
       auto const_permeability = startup_.microporous_perm*0.001*presets::darcy_to_m2;
-
       
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
         startup_.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
-
-
 
       InitLutNodeThroat(lut_node_throat_);
       InitLutPoreSolidMicro(lut_pore_solid_micro_);
@@ -1180,48 +806,3 @@ namespace xpm
     }
   };
 }
-
-
-
-// std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Bmps-v0s255_252x252x252_6p0um.raw)";
-      // parse::image_dict input_spec{
-      //   .pore = 0,
-      //   .solid = 1,       // dummy value, no '1' is in the image
-      //   .microporous = 255, // we read actual solid as microporous
-      // };
-
-      // std::filesystem::path image_path = R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu_backup\temp\images\Est-v0m2s3_500x500x500_4p0um.raw)";
-      // constexpr parse::image_dict input_spec{
-      //   .solid = 3,
-      //   .pore = 0,
-      //   .microporous = 2
-      // };
-     
-      // HYPRE_Real tolerance = 1.e-9; HYPRE_Int max_iterations = 1000;
-
-
-
-
-
-
-// auto pos = std::make_unique<v3d[]>(index_count);
-        // {
-        //   auto* pos_ptr = pos.get();
-        //
-        //   for (macro_idx i{0}; i < pn_.node_count(); ++i)
-        //     if (pni_.connected(i))
-        //       *pos_ptr++ = pn_.node_[attribs::pos][*i];
-        //
-        //   idx3d_t ijk;
-        //   auto& [i, j, k] = ijk;
-        //   voxel_idx idx1d;
-        //
-        //   auto cell_size = pn_.physical_size/img_.dim;
-        //
-        //   for (k = 0; k < img_.dim.z(); ++k)
-        //     for (j = 0; j < img_.dim.y(); ++j)
-        //       for (i = 0; i < img_.dim.x(); ++i, ++idx1d)
-        //         if (pni_.connected(idx1d)) // darcy node
-        //           *pos_ptr++ = cell_size*(ijk + 0.5);
-        // }
-        // std::sort(indices.get(), indices.get() + index_count, [&pos](idx1d_t l, idx1d_t r) { return pos[l].x() > pos[r].x(); });

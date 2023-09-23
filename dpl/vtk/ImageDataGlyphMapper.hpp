@@ -59,11 +59,9 @@ namespace dpl::vtk
   template<int face_idx, typename idx1d_t>
   class GlyphMapperFaceGeneric : public GlyphMapperFace<idx1d_t>
   {
-    using face = dpl::face_cubic<face_idx>;
-    using dims = dpl::cdims<face::dim>;
-    using v3d = dpl::vector3d;
-    using v3i = dpl::vector3i;
-    using idx3d_t = dpl::vector_n<idx1d_t, 3>;
+    using face = face_cubic<face_idx>;
+    using dims = cdims<face::dim>;
+    using idx3d_t = vector_n<idx1d_t, 3>;
 
     static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {
       auto quad = vtkSmartPointer<vtkPolyData>::New();
@@ -74,7 +72,7 @@ namespace dpl::vtk
       vtkNew<vtkCellArray> cells;
       quad->SetPolys(cells);
         
-      v3d pos;
+      vector3d pos;
       pos[dims::e0] = 0;
       pos[dims::e1] = -half_length;
       pos[dims::e2] = -half_length;
@@ -104,14 +102,6 @@ namespace dpl::vtk
     
   public:
     void Init(double half_length = 0.5) {
-      
-      // POLY_polydata__->SetPoints(POLY_points__);
-      // POLY_polydata__->SetPolys(POLY_cells__);
-      // POLY_polydata__->GetCellData()->SetScalars(color_arr_);
-
-
-
-
       // color_arr_->SetName("darcy_adj");
 
       vtkNew<vtkPolyData> polydata;
@@ -126,7 +116,7 @@ namespace dpl::vtk
       this->glyph_mapper_->SetSourceData(Quad(/*half_length/2*/));
     }
 
-    void Populate(const v3i& cells, const v3d& cell_size, const auto& filter) {
+    void Populate(const vector3i& cells, const vector3d& cell_size, const auto& filter) {
       idx3d_t map_idx{1, cells.x(), cells.x()*cells.y()};
       idx3d_t ijk;
       
@@ -135,7 +125,7 @@ namespace dpl::vtk
       
       auto adj_step = map_idx[dims::e0];
 
-      v3d pos;
+      vector3d pos;
       
       idx1d_t idx1d;
       
@@ -153,26 +143,6 @@ namespace dpl::vtk
 
               this->points_->InsertNextPoint(pos);
               this->original_indices_.push_back(idx1d);
-              // post(idx1d);
-
-              // auto pts_count = POLY_points__->GetNumberOfPoints();
-              //
-              // pos[dims::e0] = 0;
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // pos[dims::e2] = (e2)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              // vtkIdType indices[] = {pts_count + 3, pts_count + 2, pts_count + 1, pts_count + 0};
-              // POLY_cells__->InsertNextCell(4, indices);
-
             }
           }
           
@@ -188,43 +158,16 @@ namespace dpl::vtk
               pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
               pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
 
-
-
-              // auto pts_count = POLY_points__->GetNumberOfPoints();
-              //
-              // pos[dims::e0] = (e0 + 1)*cell_size[dims::e0];
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // pos[dims::e2] = (e2)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-
               if constexpr (face::is_upper) {
                 if (filtered) {
                   this->points_->InsertNextPoint(pos);
                   this->original_indices_.push_back(idx1d);
-                  // post(idx1d);
-
-                  // vtkIdType indices[] = {pts_count + 0, pts_count + 1, pts_count + 2, pts_count + 3};
-                  // POLY_cells__->InsertNextCell(4, indices);
                 }
               }
               else {
                 if (adj_filtered) {
                   this->points_->InsertNextPoint(pos);
                   this->original_indices_.push_back(adj_idx1d);
-                  // post(adj_idx1d);
-
-
-                  // vtkIdType indices[] = {pts_count + 3, pts_count + 2, pts_count + 1, pts_count + 0};
-                  // POLY_cells__->InsertNextCell(4, indices);
                 }
               }
             }
@@ -241,29 +184,6 @@ namespace dpl::vtk
               
               this->points_->InsertNextPoint(pos);
               this->original_indices_.push_back(idx1d);
-              // post(idx1d);
-
-
-
-
-
-              // auto pts_count = POLY_points__->GetNumberOfPoints();
-              //
-              // pos[dims::e0] = (e0_count)*cell_size[dims::e0];
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // pos[dims::e2] = (e2)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1 + 1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e2] = (e2 + 1)*cell_size[dims::e2];
-              // POLY_points__->InsertNextPoint(pos);
-              //
-              // pos[dims::e1] = (e1)*cell_size[dims::e1];
-              // POLY_points__->InsertNextPoint(pos);
-              // vtkIdType indices[] = {pts_count + 0, pts_count + 1, pts_count + 2, pts_count + 3};
-              // POLY_cells__->InsertNextCell(4, indices);
             }
           }
         }
@@ -283,7 +203,7 @@ namespace dpl::vtk
       });
     }
 
-    void Populate(const dpl::vector3i& dims, const dpl::vector3d& cell_size, const auto& filter) {
+    void Populate(const vector3i& dims, const vector3d& cell_size, const auto& filter) {
       dpl::psfor<6>([=, this](auto i) {
         std::get<i>(faces_).Populate(dims, cell_size, filter);
       });

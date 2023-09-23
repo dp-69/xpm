@@ -509,20 +509,29 @@ namespace dpl
   auto solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, const auto arg) {
     return p0.y() + (p1 - p0).slope()*(arg - p0.x());
   }
-  
+
   template<typename T>
-  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg) {
-    auto begin = curve.begin();
-    auto end = curve.end();
+  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::linear_t = extrapolant::linear) {
+    if (arg <= curve.front().x())
+      return solve(curve[0], curve[1], arg);
 
-    if (arg < begin->x())
-      return solve(*begin, *(begin + 1), arg);        
+    if (arg > curve.back().x())
+      return solve(curve[curve.size() - 2], curve[curve.size() - 1], arg);
 
-    auto iter = std::lower_bound(begin, end, arg, [](const vector_n<T, 2>& l, T r) { return l.x() < r; });
+    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x(); });
+    return solve(*(iter - 1), *iter, arg);
+  }
 
-    return iter == end - 1 || iter == end
-      ? solve(*(end - 2), *(end - 1), arg)
-      : solve(*iter, *(iter + 1), arg);
+  template<typename T>
+  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::flat_t) {
+    if (arg <= curve.front().x())
+      return curve.front().y();
+
+    if (arg > curve.back().x())
+      return curve.back().y();
+
+    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x(); });
+    return solve(*(iter - 1), *iter, arg);
   }
 }
 
