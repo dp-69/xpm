@@ -51,9 +51,9 @@ add_executable(xpm # WIN32
   "src/main.cpp"
   "src/functions.cpp"
   
-  "dpl/qt/property_editor/Editors.hpp"
-  "dpl/qt/property_editor/PropertyEntities.hpp"
-  "dpl/qt/property_editor/QPropertyTreeView.hpp"
+  "libs/dpl/qt/property_editor/Editors.hpp"
+  "libs/dpl/qt/property_editor/PropertyEntities.hpp"
+  "libs/dpl/qt/property_editor/QPropertyTreeView.hpp"
 )
 
 target_include_directories(xpm PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -62,10 +62,10 @@ target_compile_features(xpm PUBLIC cxx_std_20)
 target_compile_definitions(xpm PRIVATE XPM_DEBUG_OUTPUT)
 
 
-add_subdirectory(dpl)
+add_subdirectory(libs/dpl)
 target_link_libraries(xpm PRIVATE dpl)
 
-add_subdirectory(pnextract)
+add_subdirectory(libs/pnextract)
 
 if(MSVC)  
   target_compile_options(pnextract PRIVATE -w)

@@ -470,7 +470,7 @@ namespace xpm
 
         auto update = [this, theta, start, &pc_to_sw] {
           auto r_cap = invasion_task_.last_r_cap();
-          auto darcy_saturation = 1.0 - solve(pc_to_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat);
+          auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_to_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
           auto area_of_films = props::area_of_films(theta, r_cap);
 
           auto map_satur = [](double x) { return x/2. + 0.25; };

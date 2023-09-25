@@ -102,26 +102,23 @@ namespace xpm {
       invaded_macro_voxel_.resize(pni_->connected_count());
       invaded_throat_.resize(pn_->throat_count());
 
-      // double darcy_r_cap_const = 
-      //   props::r_cap_piston_with_films(theta, std::ranges::min(pn_->node_.range(attribs::r_ins)))*0.95;
-      //
-      // {
-      //   std::cout << fmt::format("max macro Pc: {}\n", 1/darcy_r_cap_const);
-      //
-      //   auto min_r_cap_throat = std::numeric_limits<double>::max();
-      //
-      //   for (std::size_t i{0}; i < pn_->throat_count(); ++i)
-      //     if (auto [l, r] = pn_->throat_[attribs::adj][i]; pn_->inner_node(r) && pni_->connected(l))
-      //       min_r_cap_throat = std::min(min_r_cap_throat, pn_->throat_[attribs::r_ins][i]);
-      //
-      //   min_r_cap_throat = 0.95*props::r_cap_piston_with_films(theta, min_r_cap_throat);
-      //
-      //   std::cout << fmt::format("max throat Pc: {}\n", 1/min_r_cap_throat);
-      //
-      //   darcy_r_cap_const = std::min(darcy_r_cap_const, min_r_cap_throat); // TODO: USE DATA FROM THE CURVE!
-      // }
+      
 
-      auto darcy_r_cap_const = 1/darcy_pc_to_sw.front().x();
+
+      double darcy_r_cap_const;
+
+      if (darcy_pc_to_sw.empty()) {
+        auto min_r_cap_throat = std::numeric_limits<double>::max();
+      
+        for (std::size_t i{0}; i < pn_->throat_count(); ++i)
+          if (auto [l, r] = pn_->throat_[attribs::adj][i]; pn_->inner_node(r) && pni_->connected(l))
+            min_r_cap_throat = std::min(min_r_cap_throat, pn_->throat_[attribs::r_ins][i]);
+        min_r_cap_throat = 0.95*props::r_cap_piston_with_films(theta, min_r_cap_throat);
+      
+        darcy_r_cap_const = min_r_cap_throat; // TODO: USE DATA FROM THE CURVE!
+      }
+      else
+        darcy_r_cap_const = 1/darcy_pc_to_sw.front().x();
 
 
 
@@ -153,10 +150,12 @@ namespace xpm {
 
       auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim).prod()*darcy_porosity;
 
+      
+
       auto eval_inv_volume = [&] {
         return
           inv_volume_coefs[0] + inv_volume_coefs[2]*last_r_cap_*last_r_cap_
-        + (1 - solve(darcy_pc_to_sw, 1/last_r_cap_, dpl::extrapolant::flat))*unit_darcy_pore_volume*inv_darcy_count
+        + (1 - (darcy_pc_to_sw.empty() ? 0.0 : solve(darcy_pc_to_sw, 1/last_r_cap_, dpl::extrapolant::flat)))*unit_darcy_pore_volume*inv_darcy_count
         ;
       };
 

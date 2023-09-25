@@ -27,8 +27,8 @@
 #include <memory>
 #include <vector>
 
-#ifdef __cpp_lib_ranges
-  #include <ranges>    
+#ifdef __cpp_lib_span
+  #include <span>    
 #endif
 
 
@@ -129,13 +129,14 @@ namespace dpl
       return lookup(this).get();
     }
 
-    #ifdef __cpp_lib_ranges
+    #ifdef __cpp_lib_span
     template <typename Key, std::enable_if_t<!std::is_base_of_v<lookup_item_tag, Key>, int> = 0>
-    auto range(Key k) const {
+    auto span(Key k) const {
       static constexpr auto lookup = static_map_rec_<Args...>::find(k);
       static_assert(lookup, "Type key is not available");
       auto* ptr = lookup(this).get();
-      return std::ranges::subrange{ptr, ptr + size_};
+      return std::span{ptr, ptr + size_};
+      // return std::ranges::subrange{ptr, ptr + size_};
     }    
     #endif
     

@@ -368,7 +368,7 @@ namespace xpm
     bool eval_inlet_outlet_connectivity() const {
       disjoint_sets ds(*node_count() + 2);
 
-      for (auto [l, r] : throat_.range(attribs::adj))
+      for (auto [l, r] : throat_.span(attribs::adj))
         ds.union_set(*l, *r);
 
       return ds.find_set(*inlet()) == ds.find_set(*outlet());
@@ -422,11 +422,11 @@ namespace xpm
       };
       
       {
-        for (auto [l, r] : throat_.range(attribs::adj))
+        for (auto [l, r] : throat_.span(attribs::adj))
           if (inner_node(r))
             ds.union_set(*l, *r);
       
-        for (auto [l, r] : throat_.range(attribs::adj))
+        for (auto [l, r] : throat_.span(attribs::adj))
           if (r == inlet())
             connected_inlet[ds.find_set(*l)] = true;
           else if (r == outlet())
@@ -680,7 +680,7 @@ R"(image voxels
 
       disjoint_sets ds(gross_total_size);
 
-      for (auto [l, r] : pn_->throat_.range(attribs::adj))
+      for (auto [l, r] : pn_->throat_.span(attribs::adj))
         if (pn_->inner_node(r)) // macro-macro
           ds.union_set(*l, *r);
 
@@ -710,7 +710,7 @@ R"(image voxels
       std::vector<bool> inlet(gross_total_size);
       std::vector<bool> outlet(gross_total_size);
 
-      for (auto [l, r] : pn_->throat_.range(attribs::adj))
+      for (auto [l, r] : pn_->throat_.span(attribs::adj))
         if (r == pn_->inlet()) // macro-inlet
           inlet[ds.find_set(*total(l))] = true;
         else if (r == pn_->outlet()) // macro-outlet
@@ -848,7 +848,7 @@ R"(image voxels
       graph_generator<net_idx_t> gen(*vertex_count);
       std::unordered_map<dc_graph::edge_descriptor, std::size_t> de_to_throat;
 
-      for (auto [l, r] : pn_->throat_.range(attribs::adj))
+      for (auto [l, r] : pn_->throat_.span(attribs::adj))
         if (connected(l))
           if (pn_->inner_node(r)) // macro-macro
             gen.reserve(net(l), net(r));
@@ -938,7 +938,7 @@ R"(image voxels
 
       builder.allocate_rows(*connected_count_);
       
-      for (auto [l, r] : pn_->throat_.range(adj))
+      for (auto [l, r] : pn_->throat_.span(adj))
         if (pn_->inner_node(r) && connected(l)) // macro-macro
           builder.reserve_connection(
             block[*net(l)],
