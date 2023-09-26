@@ -13,7 +13,26 @@ int main(int argc, char* argv[])
 
   // static const auto input = std::initializer_list<dpl::vector2d>{{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
 
-  // constexpr std::array<dpl::vector2d, 5> input = {dpl::vector2d{1, 20}, {3, 30}, {3.0001, 40}, {7, 50}, {10, 100}};
+  // std::array<int, 5> input = {int{1}, {3}, {3}, {7}, {10}};
+
+
+  //  std::array<dpl::vector2d, 5> input = {dpl::vector2d{1, 20}, {3, 30}, {3.000, 40}, {7, 50}, {10, 100}};
+  //
+  //
+  //
+  //
+  // auto ret = std::ranges::unique(input,
+  //   {}    /*[](double l, double r) { return false; }*/,
+  //   [](const dpl::vector2d& v) { return v.x(); }).begin();
+  //
+  // // for (auto x : foo) {
+  // //   std::cout << x << '\n';
+  // // }
+  //
+  // std::vector www (input.begin(), ret);
+  //
+  // int p = 3;
+
   //
   // auto spn = std::span<const dpl::vector2d>{input};
   // auto qqq = spn.size();

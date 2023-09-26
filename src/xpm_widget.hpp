@@ -22,6 +22,7 @@
 #include <QChartView>
 #include <QLineSeries>
 #include <QValueAxis>
+#include <QLogValueAxis>
 #include <QClipboard>
 
 #if (VTK_MAJOR_VERSION == 8)
@@ -125,7 +126,7 @@ namespace xpm
 
     QChartView* chart_view_;
     QLineSeries* line_series_;
-    QValueAxis*  axis_y;
+    QLogValueAxis* axis_y;
     
     void UpdateStatus(std::string text) {
       status_ = std::move(text);
@@ -278,29 +279,35 @@ namespace xpm
             [this, m = std::move(menu)](const QPoint& pos) { m->popup(chart_view_->viewport()->mapToGlobal(pos)); });
         }
 
-        line_series_ = new QLineSeries;
-        line_series_->setName("total");
+        
+        auto* chart_ = new QChart;
+        // chart_->addAxis()
+        // chart_->createDefaultAxes();
+        chart_view_->setChart(chart_);
 
-        auto* sweep_chart_ = new QChart;
-        // sweep_chart_->legend()->hide();
-        sweep_chart_->addSeries(line_series_);
-        sweep_chart_->createDefaultAxes();
-        chart_view_->setChart(sweep_chart_);
-
-        auto* axis_x = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Horizontal)[0]);
+        auto* axis_x = new QValueAxis;//static_cast<QValueAxis*>(chart_->axes(Qt::Horizontal)[0]);
         axis_x->setLabelFormat("%.2f");
         axis_x->setTitleText("Water saturation");
         axis_x->setRange(0.0, 1);
+        chart_->addAxis(axis_x, Qt::AlignBottom);
 
-
-        axis_y = static_cast<QValueAxis*>(sweep_chart_->axes(Qt::Vertical)[0]);
-        // axis_y->setLabelsFont(scaled_font);
-        axis_y->setLabelFormat("%.0f");
+        axis_y = new QLogValueAxis;//static_cast<QLogValueAxis*>(chart_->axes(Qt::Vertical)[0]);
+        axis_y->setLabelFormat("%.0e");
         axis_y->setTitleText("Capillary pressure, Pa");
-        axis_y->setRange(0, 100000);
+        chart_->addAxis(axis_y, Qt::AlignLeft);
 
+        line_series_ = new QLineSeries;
+        line_series_->setName("total");
         line_series_->clear();
         line_series_->setPointsVisible(true);
+
+        
+
+        chart_->addSeries(line_series_);
+        line_series_->attachAxis(axis_x);
+        line_series_->attachAxis(axis_y);
+        
+
 
         using namespace dpl::qt::layout;
 
@@ -429,30 +436,22 @@ namespace xpm
       using props = hydraulic_properties::equilateral_triangle_properties;
 
       {
-        auto min_r_cap_throat = std::numeric_limits<double>::max();
+        using namespace std;
 
-        for (std::size_t i{0}; i < pn_.throat_count(); ++i)
+        auto min_r_cap_throat = numeric_limits<double>::max();
+
+        for (size_t i{0}; i < pn_.throat_count(); ++i)
           if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
-            min_r_cap_throat = std::min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
+            min_r_cap_throat = min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
 
-        min_r_cap_throat = 0.7*props::r_cap_piston_with_films(0, min_r_cap_throat);
-        axis_y->setRange(axis_y->min(), 1/min_r_cap_throat);
+        axis_y->setRange(
+          // 1e4/*axis_y->min()*/,
+          pow(10., floor(log10(1./props::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
+          pow(10., ceil(log10(max(
+            1/(0.7*props::r_cap_piston_with_films(0, min_r_cap_throat)),
+            startup_.capillary_pressure.empty() ? 0 : startup_.capillary_pressure.front().y()))))*1.01
+        );
       }
-
-
-      // chart_view_ = new QChartView;
-      // chart_view_->setRenderHint(QPainter::Antialiasing);
-      // chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
-      //
-      // line_series_ = new QLineSeries;
-      //
-      // auto sweep_chart_ = new QChart;
-      // // sweep_chart_->legend()->hide();
-      // sweep_chart_->addSeries(line_series_);
-      // sweep_chart_->createDefaultAxes();
-      //
-      // chart_view_->setChart(sweep_chart_);
-
 
       invasion_task_.init();
 
@@ -463,14 +462,18 @@ namespace xpm
         using namespace std::ranges::views;
         auto query = startup_.capillary_pressure | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
         std::vector<dpl::vector2d> pc_to_sw{query.begin(), query.end()};
-        using pc_to_sw_span = std::span<const dpl::vector2d>;
+        std::cout << fmt::format("first size {}\n", pc_to_sw.size());
+        pc_to_sw.resize(std::ranges::unique(pc_to_sw, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_to_sw.begin());
+        std::cout << fmt::format("second size {}\n", pc_to_sw.size());
+
+        using pc_sw_span = std::span<const dpl::vector2d>;
 
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch, &invasion_task_,
-          startup_.microporous_poro, theta, pc_to_sw_span{pc_to_sw});
+          startup_.microporous_poro, theta, pc_sw_span{pc_to_sw});
 
         auto update = [this, theta, start, &pc_to_sw] {
           auto r_cap = invasion_task_.last_r_cap();
-          auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_to_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
+          auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
           auto area_of_films = props::area_of_films(theta, r_cap);
 
           auto map_satur = [](double x) { return x/2. + 0.25; };

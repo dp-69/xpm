@@ -95,15 +95,10 @@ namespace xpm {
     }
 
     void launch(double darcy_porosity, double theta, std::span<const dpl::vector2d> darcy_pc_to_sw) {
-      auto index_count = *pni_->connected_count();
-
       using props = hydraulic_properties::equilateral_triangle_properties;
 
       invaded_macro_voxel_.resize(pni_->connected_count());
       invaded_throat_.resize(pn_->throat_count());
-
-      
-
 
       double darcy_r_cap_const;
 
@@ -120,8 +115,6 @@ namespace xpm {
       else
         darcy_r_cap_const = 1/darcy_pc_to_sw.front().x();
 
-
-
       dpl::strong_array<net_tag, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
 
@@ -134,7 +127,7 @@ namespace xpm {
             explored_throat[i] = true;
           }
 
-      net_idx_t outlet_idx{index_count};
+      net_idx_t outlet_idx{*pni_->connected_count()};
 
       dpl::graph::dc_properties dc_props{dc_graph_};
       dpl::graph::et_traits::node_ptr outlet_entry = dc_props.get_entry(*outlet_idx);
@@ -159,6 +152,8 @@ namespace xpm {
         ;
       };
 
+      auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume()/total_pore_volume, 1/last_r_cap_}; };
+
       for (inv_idx_ = 0; !queue.empty(); ++inv_idx_) {
         // if (inv_idx_ < 50)
         //   std::this_thread::sleep_for(std::chrono::milliseconds{100});
@@ -167,10 +162,9 @@ namespace xpm {
         // else if (inv_idx_ < 1000)
         //   std::this_thread::sleep_for(std::chrono::milliseconds{10});
 
-        auto inv_volume = eval_inv_volume();
 
-        if (dpl::vector2d pc_point{1 - inv_volume/total_pore_volume, 1/last_r_cap_};
-          std::abs(last_pc_point.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point.y() - pc_point.y()) > 1e4) {
+        if (auto pc_point = eval_pc_point();
+          std::abs(last_pc_point.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point.y() - pc_point.y()) > 0.075/darcy_r_cap_const) {
           last_pc_point = pc_point;
           add_to_pc_curve(pc_point);
         }
@@ -262,12 +256,31 @@ namespace xpm {
         }
       }
 
-      for (auto mult : {1.004, 1.008, 1.016, 1.032, 1.064, 1.128}) {
-        // std::this_thread::sleep_for(std::chrono::milliseconds{1250});
+      add_to_pc_curve(eval_pc_point());
 
-        auto inv_volume = eval_inv_volume();
-        add_to_pc_curve({1 - inv_volume/total_pore_volume, 1/last_r_cap_});
-        last_r_cap_ /= mult;
+      if (!darcy_pc_to_sw.empty()) {
+
+        auto end_pc = 1./last_r_cap_;
+        auto max_dacry_pc = darcy_pc_to_sw.back().x();
+
+        auto steps = 5;
+
+        auto step = std::pow(10, (std::log10(max_dacry_pc) - std::log10(end_pc))/steps);
+
+        for (auto i = 0; i < steps; ++i) {
+          last_r_cap_ /= step;
+          // std::cout << fmt::format("adding points: {:.2e} Sw\n", eval_pc_point().y());
+          add_to_pc_curve(eval_pc_point());
+        }
+
+        // for (auto mult : {1.25, 1.5, 1.75, 2., 2.}) {   // {1.004, 1.008, 1.016, 1.032, 1.064, 1.128}
+        //   // std::this_thread::sleep_for(std::chrono::milliseconds{1250});
+        //   last_r_cap_ /= mult;
+        //
+        //   std::cout << fmt::format("adding points: {} Sw\n", eval_pc_point().y());
+        //
+        //   add_to_pc_curve(eval_pc_point());
+        // }
       }
 
       // for (auto i = 0; i < 5; ++i) {
