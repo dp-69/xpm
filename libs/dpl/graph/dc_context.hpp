@@ -157,15 +157,16 @@ namespace dpl::graph
       }
     }
 
-    void adjacent_edges_remove(std::integral auto v_idx, const dc_graph& g) {
-      for (edge_t de : g.edges(v_idx))
+    void adjacent_edges_remove(vertex_t v, const dc_graph& g) {
+      for (edge_t de : g.edges(v))
         if (!props_.is_null_entry(de) && !props_.is_tree_edge(de))
           non_tree_edge_remove(de);
 
-      for (edge_t de : g.edges(v_idx))
+      for (edge_t de : g.edges(v))
         if (!props_.is_null_entry(de))
           tree_edge_split_and_reconnect(de);
 
+      props_.set_entry(v, nullptr);
       // TODO: release vertex?
     }
 

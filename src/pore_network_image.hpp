@@ -833,7 +833,8 @@ R"(image voxels
     template <bool Outlet = false>
     std::tuple<
       dpl::graph::dc_graph,
-      std::unordered_map<dpl::graph::dc_graph::edge_descriptor, std::size_t>>
+      std::unordered_map<dpl::graph::dc_graph::edge_descriptor, std::size_t>,
+      std::unique_ptr<dpl::graph::dc_graph::edge_descriptor[]>>
     generate_dc_graph() const {
       using namespace dpl::graph;
       using namespace presets;
@@ -844,9 +845,9 @@ R"(image voxels
       if constexpr (Outlet)
         ++vertex_count;
 
-
       graph_generator<net_idx_t> gen(*vertex_count);
       std::unordered_map<dc_graph::edge_descriptor, std::size_t> de_to_throat;
+      auto throat_to_de = std::make_unique<dc_graph::edge_descriptor[]>(pn_->throat_count());
 
       for (auto [l, r] : pn_->throat_.span(attribs::adj))
         if (connected(l))
@@ -890,6 +891,7 @@ R"(image voxels
             auto [lr, rl] = gen.set(net(l), net(r));
             de_to_throat[lr] = i;
             de_to_throat[rl] = i;
+            throat_to_de[i] = lr;
           }
           else if constexpr (Outlet) {
             if (pn_->outlet() == r) // macro-outlet
@@ -921,7 +923,7 @@ R"(image voxels
           }
       }
 
-      return {gen.acquire(), std::move(de_to_throat)};
+      return {gen.acquire(), std::move(de_to_throat), std::move(throat_to_de)};
     }
 
     std::tuple<HYPRE_BigInt, size_t, dpl::hypre::ls_known_storage> generate_pressure_input(

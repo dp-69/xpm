@@ -10,6 +10,7 @@ namespace xpm {
 
     dpl::graph::dc_graph dc_graph_;
     std::unordered_map<dpl::graph::dc_graph::edge_descriptor, std::size_t> de_to_throat_;
+    std::unique_ptr<dpl::graph::dc_graph::edge_descriptor[]> throat_to_de_;
 
     dpl::graph::dc_context<dpl::graph::dc_properties> dc_context_;
 
@@ -78,7 +79,7 @@ namespace xpm {
       auto t0 = clock::now();
       std::cout << "graph...";
 
-      std::tie(dc_graph_, de_to_throat_) = pni_->generate_dc_graph<true>();
+      std::tie(dc_graph_, de_to_throat_, throat_to_de_) = pni_->generate_dc_graph<true>();
       std::cout << fmt::format(" done {}s\n  {:L} vertices\n  {:L} edges\n\n",
         duration_cast<seconds>(clock::now() - t0).count(),
         dc_graph_.vertex_count(),
@@ -155,12 +156,12 @@ namespace xpm {
       auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume()/total_pore_volume, 1/last_r_cap_}; };
 
       for (inv_idx_ = 0; !queue.empty(); ++inv_idx_) {
-        // if (inv_idx_ < 50)
-        //   std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        // if (inv_idx_ < 35)
+        //   std::this_thread::sleep_for(std::chrono::milliseconds{150});
         // else if (inv_idx_ < 100)
         //   std::this_thread::sleep_for(std::chrono::milliseconds{50});
         // else if (inv_idx_ < 1000)
-        //   std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        //   std::this_thread::sleep_for(std::chrono::milliseconds{25});
 
 
         if (auto pc_point = eval_pc_point();
@@ -175,9 +176,19 @@ namespace xpm {
         queue.pop();
 
 
-
         if (elem == displ_elem::macro) {
           auto net_idx = pni_->net(macro_idx_t(local_idx));
+
+          // {
+          //   if (
+          //     dpl::graph::et_algo::get_header(dc_props.get_entry(*net_idx)) !=
+          //     dpl::graph::et_algo::get_header(outlet_entry))
+          //     continue;
+          //
+          //   if (!props::has_films(theta))
+          //     dc_context_.adjacent_edges_remove(*net_idx, dc_graph_); // TODO;
+          // }
+
           invaded_macro_voxel_[net_idx] = true;
 
           last_r_cap_ = std::min(r_cap, last_r_cap_);
@@ -204,9 +215,20 @@ namespace xpm {
               }
         }
         else if (elem == displ_elem::voxel) {
+          auto net_idx = pni_->net(voxel_idx_t(local_idx));
+
+          // {
+          //   if (
+          //     dpl::graph::et_algo::get_header(dc_props.get_entry(*net_idx)) !=
+          //     dpl::graph::et_algo::get_header(outlet_entry))
+          //     continue;
+          //
+          //   if (!props::has_films(theta))
+          //     dc_context_.adjacent_edges_remove(*net_idx, dc_graph_); // TODO;
+          // }
+
           darcy_invaded_ = true;
 
-          auto net_idx = pni_->net(voxel_idx_t(local_idx));
           invaded_macro_voxel_[net_idx] = true;
 
           last_r_cap_ = std::min(r_cap, last_r_cap_);
@@ -228,9 +250,31 @@ namespace xpm {
                 }
         }
         else { // throat
-          invaded_throat_[local_idx] = true; // TODO
+          auto [l, r] = pn_->throat_[attribs::adj][local_idx];
 
-          auto [l, r] = pn_->throat_[attribs::adj][local_idx]; 
+          // {
+          //   using et_ptr = dpl::graph::et_traits::node_ptr;
+          //
+          //   et_ptr outlet_hdr = dpl::graph::et_algo::get_header(outlet_entry);
+          //
+          //   et_ptr l_entry = dc_props.get_entry(*pni_->net(l));
+          //   et_ptr r_entry = r == pn_->inlet() ? nullptr : dc_props.get_entry(*pni_->net(r));
+          //
+          //   if (!(
+          //       (l_entry && dpl::graph::et_algo::get_header(l_entry) == outlet_hdr) ||
+          //       (r_entry && dpl::graph::et_algo::get_header(r_entry) == outlet_hdr)))
+          //     continue;
+          //
+          //
+          //   if (!props::has_films(theta))
+          //     if (auto de = throat_to_de_[local_idx]; !dc_props.is_null_entry(de))
+          //       if (dc_props.is_tree_edge(de))
+          //         dc_context_.tree_edge_split_and_reconnect(de);
+          //       else
+          //         dc_context_.non_tree_edge_remove(de);
+          // }
+
+          invaded_throat_[local_idx] = true; // TODO
 
           if (pn_->inner_node(r)/* && pni_->connected(l)*/) {
             last_r_cap_ = std::min(r_cap, last_r_cap_);
@@ -259,7 +303,6 @@ namespace xpm {
       add_to_pc_curve(eval_pc_point());
 
       if (!darcy_pc_to_sw.empty()) {
-
         auto end_pc = 1./last_r_cap_;
         auto max_dacry_pc = darcy_pc_to_sw.back().x();
 

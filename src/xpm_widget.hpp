@@ -126,7 +126,7 @@ namespace xpm
 
     QChartView* chart_view_;
     QLineSeries* line_series_;
-    QLogValueAxis* axis_y;
+    QLogValueAxis* axis_y_;
     
     void UpdateStatus(std::string text) {
       status_ = std::move(text);
@@ -239,75 +239,129 @@ namespace xpm
         status_property_item_ = model->AddItem(
           dpl::qt::property_editor::ItemFunctor<std::string>{"Status", [this] { return status_; }});
 
-        
-
-
-        chart_view_ = new QChartView;
-        chart_view_->setRenderHint(QPainter::Antialiasing);
-        chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+        auto* plot_tabs = new QTabWidget;
 
         {
-          auto menu = std::make_unique<QMenu>();
-          
-          auto copy_action = [this](auto format, auto sep, auto begin, auto end) {
-            return [=, this] {
-              auto view =
-                std::views::transform(invasion_task_.pc_curve(),
-                  [format](const dpl::vector2d& p) { return fmt::format(format, p.x(), p.y()); })
-                | std::views::reverse;
+          chart_view_ = new QChartView;
+          chart_view_->setRenderHint(QPainter::Antialiasing);
+          chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
 
-              std::stringstream ss;
-              ss << begin << *std::begin(view);
-              for (const auto& s : view | std::views::drop(1))
-                ss << sep << s;
-              ss << end << '\n';
+          {
+            auto menu = std::make_unique<QMenu>();
+            
+            auto copy_action = [this](auto format, auto sep, auto begin, auto end) {
+              return [=, this] {
+                auto view =
+                  std::views::transform(invasion_task_.pc_curve(),
+                    [format](const dpl::vector2d& p) { return fmt::format(format, p.x(), p.y()); })
+                  | std::views::reverse;
 
-              QApplication::clipboard()->setText(QString::fromStdString(ss.str()));
+                std::stringstream ss;
+                ss << begin << *std::begin(view);
+                for (const auto& s : view | std::views::drop(1))
+                  ss << sep << s;
+                ss << end << '\n';
+
+                QApplication::clipboard()->setText(QString::fromStdString(ss.str()));
+              };
             };
-          };
 
-          using fmt_string = fmt::format_string<const double&, const double&>;
+            using fmt_string = fmt::format_string<const double&, const double&>;
 
-          connect(menu->addAction("Copy"), &QAction::triggered,
-            copy_action(fmt_string{"{:.6f}, {:.6e}"}, "\n", "", ""));
+            connect(menu->addAction("Copy"), &QAction::triggered,
+              copy_action(fmt_string{"{:.6f}, {:.6e}"}, "\n", "", ""));
 
-          connect(menu->addAction("Copy JSON"), &QAction::triggered,
-            copy_action(fmt_string{"[{:.6f}, {:.6e}]"}, ", ", "[", "]")); // copy_action(fmt_string{"  [{:.6f}, {:.6e}]"}, ",\n", "[\n", "\n]\n")); 
+            connect(menu->addAction("Copy JSON"), &QAction::triggered,
+              copy_action(fmt_string{"[{:.6f}, {:.6e}]"}, ", ", "[", "]")); // copy_action(fmt_string{"  [{:.6f}, {:.6e}]"}, ",\n", "[\n", "\n]\n")); 
 
-          chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
-          connect(chart_view_, &QTreeView::customContextMenuRequested,
-            [this, m = std::move(menu)](const QPoint& pos) { m->popup(chart_view_->viewport()->mapToGlobal(pos)); });
+            chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
+            connect(chart_view_, &QTreeView::customContextMenuRequested,
+              [this, m = std::move(menu)](const QPoint& pos) { m->popup(chart_view_->viewport()->mapToGlobal(pos)); });
+          }
+        
+          auto* chart = new QChart;
+          chart_view_->setChart(chart);
+
+          auto* axis_x = new QValueAxis;//static_cast<QValueAxis*>(chart_->axes(Qt::Horizontal)[0]);
+          axis_x->setLabelFormat("%.2f");
+          axis_x->setTitleText("Water saturation");
+          axis_x->setRange(0.0, 1);
+          chart->addAxis(axis_x, Qt::AlignBottom);
+
+          axis_y_ = new QLogValueAxis;//static_cast<QLogValueAxis*>(chart_->axes(Qt::Vertical)[0]);
+          axis_y_->setLabelFormat("%.0e");
+          axis_y_->setTitleText("Capillary pressure, Pa");
+          chart->addAxis(axis_y_, Qt::AlignLeft);
+
+          line_series_ = new QLineSeries;
+          line_series_->setName("total");
+          line_series_->clear();
+          line_series_->setPointsVisible(true);
+
+          chart->addSeries(line_series_);
+          line_series_->attachAxis(axis_x);
+          line_series_->attachAxis(axis_y_);
+
+          plot_tabs->addTab(chart_view_, "Pc");
         }
 
+        {
+          auto* chart_view = new QChartView;
+          chart_view->setRenderHint(QPainter::Antialiasing);
+          chart_view->setBackgroundBrush(Qt::GlobalColor::white);
+
+          auto* chart = new QChart;
+          chart_view->setChart(chart);
+
+          auto* axis_x = new QValueAxis;
+          axis_x->setLabelFormat("%.2f");
+          axis_x->setTitleText("Water saturation");
+          axis_x->setRange(0, 1);
+          chart->addAxis(axis_x, Qt::AlignBottom);
+
+          auto* axis_y = new QValueAxis;
+          axis_y->setLabelFormat("%.2f");
+          axis_y->setTitleText("Relative permeability");
+          axis_y->setRange(0, 1);
+          chart->addAxis(axis_y, Qt::AlignLeft);
+
+          auto* kro_series = new QLineSeries;
+          kro_series->setName("oil");
+
+          auto* krg_series = new QLineSeries;
+          krg_series->setName("gas");
+          // line_series->setPointsVisible(true);
+
+          for (auto size = 50, i = 0; i <= size; ++i) {
+            auto So = 1.*i/size;
+            auto Sor = 0.0;
+            auto Lambda = 2.0;
+            auto kro = std::pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda);
+            auto krg = std::pow((1 - So)/(1 - Sor), 2)*(1 - std::pow((So - Sor)/(1 - Sor), (2 + Lambda)/Lambda));
+
+            kro_series->append(So, kro);
+            krg_series->append(So, krg);
+          }
+          
+          // pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda)
+
+
+          // line_series->append(0.1, 0.1);
+          // line_series->append(0.5, 0.8);
+
+          chart->addSeries(kro_series);
+          kro_series->attachAxis(axis_x);
+          kro_series->attachAxis(axis_y);
+
+          chart->addSeries(krg_series);
+          krg_series->attachAxis(axis_x);
+          krg_series->attachAxis(axis_y);
+
+          plot_tabs->addTab(chart_view, "kr");
+        }
+
+
         
-        auto* chart_ = new QChart;
-        // chart_->addAxis()
-        // chart_->createDefaultAxes();
-        chart_view_->setChart(chart_);
-
-        auto* axis_x = new QValueAxis;//static_cast<QValueAxis*>(chart_->axes(Qt::Horizontal)[0]);
-        axis_x->setLabelFormat("%.2f");
-        axis_x->setTitleText("Water saturation");
-        axis_x->setRange(0.0, 1);
-        chart_->addAxis(axis_x, Qt::AlignBottom);
-
-        axis_y = new QLogValueAxis;//static_cast<QLogValueAxis*>(chart_->axes(Qt::Vertical)[0]);
-        axis_y->setLabelFormat("%.0e");
-        axis_y->setTitleText("Capillary pressure, Pa");
-        chart_->addAxis(axis_y, Qt::AlignLeft);
-
-        line_series_ = new QLineSeries;
-        line_series_->setName("total");
-        line_series_->clear();
-        line_series_->setPointsVisible(true);
-
-        
-
-        chart_->addSeries(line_series_);
-        line_series_->attachAxis(axis_x);
-        line_series_->attachAxis(axis_y);
-        
-
 
         using namespace dpl::qt::layout;
 
@@ -316,7 +370,7 @@ namespace xpm
           << (
             splitter{dir::vertical}
             << tree_view_ << stretch{1}
-            << chart_view_ << stretch{0}) << stretch{0}
+            << plot_tabs/*chart_view_*/ << stretch{0}) << stretch{0}
           << qvtk_widget_ << stretch{1}
         );
       }
@@ -427,7 +481,7 @@ namespace xpm
           microporous_pc_series->append(/*frac**/p.x(), p.y());
         microporous_pc_series->setName("microporous");
         microporous_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-        microporous_pc_series->attachAxis(axis_y);
+        microporous_pc_series->attachAxis(axis_y_);
         auto pen = microporous_pc_series->pen();
         pen.setWidth(pen.width() + 1);
         microporous_pc_series->setPen(pen);
@@ -444,7 +498,7 @@ namespace xpm
           if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
             min_r_cap_throat = min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
 
-        axis_y->setRange(
+        axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
           pow(10., floor(log10(1./props::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
           pow(10., ceil(log10(max(
@@ -462,9 +516,9 @@ namespace xpm
         using namespace std::ranges::views;
         auto query = startup_.capillary_pressure | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
         std::vector<dpl::vector2d> pc_to_sw{query.begin(), query.end()};
-        std::cout << fmt::format("first size {}\n", pc_to_sw.size());
+        // std::cout << fmt::format("first size {}\n", pc_to_sw.size());
         pc_to_sw.resize(std::ranges::unique(pc_to_sw, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_to_sw.begin());
-        std::cout << fmt::format("second size {}\n", pc_to_sw.size());
+        // std::cout << fmt::format("second size {}\n", pc_to_sw.size());
 
         using pc_sw_span = std::span<const dpl::vector2d>;
 
