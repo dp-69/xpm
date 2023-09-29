@@ -165,7 +165,7 @@ namespace xpm
         points->InsertNextPoint(n0_pos);
         orient_array->InsertNextTuple(angles_for_j_norm(pn.node_[pos][*r] - n0_pos));
 
-        scale_array->InsertNextTuple(v3d{
+        scale_array->InsertNextTuple(dpl::vector3d{
           pn.throat_[r_ins][i],
           (pn.node_[pos][*r] - n0_pos).length(),
           pn.throat_[r_ins][i]

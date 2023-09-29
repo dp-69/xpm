@@ -54,8 +54,11 @@ namespace dpl::hypre
     }
   };
 
+  template<typename Projection = std::identity>
   class ls_known_storage_builder
   {
+    Projection proj_;
+
     HYPRE_BigInt nrows_;
     size_t nvalues_;
     ls_known_storage lks_;
@@ -63,9 +66,8 @@ namespace dpl::hypre
     std::unique_ptr<size_t[]> diag_shift_;
     std::unique_ptr<HYPRE_Int[]> off_relative_;
   public:
-    auto nvalues() const { return nvalues_; }
-
-    void allocate_rows(HYPRE_BigInt nrows) {
+    explicit ls_known_storage_builder(HYPRE_BigInt nrows, Projection proj = {})
+      : proj_(proj) {
       nrows_ = nrows;
       lks_.ncols = std::make_unique<HYPRE_Int[]>(nrows);
       lks_.b = std::make_unique<HYPRE_Complex[]>(nrows);
@@ -78,13 +80,13 @@ namespace dpl::hypre
       nvalues_ = nrows;
     }
 
-    void reserve_connection(HYPRE_BigInt i0, HYPRE_BigInt i1) {
-      ++lks_.ncols[i0];
-      ++lks_.ncols[i1];
+    void reserve(/*HYPRE_BigInt*/auto i0, /*HYPRE_BigInt*/auto i1) {
+      ++lks_.ncols[proj_(i0)];
+      ++lks_.ncols[proj_(i1)];
       nvalues_ += 2;
     }
 
-    void allocate_values() {
+    void allocate() {
       lks_.cols = std::make_unique<HYPRE_BigInt[]>(nvalues_);
       lks_.values = std::make_unique<HYPRE_Complex[]>(nvalues_);
 
@@ -105,30 +107,34 @@ namespace dpl::hypre
       }
     }
 
-    void add_b(HYPRE_BigInt i, HYPRE_Complex value) {
-      lks_.b[i] += value;
+    void add_b(/*HYPRE_BigInt*/auto i, HYPRE_Complex value) {
+      lks_.b[proj_(i)] += value;
     }
 
-    void add_diag(HYPRE_BigInt i, HYPRE_Complex value) {
-      lks_.values[diag_shift_[i]] += value;
+    void add_diag(/*HYPRE_BigInt*/auto i, HYPRE_Complex value) {
+      lks_.values[diag_shift_[proj_(i)]] += value;
     }
 
-    void set_connection(HYPRE_BigInt i0, HYPRE_BigInt i1, HYPRE_Complex value) {
-      auto shift0 = diag_shift_[i0];
+    void set(/*HYPRE_BigInt*/auto i0, /*HYPRE_BigInt*/auto i1, HYPRE_Complex value) {
+      auto shift0 = diag_shift_[proj_(i0)];
       lks_.values[shift0] += value; // diag
-      shift0 += ++off_relative_[i0];
-      lks_.cols[shift0] = i1;
+      shift0 += ++off_relative_[proj_(i0)];
+      lks_.cols[shift0] = proj_(i1);
       lks_.values[shift0] = -value;
 
-      auto shift1 = diag_shift_[i1];
+      auto shift1 = diag_shift_[proj_(i1)];
       lks_.values[shift1] += value; // diag
-      shift1 += ++off_relative_[i1];
-      lks_.cols[shift1] = i0;
+      shift1 += ++off_relative_[proj_(i1)];
+      lks_.cols[shift1] = proj_(i0);
       lks_.values[shift1] = -value;
     }
 
-    auto acquire_storage() {
+    auto acquire() {
       return std::move(lks_);
+    }
+
+    auto nvalues() const {
+      return nvalues_;
     }
   };
 

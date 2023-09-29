@@ -103,17 +103,17 @@ namespace dpl
 
 
   template <typename...>
-  class strong_array {};
+  class strong_vector {};
 
   template <typename KeyTag, typename ValueType>
-  class strong_array<KeyTag, ValueType>
+  class strong_vector<KeyTag, ValueType>
   {
     std::unique_ptr<ValueType[]> uptr_;
 
   public:
-    strong_array() = default;
+    strong_vector() = default;
 
-    explicit strong_array(std::size_t size)
+    explicit strong_vector(std::size_t size)
       : uptr_{std::make_unique<ValueType[]>(size)} {}
 
     void resize(std::size_t size) {
@@ -129,21 +129,25 @@ namespace dpl
     auto& operator[](strong_integer<T, KeyTag> index) const {
       return uptr_[*index];
     }
+
+    auto data() const {
+      return uptr_.get();
+    }
   };
 
   template <typename KeyTag>
-  class strong_array<KeyTag, bool>
+  class strong_vector<KeyTag, bool>
   {
     std::vector<bool> vec_;
 
   public:
-    strong_array() = default;
+    strong_vector() = default;
 
-    explicit strong_array(std::size_t size)
+    explicit strong_vector(std::size_t size)
       : vec_(size) {}
 
     template <std::integral T>
-    explicit strong_array(strong_integer<T, KeyTag> size)
+    explicit strong_vector(strong_integer<T, KeyTag> size)
       : vec_(*size) {}
 
     void resize(std::size_t size) {
@@ -167,7 +171,7 @@ namespace dpl
   };
 
   template <typename KeyTag, typename ValueTag, typename ValueType>
-  class strong_array<KeyTag, ValueTag, ValueType> : public strong_array<KeyTag, strong_integer<ValueType, ValueTag>> {};
+  class strong_vector<KeyTag, ValueTag, ValueType> : public strong_vector<KeyTag, strong_integer<ValueType, ValueTag>> {};
 
 
   // constexpr std::size_t operator "" _uz (std::size_t x) { return x; }
@@ -286,8 +290,8 @@ namespace dpl
 
   struct extrapolant
   {
-    inline static constexpr struct linear_t {} linear;
-    inline static constexpr struct flat_t {} flat;
+    static inline constexpr struct linear_t {} linear;
+    static inline constexpr struct flat_t {} flat;
   };
 
   struct lerp_base

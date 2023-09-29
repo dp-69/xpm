@@ -94,9 +94,6 @@ namespace xpm
 
 
 
-  using v3i = dpl::vector3i;
-  using v3d = dpl::vector3d;
-
   /**
    * \brief maximum node count
    */
@@ -128,7 +125,20 @@ namespace xpm
     struct velem_tag {};
     struct velem_t : dpl::strong_integer<std::int32_t, velem_tag>
     {
-      constexpr operator macro_idx_t() const { return macro_idx_t{value}; }
+    private:
+      static inline constexpr auto not_valid = std::numeric_limits<value_type>::max();
+
+    public:
+      velem_t() : strong_integer(not_valid) {}
+      constexpr explicit velem_t(const value_type v) : strong_integer(v) {}
+
+      constexpr operator macro_idx_t() const {
+        return macro_idx_t{value};
+      }
+
+      explicit constexpr operator bool() const {
+        return value != not_valid;
+      }
     };
   }
 
@@ -141,6 +151,7 @@ namespace xpm
     static constexpr auto darcy_to_m2 = 9.869233e-13;
   }
 
+  
   namespace attribs {
     def_static_key(pos)
     def_static_key(r_ins)
@@ -203,8 +214,8 @@ namespace xpm
 
   struct startup_settings
   {
-    bool use_cache = true;
-    bool save_cache = true;
+    bool use_cache = false; //true;
+    bool save_cache = false; //true;
     bool loaded = false;
 
     struct {

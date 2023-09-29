@@ -14,7 +14,7 @@ namespace xpm {
 
     dpl::graph::dc_context<dpl::graph::dc_properties> dc_context_;
 
-    dpl::strong_array<net_tag, bool> invaded_macro_voxel_;
+    dpl::strong_vector<net_tag, bool> invaded_macro_voxel_;
     std::vector<bool> invaded_throat_;
 
     std::vector<dpl::vector2d> pc_curve_;
@@ -116,7 +116,7 @@ namespace xpm {
       else
         darcy_r_cap_const = 1/darcy_pc_to_sw.front().x();
 
-      dpl::strong_array<net_tag, bool> explored(pni_->connected_count());
+      dpl::strong_vector<net_tag, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
 
       displ_queue queue;

@@ -94,7 +94,7 @@ namespace xpm
 
     vtkNew<vtkLookupTable> lut_pressure_;
     vtkNew<vtkLookupTable> lut_continuous_;
-    vtkNew<vtkLookupTable> lut_velem_;
+    // vtkNew<vtkLookupTable> lut_velem_;
     vtkNew<vtkLookupTable> lut_pore_solid_micro_;
     vtkNew<vtkLookupTable> lut_node_throat_;
 
@@ -199,7 +199,7 @@ namespace xpm
       render_window_->AddRenderer(renderer_);
       // interactor_ = render_window_->GetInteractor();
 
-      renderer_->SetBackground(v3d{1});
+      renderer_->SetBackground(dpl::vector3d{1});
 
       {
         tree_view_ = new QPropertyTreeView;
@@ -526,40 +526,40 @@ namespace xpm
           startup_.microporous_poro, theta, pc_sw_span{pc_to_sw});
 
         auto update = [this, theta, start, &pc_to_sw] {
-          auto r_cap = invasion_task_.last_r_cap();
-          auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
-          auto area_of_films = props::area_of_films(theta, r_cap);
-
-          auto map_satur = [](double x) { return x/2. + 0.25; };
-
-          dpl::sfor<6>([&](auto face_idx) {
-            dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-
-            for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (auto v_idx = voxel_idx_t{idx1d}; pni_.connected(v_idx) && invasion_task_.invaded(v_idx))
-                face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
-              ++i;
-            }
-          });
-          
-          for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && invasion_task_.invaded(macro_idx_t{i}))
-              macro_colors->SetTypedComponent(*i, 0,
-                map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
-
-          {
-            vtkIdType throat_net_idx = 0;
-
-            for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
-              if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
-                if (pni_.connected(l) && invasion_task_.invaded(i))
-                  throat_colors->SetTypedComponent(throat_net_idx, 0,
-                    map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
-
-                ++throat_net_idx;
-              }
-            }
-          }
+          // auto r_cap = invasion_task_.last_r_cap();
+          // auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
+          // auto area_of_films = props::area_of_films(theta, r_cap);
+          //
+          // auto map_satur = [](double x) { return x/2. + 0.25; };
+          //
+          // dpl::sfor<6>([&](auto face_idx) {
+          //   dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+          //
+          //   for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
+          //     if (auto v_idx = voxel_idx_t{idx1d}; pni_.connected(v_idx) && invasion_task_.invaded(v_idx))
+          //       face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
+          //     ++i;
+          //   }
+          // });
+          //
+          // for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+          //   if (pni_.connected(i) && invasion_task_.invaded(macro_idx_t{i}))
+          //     macro_colors->SetTypedComponent(*i, 0,
+          //       map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
+          //
+          // {
+          //   vtkIdType throat_net_idx = 0;
+          //
+          //   for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
+          //     if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
+          //       if (pni_.connected(l) && invasion_task_.invaded(i))
+          //         throat_colors->SetTypedComponent(throat_net_idx, 0,
+          //           map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
+          //
+          //       ++throat_net_idx;
+          //     }
+          //   }
+          // }
           
           QMetaObject::invokeMethod(this,
             [this, start] {
@@ -604,7 +604,7 @@ namespace xpm
 
       //------------------------------
 
-      v3i processors{1};
+      dpl::vector3i processors{1};
 
       if (startup_.solver.decomposition)
         processors = *startup_.solver.decomposition;
@@ -656,11 +656,11 @@ namespace xpm
 
         img_.read_icl_velems(pnm_path);
 
-        auto mapped_range =
-          std::ranges::subrange{img_.velem.get(), img_.velem.get() + img_.size}
-        | std::views::transform([](voxel_property::velem_t x) { return *x; });
+        // auto mapped_range =
+        //   std::span(img_.velem.data(), img_.size) 
+        // | std::views::transform([](voxel_property::velem_t x) { return *x; });
 
-        InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range));
+        // InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range)); // TODO max is not valid, should check value validity
 
         img_.eval_microporous();
       }
@@ -693,7 +693,7 @@ namespace xpm
       else {
         std::cout << "decomposition...";
 
-        auto decomposed = pni_.decompose_rows(processors);
+        auto mapping = pni_.generate_mapping(processors);
 
         // for (auto i = 0; i < processors.prod(); ++i)
         //   std::cout << std::format("\nblock {}, rows {}--{}, size {}",
@@ -703,19 +703,16 @@ namespace xpm
           << " done\n\n"
           << "input matrix build...";
 
-        auto [nrows, nvalues, input] = pni_.generate_pressure_input(decomposed, const_permeability);
+        auto [nrows, nvalues, input] = pni_.generate_pressure_input(mapping, const_permeability);
 
-        std::cout
-          << " done\n\n"
-          // << "pre hypre time: " << duration_cast<std::chrono::milliseconds>(clock::now() - begin_init_time).count() << "ms\n\n"
-        ;
+        std::cout << " done\n\n";
 
         std::cout << 
           fmt::format("save input matrix [{} MB]...", (
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
-        dpl::hypre::mpi::save(input, nrows, nvalues, decomposed.blocks, startup_.solver.tolerance, startup_.solver.max_iterations);
+        dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, startup_.solver.tolerance, startup_.solver.max_iterations);
 
         std::cout
           << " done\n\n"
@@ -738,7 +735,7 @@ namespace xpm
           pressure.resize(nrows);
 
           for (HYPRE_BigInt i = 0; i < nrows; ++i)
-            pressure[decomposed.decomposed_to_net[i]] = decomposed_pressure[i];
+            pressure[mapping.backward[i]] = decomposed_pressure[i];
         }
 
         std::cout << "pressure solved\n\n";
@@ -759,42 +756,29 @@ namespace xpm
       auto assembly = vtkSmartPointer<vtkAssembly>::New();
 
       {
-        vtkSmartPointer<vtkActor> macro_actor;
-        std::tie(macro_actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
-          [&](macro_idx_t i) {
-            return pni_.connected(i) ? 0/*pressure[pni_.net(i)]*/ : std::numeric_limits<double>::quiet_NaN();
-          });
-           
-        assembly->AddPart(macro_actor);
-      }
+        vtkSmartPointer<vtkActor> actor;
 
-      {
-        vtkSmartPointer<vtkActor> throat_actor;
-        std::tie(throat_actor, throat_colors) = CreateThroatActor(pn_, lut_pressure_, [&](std::size_t i) {
+        std::tie(actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
+          [&](macro_idx_t i) {
+            return pni_.connected(i) ? /*0*/ pressure[*pni_.net(i)] : std::numeric_limits<double>::quiet_NaN();
+          });
+
+        assembly->AddPart(actor);
+        
+        std::tie(actor, throat_colors) = CreateThroatActor(pn_, lut_pressure_, [&](std::size_t i) {
           auto [l, r] = pn_.throat_[attribs::adj][i];
 
-          return
-           
-            pni_.connected(l)
-               ? 0/*(pressure[pni_.net(l)] + pressure[pni_.net(r)])/2*/
-               : std::numeric_limits<double>::quiet_NaN();
-
-          // return
-          //   pni_.connected(l)
-          //     ? pn_.inner_node(r)
-          //       ? pni_.connected(r) ? 0/*(pressure[pni_.net(l)] + pressure[pni_.net(r)])/2*/ : std::numeric_limits<HYPRE_Complex>::quiet_NaN()
-          //       : r == pn_.inlet() ? 1.0 : 0.0
-          //     : std::numeric_limits<HYPRE_Complex>::quiet_NaN();
+          return pni_.connected(l)
+            ? /*0*/ (pressure[*pni_.net(l)] + pressure[*pni_.net(r)])/2
+            : std::numeric_limits<double>::quiet_NaN();
         });
 
-        assembly->AddPart(throat_actor);
+        assembly->AddPart(actor);
       }
 
       renderer_->AddActor(assembly);
 
       // std::ranges::fill(pressure, 0);
-      
-      // std::cout << "\n\nNetwork actor created";
 
       {
         auto scale_factor = /*1.0*/pn_.physical_size.x()/img_.dim.x(); // needed for vtk 8.2 floating point arithmetics
@@ -821,7 +805,7 @@ namespace xpm
             for (auto idx1d : face.GetIndices())
               face.GetColorArray()->SetTypedComponent(i++, 0, 
                 pni_.connected(voxel_idx_t{idx1d})
-                  ? /*pressure[pni_.net(v_idx)]*/ 0
+                  ? /*0*/ pressure[*pni_.net(voxel_idx_t{idx1d})]
                   : std::numeric_limits<double>::quiet_NaN()
               );
 
@@ -839,8 +823,8 @@ namespace xpm
               
             actor->SetMapper(glyphs);
 
-            actor->GetProperty()->SetEdgeVisibility(/*false*/false);
-            actor->GetProperty()->SetEdgeColor(v3d{0.25} /*0, 0, 0*/);
+            actor->GetProperty()->SetEdgeVisibility(false);
+            actor->GetProperty()->SetEdgeColor(dpl::vector3d{0.25});
                 
             actor->GetProperty()->SetAmbient(0.5);
             actor->GetProperty()->SetDiffuse(0.4);
