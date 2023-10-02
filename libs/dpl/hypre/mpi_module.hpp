@@ -113,13 +113,6 @@ namespace dpl::hypre::mpi
 
   using solve_result = std::tuple<std::unique_ptr<HYPRE_Complex[]>, HYPRE_Real, HYPRE_Int>;
 
-  // struct solve_result
-  // {
-  //   std::unique_ptr<HYPRE_Complex[]> uptr;
-  //   HYPRE_Real residual;
-  //   HYPRE_Int iters;
-  // };
-
   inline solve_result load_values(HYPRE_BigInt nrows) {
     auto values = std::make_unique<HYPRE_Complex[]>(nrows);
     HYPRE_Real residual;
@@ -192,7 +185,7 @@ namespace dpl::hypre::mpi
     auto local_nrows = input.range->width();
     auto local_values = std::make_unique<HYPRE_Complex[]>(local_nrows);
 
-    auto [residual, iters] = dpl::hypre::solve(*input.range, input, local_values.get(), input.tol, input.max_iter);
+    auto [residual, iters] = solve(input, *input.range, local_values.get(), input.tol, input.max_iter);
 
     std::unique_ptr<HYPRE_Complex[]> recvbuf;
     std::unique_ptr<int[]> recvcounts;

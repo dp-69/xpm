@@ -523,9 +523,16 @@ namespace xpm
         using pc_sw_span = std::span<const dpl::vector2d>;
 
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch, &invasion_task_,
-          startup_.microporous_poro, theta, pc_sw_span{pc_to_sw});
+          startup_.microporous_poro, theta, pc_sw_span{pc_to_sw}, startup_.microporous_perm*0.001*presets::darcy_to_m2);
 
-        auto update = [this, theta, start, &pc_to_sw] {
+        auto last_inv_idx = std::numeric_limits<idx1d_t>::max();
+
+        auto update = [this, theta, start, &pc_to_sw, &last_inv_idx] {
+          if (last_inv_idx == invasion_task_.inv_idx())
+            return;
+
+          last_inv_idx = invasion_task_.inv_idx();
+
           // auto r_cap = invasion_task_.last_r_cap();
           // auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
           // auto area_of_films = props::area_of_films(theta, r_cap);
@@ -675,7 +682,7 @@ namespace xpm
 
       using namespace presets;
 
-      std::vector<HYPRE_Complex> pressure;
+      dpl::strong_vector<net_tag, double> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
       HYPRE_Int iters = 0;
 
@@ -693,7 +700,8 @@ namespace xpm
       else {
         std::cout << "decomposition...";
 
-        auto mapping = pni_.generate_mapping(processors);
+        
+        auto [_, mapping] = pni_.generate_mapping(processors, [this](auto) { return true; });
 
         // for (auto i = 0; i < processors.prod(); ++i)
         //   std::cout << std::format("\nblock {}, rows {}--{}, size {}",
@@ -703,7 +711,10 @@ namespace xpm
           << " done\n\n"
           << "input matrix build...";
 
-        auto [nrows, nvalues, input] = pni_.generate_pressure_input(mapping, const_permeability);
+
+        idx1d_t nrows = *pni_.connected_count();
+        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, const_permeability, [this](auto) { return true; });
+
 
         std::cout << " done\n\n";
 
@@ -743,12 +754,12 @@ namespace xpm
         if (startup_.save_cache) {
           std::filesystem::create_directory("cache");
           std::ofstream cache_stream(cache_path, std::ofstream::binary);
-          cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*pressure.size());
+          cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)**pni_.connected_count());
           std::cout << "pressure cached\n\n";
         }
       }
 
-      pni_.flow_summary(pressure.data(), const_permeability);
+      pni_.flow_summary(pressure, const_permeability, [this](auto) { return true; });
       std::cout << fmt::format("  residual: {:.4g}, iterations: {}\n\n", residual, iters);
 
       
@@ -760,7 +771,7 @@ namespace xpm
 
         std::tie(actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
           [&](macro_idx_t i) {
-            return pni_.connected(i) ? /*0*/ pressure[*pni_.net(i)] : std::numeric_limits<double>::quiet_NaN();
+            return pni_.connected(i) ? /*0*/ pressure[pni_.net(i)] : std::numeric_limits<double>::quiet_NaN();
           });
 
         assembly->AddPart(actor);
@@ -769,7 +780,7 @@ namespace xpm
           auto [l, r] = pn_.throat_[attribs::adj][i];
 
           return pni_.connected(l)
-            ? /*0*/ (pressure[*pni_.net(l)] + pressure[*pni_.net(r)])/2
+            ? /*0*/ (pressure[pni_.net(l)] + pressure[pni_.net(r)])/2
             : std::numeric_limits<double>::quiet_NaN();
         });
 
@@ -786,8 +797,8 @@ namespace xpm
         img_glyph_mapper_.Init(scale_factor);
         {
           std::vector<bool> filter(img_.size);
-          for (idx1d_t i = 0; i < img_.size; ++i)
-            filter[i] = img_.phase[i] == microporous;
+          for (voxel_idx_t i{0}; i < img_.size; ++i)
+            filter[*i] = img_.phase[i] == microporous;
 
           cout << "3D faces...";
 
@@ -805,7 +816,7 @@ namespace xpm
             for (auto idx1d : face.GetIndices())
               face.GetColorArray()->SetTypedComponent(i++, 0, 
                 pni_.connected(voxel_idx_t{idx1d})
-                  ? /*0*/ pressure[*pni_.net(voxel_idx_t{idx1d})]
+                  ? /*0*/ pressure[pni_.net(voxel_idx_t{idx1d})]
                   : std::numeric_limits<double>::quiet_NaN()
               );
 

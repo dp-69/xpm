@@ -106,9 +106,6 @@ namespace xpm
   struct macro_tag {};
   using macro_idx_t = dpl::strong_integer<idx1d_t, macro_tag>;
 
-  struct total_tag {};
-  using total_idx_t = dpl::strong_integer<idx1d_t, total_tag>;
-
   struct net_tag {};
   using net_idx_t = dpl::strong_integer<idx1d_t, net_tag>;
 

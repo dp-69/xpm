@@ -65,6 +65,7 @@ namespace dpl::hypre
 
     std::unique_ptr<size_t[]> diag_shift_;
     std::unique_ptr<HYPRE_Int[]> off_relative_;
+
   public:
     explicit ls_known_storage_builder(HYPRE_BigInt nrows, Projection proj = {})
       : proj_(proj) {
@@ -144,7 +145,7 @@ namespace dpl::hypre
 
 
   inline std::pair<HYPRE_Real, HYPRE_Int> solve(
-    const index_range& range, const ls_known_ref& in, HYPRE_Complex* values,
+    const ls_known_ref& in, const index_range& range, HYPRE_Complex* values,
     HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20
   ) {
 
