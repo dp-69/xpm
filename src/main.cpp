@@ -6,6 +6,11 @@
 
 int main(int argc, char* argv[])
 {
+  // auto v0 = xpm::invaded_func<false>::flipper_::flip(false);
+  // auto v1 = xpm::invaded_func<false>::flipper_::flip(true);
+  // auto v2 = xpm::invaded_func<true>::flipper_::flip(false);
+  // auto v3 = xpm::invaded_func<true>::flipper_::flip(true);
+
   // std::span<dpl::vector2d> s;
   // std::span<const dpl::vector2d> s_cnst;
   // std::span<const dpl::vector2d> s_cnst2;

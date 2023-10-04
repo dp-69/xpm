@@ -495,10 +495,30 @@ namespace xpm
 
 
 
-  struct image_data
+  class image_data
   {
-    idx3d_t dim;
-    idx1d_t size;
+    idx1d_t size_;
+    idx3d_t dim_;
+    map_idx3_t<voxel_idx_t> idx1d_mapper_;
+
+  public:
+    auto size() const {
+      return size_;
+    }
+
+    auto& dim() const {
+      return dim_;
+    }
+
+    template <typename... Args>
+    auto idx_map(Args&&... arg) const {
+      return idx1d_mapper_(std::forward<Args>(arg)...);
+    }
+
+    void set_dim(idx3d_t dim) {
+      dim_ = dim;
+      idx1d_mapper_ = idx_mapper(dim_);
+    }
 
     dpl::strong_vector<voxel_tag, voxel_property::phase_t> phase;
 
@@ -509,31 +529,25 @@ namespace xpm
      */
     dpl::strong_vector<voxel_tag, voxel_property::velem_t> velem;
 
-    auto idx1d_mapper() const {
-      return idx_mapper(dim);
-    }
-
     void eval_microporous() {
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
       voxel_idx_t idx1d{0};
 
-      auto map_idx = idx1d_mapper();
-
-      for (k = 0; k < dim.z(); ++k)
-        for (j = 0; j < dim.y(); ++j) 
-          for (i = 0; i < dim.x(); ++i, ++idx1d)
+      for (k = 0; k < dim_.z(); ++k)
+        for (j = 0; j < dim_.y(); ++j) 
+          for (i = 0; i < dim_.x(); ++i, ++idx1d)
             if (phase[idx1d] == presets::microporous) {
               voxel_property::velem_t adj;
 
               dpl::sfor<3>([&](auto d) {
                 if (ijk[d] > 0)
-                  if (voxel_idx_t adj_idx = idx1d - map_idx[d]; phase[adj_idx] == presets::pore)
+                  if (voxel_idx_t adj_idx = idx1d - idx_map(d); phase[adj_idx] == presets::pore)
                     if (velem[adj_idx])
                       adj = velem[adj_idx];
 
-                if (ijk[d] < dim[d] - 1)
-                  if (voxel_idx_t adj_idx = idx1d + map_idx[d]; phase[adj_idx] == presets::pore)
+                if (ijk[d] < dim_[d] - 1)
+                  if (voxel_idx_t adj_idx = idx1d + idx_map(d); phase[adj_idx] == presets::pore)
                     if (velem[adj_idx])
                       adj = velem[adj_idx];
               });
@@ -545,16 +559,16 @@ namespace xpm
     void read_image(const auto& image_path, parse::image_dict input_config) {
       std::ifstream is(image_path);
       is.seekg(0, std::ios_base::end);
-      size = static_cast<idx1d_t>(is.tellg());
+      size_ = static_cast<idx1d_t>(is.tellg());
       is.seekg(0, std::ios_base::beg);
-      phase.resize(size);
-      is.read(reinterpret_cast<char*>(phase.data()), size);
+      phase.resize(size_);
+      is.read(reinterpret_cast<char*>(phase.data()), size_);
 
       size_t pore_voxels = 0;
       size_t solid_voxels = 0;
       size_t microporous_voxels = 0;
 
-      for (voxel_idx_t i{0}; i < size; ++i)
+      for (voxel_idx_t i{0}; i < size_; ++i)
         if (auto& value = phase[i];
           *value == input_config.pore) {
           value = presets::pore;
@@ -578,7 +592,7 @@ R"(image voxels
   microprs: {:L}
 
 )",
-        size, pore_voxels, solid_voxels, microporous_voxels); 
+        size_, pore_voxels, solid_voxels, microporous_voxels); 
       // #endif
     }
 
@@ -594,18 +608,18 @@ R"(image voxels
       boost::iostreams::mapped_file_source file(network_path.string() + "_VElems.raw");
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
-      velem.resize(dim.prod());
+      velem.resize(dim_.prod());
 
       // auto* ptr = velem.get();
 
-      idx3d_t velems_factor{1, dim.x() + 2, (dim.x() + 2)*(dim.y() + 2)};
+      idx3d_t velems_factor{1, dim_.x() + 2, (dim_.x() + 2)*(dim_.y() + 2)};
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
       voxel_idx_t idx1d{0};
 
-      for (k = 0; k < dim.z(); ++k)
-        for (j = 0; j < dim.y(); ++j) 
-          for (i = 0; i < dim.x(); ++i, ++idx1d) {
+      for (k = 0; k < dim_.z(); ++k)
+        for (j = 0; j < dim_.y(); ++j) 
+          for (i = 0; i < dim_.x(); ++i, ++idx1d) {
             if (auto val = file_ptr[velems_factor.dot(ijk + 1)]; val > 0)
               *velem[idx1d] = val - 2;
           }
@@ -683,7 +697,7 @@ R"(image voxels
     }
 
     void evaluate_isolated() {
-      auto gross_total_size = *pn_->node_count() + img_->size;
+      auto gross_total_size = *pn_->node_count() + img_->size();
 
       disjoint_sets ds(gross_total_size);
 
@@ -692,23 +706,22 @@ R"(image voxels
           ds.union_set(*l, *r);
 
       using namespace presets;
-      auto map_idx = img_->idx1d_mapper();
 
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
         voxel_idx_t idx1d{0};
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j)
-            for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j)
+            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (img_->phase[idx1d] == microporous) {
                 if (img_->velem[idx1d]) // macro-darcy
                   ds.union_set(*total(img_->velem[idx1d]), *total(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img_->dim[d] - 1)
-                    if (voxel_idx_t adj_idx1d = idx1d + map_idx[d]; img_->phase[adj_idx1d] == microporous) // darcy-darcy
+                  if (ijk[d] < img_->dim()[d] - 1)
+                    if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
                       ds.union_set(*total(idx1d), *total(adj_idx1d));
                 });
               }
@@ -727,12 +740,12 @@ R"(image voxels
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j) {
-            if (voxel_idx_t inlet_idx1d{map_idx(0, j, k)}; img_->phase[inlet_idx1d] == microporous) // darcy-inlet
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j) {
+            if (voxel_idx_t inlet_idx1d{img_->idx_map(0, j, k)}; img_->phase[inlet_idx1d] == microporous) // darcy-inlet
               inlet[ds.find_set(*total(inlet_idx1d))] = true;
 
-            if (voxel_idx_t outlet_idx1d{map_idx(img_->dim.x() - 1, j, k)}; img_->phase[outlet_idx1d] == microporous) // darcy-outlet
+            if (voxel_idx_t outlet_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; img_->phase[outlet_idx1d] == microporous) // darcy-outlet
               outlet[ds.find_set(*total(outlet_idx1d))] = true;
           }
       }
@@ -747,7 +760,7 @@ R"(image voxels
       
       connected_count_ = connected_macro_count_;
 
-      for (voxel_idx_t i{0}; i < img_->size; ++i) {
+      for (voxel_idx_t i{0}; i < img_->size(); ++i) {
         auto total_idx = total(i);
         auto rep = ds.find_set(*total_idx); 
         total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
@@ -792,11 +805,11 @@ R"(image voxels
         auto& [i, j, k] = ijk;
         voxel_idx_t idx1d{0};
 
-        auto cell_size = pn_->physical_size/img_->dim;
+        auto cell_size = pn_->physical_size/img_->dim();
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j)
-            for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j)
+            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) { // darcy node
                 net_idx_t net_idx = net(idx1d);
                 idx_to_block[*net_idx] = {net_idx, filter(net_idx)
@@ -845,7 +858,6 @@ R"(image voxels
     generate_dc_graph() const {
       using namespace dpl::graph;
       using namespace presets;
-      auto map_idx = img_->idx1d_mapper();
 
       net_idx_t vertex_count = connected_count_; // last is outlet
 
@@ -870,20 +882,20 @@ R"(image voxels
         auto& [i, j, k] = ijk;
         voxel_idx_t idx1d{0};
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j) {
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j) {
             if constexpr (Outlet) 
-              if (voxel_idx_t adj_idx1d{map_idx(img_->dim.x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+              if (voxel_idx_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
                 gen.reserve(net(adj_idx1d), vertex_count - 1);
 
-            for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
+            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
                   gen.reserve(net(img_->velem[idx1d]), net(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img_->dim[d] - 1)
-                    if (voxel_idx_t adj_idx1d = idx1d + map_idx[d]; img_->phase[adj_idx1d] == microporous) // darcy-darcy
+                  if (ijk[d] < img_->dim()[d] - 1)
+                    if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
                       gen.reserve(net(idx1d), net(adj_idx1d));
                 });
               }
@@ -910,20 +922,20 @@ R"(image voxels
         auto& [i, j, k] = ijk;
         voxel_idx_t idx1d{0};
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j) {
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j) {
             if constexpr (Outlet)
-              if (voxel_idx_t adj_idx1d{map_idx(img_->dim.x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+              if (voxel_idx_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
                 gen.set(net(adj_idx1d), vertex_count - 1);
 
-            for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
+            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
                   gen.set(net(img_->velem[idx1d]), net(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img_->dim[d] - 1)
-                    if (voxel_idx_t adj_idx1d = idx1d + map_idx[d]; img_->phase[adj_idx1d] == microporous) // darcy-darcy
+                  if (ijk[d] < img_->dim()[d] - 1)
+                    if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
                       gen.set(net(idx1d), net(adj_idx1d));
                 });
               }
@@ -936,15 +948,7 @@ R"(image voxels
     std::tuple</*HYPRE_BigInt, */size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
       idx1d_t nrows, const dpl::strong_vector<net_tag, idx1d_t>& forward, double const_permeability, auto filter) const {
 
-      using namespace presets;
-
-
-      auto voxel_idx_map = img_->idx1d_mapper();
-
-      dpl::hypre::ls_known_storage_builder builder{
-        nrows/**connected_count_*/,
-        [&forward, this](auto i) { return forward[this->net(i)]; }
-      };
+      dpl::hypre::ls_known_storage_builder builder{nrows, [&forward, this](auto i) { return forward[this->net(i)]; }};
 
       for (std::size_t i = 0; i < pn_->throat_count(); ++i)
         if (auto [l, r] = pn_->throat_[attribs::adj][i];
@@ -956,16 +960,16 @@ R"(image voxels
         auto& [i, j, k] = ijk;
         voxel_idx_t idx1d{0};
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j)
-            for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j)
+            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
                 if (auto velem = img_->velem[idx1d]; velem && filter(velem)) // macro-darcy
                   builder.reserve(velem, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img_->dim[d] - 1)
-                    if (auto adj_idx1d = idx1d + voxel_idx_map[d]; img_->phase[adj_idx1d] == microporous && filter(adj_idx1d)) // darcy-darcy
+                  if (ijk[d] < img_->dim()[d] - 1)
+                    if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == presets::microporous && filter(adj_idx1d)) // darcy-darcy
                       builder.reserve(idx1d, adj_idx1d);
                 });
               }
@@ -992,29 +996,29 @@ R"(image voxels
         }
 
       {
-        auto cell_size = pn_->physical_size/img_->dim;
+        auto cell_size = pn_->physical_size/img_->dim();
         
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
         voxel_idx_t idx1d{0};
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j) {
-            if (voxel_idx_t inlet_idx1d = voxel_idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) { // darcy-inlet
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j) {
+            if (voxel_idx_t inlet_idx1d = img_->idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) { // darcy-inlet
               auto coef = -2*cell_size.x()*const_permeability;
 
               builder.add_b(inlet_idx1d, coef/**1 Pa*/);
               builder.add_diag(inlet_idx1d, coef);
             }
 
-            if (voxel_idx_t outlet_idx1d = voxel_idx_map(img_->dim.x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) { // darcy-outlet
+            if (voxel_idx_t outlet_idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) { // darcy-outlet
               auto coef = -2*cell_size.x()*const_permeability;
 
               // builder.add_b(outlet_idx1d), coef/**0 Pa*/);
               builder.add_diag(outlet_idx1d, coef);
             }
 
-            for (i = 0; i < img_->dim.x(); ++i, ++idx1d)
+            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
                 if (auto velem = img_->velem[idx1d]; velem && filter(velem)) { // macro-darcy
                   macro_idx_t adj_macro_idx = velem;
@@ -1039,8 +1043,8 @@ R"(image voxels
                 }
 
                 dpl::sfor<3>([&](auto d) {
-                  if (ijk[d] < img_->dim[d] - 1)
-                    if (auto adj_idx1d = idx1d + voxel_idx_map[d]; img_->phase[adj_idx1d] == microporous && filter(adj_idx1d)) { // darcy-darcy
+                  if (ijk[d] < img_->dim()[d] - 1)
+                    if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == presets::microporous && filter(adj_idx1d)) { // darcy-darcy
                       auto coef = -cell_size.x()*const_permeability;
                       builder.set(idx1d, adj_idx1d, coef);
                     }
@@ -1053,51 +1057,44 @@ R"(image voxels
     }
 
 
-   
-    void flow_summary(const dpl::strong_vector<net_tag, HYPRE_Complex>& pressure, double const_permeability, auto filter) const {
-      double inlet_flow_sum = 0;
-      double outlet_flow_sum = 0;
+    std::pair<double, double> flow_rates(
+      const dpl::strong_vector<net_tag, HYPRE_Complex>& pressure, double const_permeability, auto filter) const {
+      auto inlet_flow = 0.0;
+      auto outlet_flow = 0.0;
 
-      auto cell_size_x = (pn_->physical_size/img_->dim).x();
-
-      auto map_idx = img_->idx1d_mapper();
+      auto cell_x = (pn_->physical_size/img_->dim()).x();
 
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
 
-        for (k = 0; k < img_->dim.z(); ++k)
-          for (j = 0; j < img_->dim.y(); ++j) {
-            if (voxel_idx_t inlet_idx1d = map_idx(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) // darcy-inlet
-              inlet_flow_sum += -2*cell_size_x*const_permeability*(1 - pressure[net(inlet_idx1d)]);
+        for (k = 0; k < img_->dim().z(); ++k)
+          for (j = 0; j < img_->dim().y(); ++j) {
+            if (auto idx1d = img_->idx_map(0, j, k); connected(idx1d) && filter(idx1d)) // darcy-inlet
+              inlet_flow += -2*cell_x*const_permeability*(pressure[net(idx1d)] - 1);
 
-            if (voxel_idx_t outlet_idx1d = map_idx(img_->dim.x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) // darcy-outlet
-              outlet_flow_sum += -2*cell_size_x*const_permeability*(pressure[net(outlet_idx1d)]);
+            if (auto idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(idx1d) && filter(idx1d)) // darcy-outlet
+              outlet_flow += -2*cell_x*const_permeability*(0 - pressure[net(idx1d)]);
           }
       }
 
-      for (std::size_t i = 0; i < pn_->throat_count(); ++i)
-        if (auto [l, r] = pn_->throat_[attribs::adj][i]; r == pn_->inlet()) { // macro-inlet
+      for (std::size_t i = 0; i < pn_->throat_count(); ++i) {
+        auto [l, r] = pn_->throat_[attribs::adj][i];
+
+        if (r == pn_->inlet()) { // macro-inlet
           if (connected(l) && filter(i) && filter(l))
-            inlet_flow_sum += pn_->coef(i)*(1 - pressure[net(l)]);
+            inlet_flow += pn_->coef(i)*(pressure[net(l)] - 1);
         }
         else if (r == pn_->outlet()) { // macro-outlet
           if (connected(l) && filter(i) && filter(l))
-            outlet_flow_sum += pn_->coef(i)*(pressure[net(l)]);
+            outlet_flow += pn_->coef(i)*(0 - pressure[net(l)]);
         }
+      }
 
-      
-      std::cout << fmt::format(
-R"(microprs perm: {} mD
-  inlet perm: {:.6f} mD
-  outlet perm: {:.6f} mD
-)",
-        const_permeability/presets::darcy_to_m2*1000,
-        -inlet_flow_sum/pn_->physical_size.x()/presets::darcy_to_m2*1000,
-        -outlet_flow_sum/pn_->physical_size.x()/presets::darcy_to_m2*1000);
+      return {inlet_flow, outlet_flow};
     }
-
-    double eval_total_pore_volume(double darcy_porosity) const {
+    
+    double total_pore_volume(double darcy_porosity) const {
       auto volume = 0.0;
 
       for (macro_idx_t i{0}; i < pn_->node_count(); ++i)
@@ -1108,9 +1105,9 @@ R"(microprs perm: {} mD
         if (auto [l, r] = pn_->throat_[attribs::adj][i]; pn_->inner_node(r) && connected(l))
           volume += pn_->throat_[attribs::volume][i];
         
-      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim).prod()*darcy_porosity;
+      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*darcy_porosity;
 
-      for (voxel_idx_t i{0}; i < img_->size; ++i)
+      for (voxel_idx_t i{0}; i < img_->size(); ++i)
         if (connected(i))
           volume += unit_darcy_pore_volume;
 

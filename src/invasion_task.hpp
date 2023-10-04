@@ -4,26 +4,45 @@
 
 namespace xpm {
   class invasion_task {
+    template <bool invert>
     struct invaded_func
     {
-      pore_network_image* pni;
-      dpl::strong_vector<net_tag, bool>* macro_voxel;
-      std::vector<bool>* throat;
+      template <bool value>
+      struct flipper {
+        static bool flip(bool v) { return v; }
+      };
 
-      bool operator()(net_idx_t i) {
-        return !(*macro_voxel)[i];
+      template <>
+      struct flipper<true> {
+        static bool flip(bool v) { return !v; }
+      };
+
+
+      const pore_network_image* pni;
+      const dpl::strong_vector<net_tag, bool>* macro_voxel;
+      const std::vector<bool>* throat;
+      using flipper_ = flipper<invert>;
+
+      bool operator()(net_idx_t i) const {
+        // return true;
+        return flipper_::flip((*macro_voxel)[i]);
       }
 
-      bool operator()(voxel_idx_t i) {
-        return !(*macro_voxel)[pni->net(i)];
+      bool operator()(voxel_idx_t i) const {
+        // return true;
+        return flipper_::flip((*macro_voxel)[pni->net(i)]);
       }
 
-      bool operator()(macro_idx_t i) {
-        return !(*macro_voxel)[pni->net(i)];
+      bool operator()(macro_idx_t i) const {
+        // return true;
+        return flipper_::flip((*macro_voxel)[pni->net(i)]);
       }
 
-      bool operator()(std::size_t i) {
-        return !(*throat)[i];
+      bool operator()(std::size_t i) const {
+        if (!pni->pn().inner_node(pni->pn().throat_[attribs::adj][i].second))
+          return true;
+
+        return flipper_::flip((*throat)[i]);
       }
     };
 
@@ -42,6 +61,7 @@ namespace xpm {
     std::vector<bool> invaded_throat_;
 
     std::vector<dpl::vector2d> pc_curve_;
+    std::vector<dpl::vector3d> kr_curves_;
 
     idx1d_t inv_idx_ = 0;
 
@@ -80,8 +100,12 @@ namespace xpm {
       return invaded_throat_[i];
     }
 
-    auto& pc_curve() {
+    auto& pc_curve() const {
       return pc_curve_;
+    }
+
+    auto& kr_curves() const {
+      return kr_curves_;
     }
 
     auto last_r_cap() {
@@ -117,9 +141,10 @@ namespace xpm {
       std::cout << "full decremental connectivity... (async)\n";
 
       pc_curve_.reserve(1000);
+      kr_curves_.reserve(1000);
     }
 
-    void launch(double darcy_porosity, double theta, std::span<const dpl::vector2d> darcy_pc_to_sw, double darcy_perm) {
+    void launch(double darcy_porosity, double theta, std::span<const dpl::vector2d> darcy_pc_to_sw, double darcy_perm, const dpl::vector3i& procs) {
       using props = hydraulic_properties::equilateral_triangle_properties;
 
       invaded_macro_voxel_.resize(pni_->connected_count());
@@ -162,11 +187,12 @@ namespace xpm {
 
       last_r_cap_ = queue.front().radius_cap;
 
-      auto total_pore_volume = pni_->eval_total_pore_volume(darcy_porosity);
+      auto total_pore_volume = pni_->total_pore_volume(darcy_porosity);
 
       dpl::vector2d last_pc_point{2, -1};
+      double last_kr_sw = 1.0;
 
-      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim).prod()*darcy_porosity;
+      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*darcy_porosity;
 
       auto eval_inv_volume = [&] {
         return
@@ -177,6 +203,34 @@ namespace xpm {
 
       auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume()/total_pore_volume, 1/last_r_cap_}; };
 
+      auto rel_calc = [this, darcy_perm, &procs](auto flip) {
+        invaded_func<flip> filter{pni_, &invaded_macro_voxel_, &invaded_throat_};
+        auto [nrows, mapping] = pni_->generate_mapping(procs, filter);
+        auto [nvalues, input] = pni_->generate_pressure_input(nrows, mapping.forward, darcy_perm, filter);
+
+        dpl::strong_vector<net_tag, double> pressure(*pni_->connected_count());
+
+        auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
+        
+        // solve(input, {0, nrows - 1}, decomposed_pressure.get(), 1e-9, 19);
+
+        dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, 1e-9, 19);
+        std::system(fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), dpl::hypre::mpi::mpi_exec).c_str()); // NOLINT(concurrency-mt-unsafe)
+        std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values(nrows);
+        
+        for (HYPRE_BigInt i = 0; i < nrows; ++i)
+          pressure[mapping.backward[i]] = decomposed_pressure[i];
+
+        auto [inlet, outlet] = pni_->flow_rates(pressure, darcy_perm, filter);
+
+        return inlet;
+
+        // std::cout << fmt::format(
+        //   "  S_def perm inlet: {:.4f} mD, outlet: {:.4f} mD\n", //
+        //   inlet/pn_->physical_size.x()/presets::darcy_to_m2*1000,
+        //   outlet/pn_->physical_size.x()/presets::darcy_to_m2*1000);
+      };
+
       for (inv_idx_ = 0; !queue.empty(); ++inv_idx_) {
         // if (inv_idx_ < 35)
         //   std::this_thread::sleep_for(std::chrono::milliseconds{150});
@@ -185,34 +239,26 @@ namespace xpm {
         // else if (inv_idx_ < 1000)
         //   std::this_thread::sleep_for(std::chrono::milliseconds{25});
 
-        if (inv_idx_ == 20 || inv_idx_ == 40 || inv_idx_ == 80) {
-          invaded_func filter{pni_, &invaded_macro_voxel_, &invaded_throat_};
-          auto [nrows, mapping] = pni_->generate_mapping(1, filter);
-          auto [nvalues, input] = pni_->generate_pressure_input(nrows, mapping.forward, darcy_perm, filter);
 
-          dpl::strong_vector<net_tag, double> pressure(*pni_->connected_count());
 
-          auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
-          solve(input, dpl::hypre::index_range{0, nrows - 1}, decomposed_pressure.get(), 1e-9, 19);
+        if (
+          auto sw = (1 - eval_inv_volume()/total_pore_volume); (last_kr_sw - sw) > 0.075
           
-          for (HYPRE_BigInt i = 0; i < nrows; ++i)
-            pressure[mapping.backward[i]] = decomposed_pressure[i];
+          /*false*//*inv_idx_%150 == 0*/ /*|| dc_graph_.vertex_count() - 2 == inv_idx_ */   /* || inv_idx_ == 40 || inv_idx_ == 80*/) {
 
+          last_kr_sw = sw;
 
-          // dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, 1e-9, 19);
-          // std::system(fmt::format("mpiexec -np {} \"{}\" -s", 1, dpl::hypre::mpi::mpi_exec).c_str()); // NOLINT(concurrency-mt-unsafe)
-          //
-          // dpl::strong_vector<net_tag, double> pressure(*pni_->connected_count());
-          //
-          // {
-          //   auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
-          //   std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values(nrows);
-          //
-          //   for (HYPRE_BigInt i = 0; i < nrows; ++i)
-          //     pressure[mapping.backward[i]] = decomposed_pressure[i];
-          // }
+          auto def = rel_calc(std::true_type{});
+          auto inv = rel_calc(std::false_type{});
 
-          pni_->flow_summary(pressure, darcy_perm, filter);
+          kr_curves_.emplace_back(sw, def, inv);
+
+          std::cout << fmt::format(
+            "Sw: {:.4f}, S_def: {:.4f} mD, S_inv: {:.4f} mD\n", //
+            sw,
+            def/pn_->physical_size.x()/presets::darcy_to_m2*1000,
+            inv/pn_->physical_size.x()/presets::darcy_to_m2*1000);
+
         }
 
 
@@ -246,7 +292,6 @@ namespace xpm {
           last_r_cap_ = std::min(r_cap, last_r_cap_);
 
           inv_volume_coefs[0] += pn_->node_[attribs::volume][local_idx];
-
           inv_volume_coefs[2] += pn_->node_[attribs::volume][local_idx]*
             -props::area_of_films(theta)/props::area(pn_->node_[attribs::r_ins][local_idx]);
 

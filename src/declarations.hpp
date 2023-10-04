@@ -41,6 +41,11 @@ namespace xpm
   {
     struct equilateral_triangle_properties
     {
+      static double sqr(double x) {
+        return x*x;
+      }
+
+    public:
       // struct shape
       // {
       //   static constexpr double area(double r_ins = 1) {
@@ -55,6 +60,15 @@ namespace xpm
       // k*G, k - coefficient, G - shape factor
       static double conductance(double area = 1, double viscosity = 1) {
         return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
+      }
+
+      static double conductance_corner(double theta, double area = 1) {
+        return sqr(area)*(
+          0.364
+          *(-0.261799387799 + 0.25*theta + 0.5*cos(theta)*cos(0.523598775598 + theta))
+          /sqr(1.04719755120 - theta + 2.0*cos(0.523598775598 + theta))
+          + 0.28*0.0481125224325
+          )/3.0;
       }
 
       /**
@@ -164,29 +178,31 @@ namespace xpm
     boost::typed_identity_property_map<idx1d_t>
   >;
 
-  template <typename R>// requires std::integral<R>
+  template <typename R>
   class map_idx3_t
   {
     R x_, xy_;
 
   public:
+    map_idx3_t() = default;
+
     template <typename T>
     explicit map_idx3_t(dpl::vector_n<T, 3> dim)
       : x_(dim.x()), xy_(static_cast<R>(dim.x())*dim.y()) {}
 
-    template <typename V>
-    R operator()(dpl::vector_n<V, 3> v) const {
-      return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
-    }
+    // template <typename V>
+    // R operator()(dpl::vector_n<V, 3> v) const {
+    //   return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
+    // }
 
-    template <typename V>
-    R operator()(V x, V y, V z) const {
+    template <typename T>
+    R operator()(T x, T y, T z) const {
       return static_cast<R>(x) + x_*y + xy_*z;
     }
 
-    auto operator[](std::integral_constant<int, 0>) { return 1; }
-    auto operator[](std::integral_constant<int, 1>) { return x_; }
-    auto operator[](std::integral_constant<int, 2>) { return xy_; }
+    auto operator()(std::integral_constant<int, 0>) const { return 1; }
+    auto operator()(std::integral_constant<int, 1>) const { return x_; }
+    auto operator()(std::integral_constant<int, 2>) const { return xy_; }
   };
 
   inline auto idx_mapper(idx3d_t dim) {

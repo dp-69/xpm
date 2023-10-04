@@ -126,6 +126,11 @@ namespace xpm
 
     QChartView* chart_view_;
     QLineSeries* line_series_;
+    QLineSeries* kro_series_;
+    QLineSeries* krg_series_;
+    double absolute_flow_rate;
+
+
     QLogValueAxis* axis_y_;
     
     void UpdateStatus(std::string text) {
@@ -325,23 +330,25 @@ namespace xpm
           axis_y->setRange(0, 1);
           chart->addAxis(axis_y, Qt::AlignLeft);
 
-          auto* kro_series = new QLineSeries;
-          kro_series->setName("oil");
+          kro_series_ = new QLineSeries;
+          kro_series_->setPointsVisible(true);
+          kro_series_->setName("oil");
 
-          auto* krg_series = new QLineSeries;
-          krg_series->setName("gas");
+          krg_series_ = new QLineSeries;
+          krg_series_->setPointsVisible(true);
+          krg_series_->setName("gas");
           // line_series->setPointsVisible(true);
 
-          for (auto size = 50, i = 0; i <= size; ++i) {
-            auto So = 1.*i/size;
-            auto Sor = 0.0;
-            auto Lambda = 2.0;
-            auto kro = std::pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda);
-            auto krg = std::pow((1 - So)/(1 - Sor), 2)*(1 - std::pow((So - Sor)/(1 - Sor), (2 + Lambda)/Lambda));
-
-            kro_series->append(So, kro);
-            krg_series->append(So, krg);
-          }
+          // for (auto size = 50, i = 0; i <= size; ++i) {
+          //   auto So = 1.*i/size;
+          //   auto Sor = 0.0;
+          //   auto Lambda = 2.0;
+          //   auto kro = std::pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda);
+          //   auto krg = std::pow((1 - So)/(1 - Sor), 2)*(1 - std::pow((So - Sor)/(1 - Sor), (2 + Lambda)/Lambda));
+          //
+          //   kro_series->append(So, kro);
+          //   krg_series->append(So, krg);
+          // }
           
           // pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda)
 
@@ -349,13 +356,13 @@ namespace xpm
           // line_series->append(0.1, 0.1);
           // line_series->append(0.5, 0.8);
 
-          chart->addSeries(kro_series);
-          kro_series->attachAxis(axis_x);
-          kro_series->attachAxis(axis_y);
+          chart->addSeries(kro_series_);
+          kro_series_->attachAxis(axis_x);
+          kro_series_->attachAxis(axis_y);
 
-          chart->addSeries(krg_series);
-          krg_series->attachAxis(axis_x);
-          krg_series->attachAxis(axis_y);
+          chart->addSeries(krg_series_);
+          krg_series_->attachAxis(axis_x);
+          krg_series_->attachAxis(axis_y);
 
           plot_tabs->addTab(chart_view, "kr");
         }
@@ -522,8 +529,10 @@ namespace xpm
 
         using pc_sw_span = std::span<const dpl::vector2d>;
 
+
+        
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch, &invasion_task_,
-          startup_.microporous_poro, theta, pc_sw_span{pc_to_sw}, startup_.microporous_perm*0.001*presets::darcy_to_m2);
+          startup_.microporous_poro, theta, pc_sw_span{pc_to_sw}, startup_.microporous_perm*0.001*presets::darcy_to_m2, *startup_.solver.decomposition);
 
         auto last_inv_idx = std::numeric_limits<idx1d_t>::max();
 
@@ -580,6 +589,17 @@ namespace xpm
               
               for (auto p : invasion_task_.pc_curve())
                 line_series_->append(p.x(), p.y());
+
+              kro_series_->clear();
+              kro_series_->append(1, 1);
+
+              krg_series_->clear();
+              krg_series_->append(1, 0);
+
+              for (auto [sw, kro, krg] : invasion_task_.kr_curves()) {
+                kro_series_->append(sw, kro/absolute_flow_rate);
+                krg_series_->append(sw, krg/absolute_flow_rate);                
+              }
 
               dpl::sfor<6>([&](auto face_idx) {
                 std::get<face_idx>(img_glyph_mapper_.faces_).GetColorArray()->Modified();
@@ -645,7 +665,7 @@ namespace xpm
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout
-          << fmt::format("network\n  nodes: {}\n  throats: {}\n", pn_.node_count(), pn_.throat_count())
+          << fmt::format("network\n  nodes: {:L}\n  throats: {:L}\n", pn_.node_count(), pn_.throat_count())
           << (pn_.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
       #endif
 
@@ -659,7 +679,7 @@ namespace xpm
 
       {
         img_.read_image(startup_.image.path, startup_.image.phases);
-        img_.dim = startup_.loaded ? startup_.image.size : std::round(std::cbrt(img_.size));
+        img_.set_dim(startup_.loaded ? startup_.image.size : std::round(std::cbrt(img_.size())));
 
         img_.read_icl_velems(pnm_path);
 
@@ -676,7 +696,7 @@ namespace xpm
 
       pni_.evaluate_isolated();
 
-      std::cout << fmt::format(" done\n  macro: {}\n  voxel: {}\n\n",
+      std::cout << fmt::format(" done\n  macro: {:L}\n  voxel: {:L}\n\n",
         pni_.connected_macro_count(),
         pni_.connected_count() - pni_.connected_macro_count());
 
@@ -759,9 +779,21 @@ namespace xpm
         }
       }
 
-      pni_.flow_summary(pressure, const_permeability, [this](auto) { return true; });
-      std::cout << fmt::format("  residual: {:.4g}, iterations: {}\n\n", residual, iters);
+      {
+        auto [inlet, outlet] = pni_.flow_rates(pressure, const_permeability, [this](auto) { return true; });
+          
+        std::cout << fmt::format(
+          "microprs perm: {} mD\n"
+          "  inlet perm: {:.6f} mD\n"
+          "  outlet perm: {:.6f} mD\n"
+          "  residual: {:.4g}, iterations: {}\n\n",
+          const_permeability/darcy_to_m2*1000,
+          inlet/pn_.physical_size.x()/darcy_to_m2*1000,
+          outlet/pn_.physical_size.x()/darcy_to_m2*1000,
+          residual, iters);
 
+        absolute_flow_rate = inlet;
+      }
       
 
       auto assembly = vtkSmartPointer<vtkAssembly>::New();
@@ -792,19 +824,19 @@ namespace xpm
       // std::ranges::fill(pressure, 0);
 
       {
-        auto scale_factor = /*1.0*/pn_.physical_size.x()/img_.dim.x(); // needed for vtk 8.2 floating point arithmetics
+        auto scale_factor = /*1.0*/pn_.physical_size.x()/img_.dim().x(); // needed for vtk 8.2 floating point arithmetics
             
         img_glyph_mapper_.Init(scale_factor);
         {
-          std::vector<bool> filter(img_.size);
-          for (voxel_idx_t i{0}; i < img_.size; ++i)
+          std::vector<bool> filter(img_.size());
+          for (voxel_idx_t i{0}; i < img_.size(); ++i)
             filter[*i] = img_.phase[i] == microporous;
 
           cout << "3D faces...";
 
           auto t0 = clock::now();
 
-          img_glyph_mapper_.Populate(img_.dim, pn_.physical_size/img_.dim,
+          img_glyph_mapper_.Populate(img_.dim(), pn_.physical_size/img_.dim(),
             [&](idx1d_t idx1d) { return filter[idx1d]; });
 
           std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t0).count());
