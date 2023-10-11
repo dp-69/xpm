@@ -37,13 +37,107 @@ struct fmt::formatter<dpl::strong_integer<T, Tag>> : formatter<T>
 
 namespace xpm
 {
+
+  class phase_config
+  {
+    static inline constexpr unsigned char phase0_ = 0;
+    static inline constexpr unsigned char phase1_ = 128;
+
+    static inline constexpr unsigned char phase_bits_ = 192;
+    static inline constexpr unsigned char layout_bits_ = 3;
+    
+
+    static inline constexpr unsigned char single_ = 0;
+    static inline constexpr unsigned char bulk_films_ = 1;
+    // static inline constexpr unsigned char phase1_bulk_films_ = phase1_ | bulk_films_;
+
+    unsigned char value;
+
+  public:
+
+    constexpr explicit phase_config(unsigned char v = 0) : value(v) {}
+
+    auto phase() const {
+      return value & phase_bits_;
+    }
+
+    auto layout() const {
+      return value & layout_bits_;
+    }
+
+    static constexpr auto phase0() {
+      return phase0_;
+    }
+
+    static constexpr auto phase1() {
+      return phase1_;
+    }
+
+    static constexpr auto bulk_films() {
+      return bulk_films_;
+    }
+
+    static constexpr auto phase1_bulk_films() {
+      return phase_config{phase1_ | bulk_films_};
+    }
+  };
+
+
+  /**
+   * \brief
+   *   (00)00000(00)
+   *    |       | layout
+   *    |
+   *    | bulk phase
+   */
+  // enum class phase_config : unsigned char
+  // {
+  //   phase0 = 0, 
+  //   phase1 = 128,
+  //
+  //   single = 0,
+  //   bulk_films = 1, // phase0 default
+  //
+  //   phase1_bulk_films = phase1 | bulk_films
+  //
+  //   // bulk = 1,
+  //   // layers = 2, // only defending phase, intermediate stage
+  //   // corners = 4,
+  //   //
+  //   // bulk_corners = bulk | corners, // 5
+  //   // bulk_layers_corners = bulk | layers | corners, // 7
+  //   //
+  //   // b = bulk,
+  //   // bc = bulk_corners,
+  //   // blc = bulk_layers_corners
+  // };
+
+  // constexpr phase_config operator|(phase_config l, phase_config r) {
+  //   using t = std::underlying_type_t<phase_config>;
+  //   return static_cast<phase_config>(static_cast<t>(l) | static_cast<t>(r));
+  // }
+
+
+
+
+  class default_maps
+  {
+    static inline auto true_ = [](auto) { return true; };
+    static inline auto unity_ = [](auto) { return 1; };
+
+  public:
+    using true_t = decltype(true_);
+    using unity_t = decltype(unity_);
+
+    static bool invert(std::true_type, bool v) { return !v; }
+    static bool invert(std::false_type, bool v) { return v; }
+  };
+
   namespace hydraulic_properties
   {
-    struct equilateral_triangle_properties
+    class equilateral_triangle_properties
     {
-      static double sqr(double x) {
-        return x*x;
-      }
+      static double sqr(double x) { return x*x; }
 
     public:
       // struct shape
@@ -54,16 +148,16 @@ namespace xpm
       // };
 
       static double area(double r_ins = 1) {
-        return 5.19615242271*r_ins*r_ins;
+        return 5.19615242271*sqr(r_ins);
       }
 
       // k*G, k - coefficient, G - shape factor
-      static double conductance(double area = 1, double viscosity = 1) {
-        return 0.0288675134595*area*area/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
+      static double conductance_single_phase(double area = 1, double viscosity = 1) {
+        return 0.0288675134595*sqr(area)/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
       }
 
-      static double conductance_corner(double theta, double area = 1) {
-        return sqr(area)*(
+      static double conductance_films(double theta, double film_area = 1) {
+        return sqr(film_area)*(
           0.364
           *(-0.261799387799 + 0.25*theta + 0.5*cos(theta)*cos(0.523598775598 + theta))
           /sqr(1.04719755120 - theta + 2.0*cos(0.523598775598 + theta))
@@ -83,15 +177,27 @@ namespace xpm
       }
 
       static double area_of_films(double theta, double r_cap = 1) {
-        return r_cap*r_cap*(
-          -0.5435164422364771 + 3.*theta + 1.7320508075688772*std::cos(2.*theta) +
-          1.7320508075688772*std::sin(0.5235987755982988 - 2.*theta)
+        return sqr(r_cap)*(
+          -0.5435164422364771 + 3*theta + 1.7320508075688772*std::cos(2*theta) +
+          1.7320508075688772*std::sin(0.5235987755982988 - 2*theta)
         );
       }
     };
   }
 
 
+  // props.conductanceSinglePhaseCoef = equilateral_triangle_properties::conductance_single_phase_coef()/**sqr(props.total_area())*/;
+  //       
+  //     props.conductanceWettingCornerCoef = 
+  //        (0.364*(-0.261799387799 + 0.25*theta + 0.5*cos(theta)*cos(0.523598775598 + theta))/
+  //              sqr(1.04719755120 - theta + 2.0*cos(0.523598775598 + theta)) +
+  //        0.28*0.0481125224325)/3.0;   
+
+  // props.wettingAreaSaturation_rCapSqr = equilateral_triangle_properties::total_corner_area_uniform_wet(theta)/props.total_area();
+
+  //return props.phases.bulk_phase == Phase
+  //        ? props.conductanceSinglePhaseCoef*(1 - props.wettingAreaSaturation_rCapSqr*sqr(rCap))          
+  //        : props.conductanceWettingCornerCoef*sqr(props.wettingAreaSaturation_rCapSqr*sqr(rCap)); 
 
 
 
@@ -200,6 +306,11 @@ namespace xpm
       return static_cast<R>(x) + x_*y + xy_*z;
     }
 
+    template <typename T>
+    R operator()(const dpl::vector_n<T, 3>& v) const {
+      return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
+    }
+
     auto operator()(std::integral_constant<int, 0>) const { return 1; }
     auto operator()(std::integral_constant<int, 1>) const { return x_; }
     auto operator()(std::integral_constant<int, 2>) const { return xy_; }
@@ -227,8 +338,8 @@ namespace xpm
 
   struct startup_settings
   {
-    bool use_cache = false; //true;
-    bool save_cache = false; //true;
+    bool use_cache = true;
+    bool save_cache = false;
     bool loaded = false;
 
     struct {
@@ -245,9 +356,12 @@ namespace xpm
       }
     } image;
 
-    double microporous_perm; /* mD */
-    double microporous_poro; /* fraction */
-    std::vector<dpl::vector2d> capillary_pressure;
+    double micro_perm = -999; /* mD */
+    double micro_poro = -999; /* fraction */
+    std::vector<dpl::vector2d> micro_pc;
+    std::vector<dpl::vector2d> micro_kr0;
+    std::vector<dpl::vector2d> micro_kr1;
+    
 
     struct
     {
@@ -266,12 +380,58 @@ namespace xpm
 
     void load(const nlohmann::json& j) {
       image.load(j["image"]);
-      auto& j_microporosity = j["properties"]["microporosity"];
-      microporous_perm = j_microporosity["permeability"];
-      microporous_poro = j_microporosity["porosity"];
-      capillary_pressure = j_microporosity["capillary_pressure"];
+
+      if (auto microprs = j.find("microporosity"); microprs != j.end()) {
+        micro_perm = (*microprs)["permeability"];
+        micro_poro = (*microprs)["porosity"];
+        micro_pc = (*microprs)["capillary_pressure"];
+        micro_kr0 = (*microprs)["relative_permeability"][0];
+        micro_kr1 = (*microprs)["relative_permeability"][1];
+      }
+
       solver.load(j["solver"]);
       loaded = true;
     }
   };
+
+  inline void crop(
+    const std::filesystem::path& src_p, dpl::vector3i src_size, dpl::vector3i src_origin,
+    const std::filesystem::path& dst_p, dpl::vector3i dst_size) {
+
+    auto src_total_size = src_size.prod();
+    auto dst_total_size = dst_size.prod();
+
+    std::vector<unsigned char> src(src_total_size);
+    std::vector<unsigned char> dst(dst_total_size);
+
+    std::ifstream is(src_p);
+    
+    is.read(reinterpret_cast<char*>(src.data()), src_total_size);
+
+    auto src_mapper = idx_mapper(src_size);
+
+    idx3d_t ijk;
+    auto& [i, j, k] = ijk;
+    voxel_idx_t idx1d{0};
+
+    for (k = 0; k < dst_size.z(); ++k)
+      for (j = 0; j < dst_size.y(); ++j)
+        for (i = 0; i < dst_size.x(); ++i, ++idx1d)
+          dst[*idx1d] = src[*src_mapper(src_origin + ijk)];
+
+    std::ofstream os(dst_p);
+    os.write(reinterpret_cast<char*>(dst.data()), dst_total_size);
+
+
+    // if (connected(idx1d) && filter(idx1d)) {
+    //   if (auto velem = img_->velem[idx1d]; velem && filter(velem)) // macro-darcy
+    //     builder.reserve(velem, idx1d);
+    //
+    //   dpl::sfor<3>([&](auto d) {
+    //     if (ijk[d] < img_->dim()[d] - 1)
+    //       if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == presets::microporous && filter(adj_idx1d)) // darcy-darcy
+    //         builder.reserve(idx1d, adj_idx1d);
+    //   });
+    // }
+  }
 }

@@ -155,11 +155,6 @@ namespace dpl
     }
 
     template <std::integral T>
-    void resize(strong_integer<T, KeyTag> size) {
-      vec_.resize(*size);
-    }
-
-    template <std::integral T>
     auto operator[](strong_integer<T, KeyTag> index) {
       return vec_[*index];
     }

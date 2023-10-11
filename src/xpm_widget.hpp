@@ -24,6 +24,7 @@
 #include <QValueAxis>
 #include <QLogValueAxis>
 #include <QClipboard>
+#include <QLegendMarker>
 
 #if (VTK_MAJOR_VERSION == 8)
   #include <QVTKOpenGLWidget.h>
@@ -124,14 +125,16 @@ namespace xpm
     std::string status_ = "<nothing>";
     dpl::qt::property_editor::PropertyItem* status_property_item_;
 
-    QChartView* chart_view_;
+    QChartView* pc_chart_view_;
+    QChartView* kr_chart_view_;
     QLineSeries* line_series_;
-    QLineSeries* kro_series_;
-    QLineSeries* krg_series_;
-    double absolute_flow_rate;
+    QLineSeries* kr0_series_;
+    QLineSeries* kr1_series_;
+    double absolute_rate_;
 
 
-    QLogValueAxis* axis_y_;
+    QValueAxis* kr_axis_y_;
+    QLogValueAxis* pc_axis_y_;
     
     void UpdateStatus(std::string text) {
       status_ = std::move(text);
@@ -247,14 +250,14 @@ namespace xpm
         auto* plot_tabs = new QTabWidget;
 
         {
-          chart_view_ = new QChartView;
-          chart_view_->setRenderHint(QPainter::Antialiasing);
-          chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+          pc_chart_view_ = new QChartView;
+          pc_chart_view_->setRenderHint(QPainter::Antialiasing);
+          pc_chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
 
           {
             auto menu = std::make_unique<QMenu>();
             
-            auto copy_action = [this](auto format, auto sep, auto begin, auto end) {
+            auto action = [this](auto format, auto sep, auto begin, auto end) {
               return [=, this] {
                 auto view =
                   std::views::transform(invasion_task_.pc_curve(),
@@ -274,18 +277,18 @@ namespace xpm
             using fmt_string = fmt::format_string<const double&, const double&>;
 
             connect(menu->addAction("Copy"), &QAction::triggered,
-              copy_action(fmt_string{"{:.6f}, {:.6e}"}, "\n", "", ""));
+              action(fmt_string{"{:.6f}\t{:.6e}"}, "\n", "", ""));
 
             connect(menu->addAction("Copy JSON"), &QAction::triggered,
-              copy_action(fmt_string{"[{:.6f}, {:.6e}]"}, ", ", "[", "]")); // copy_action(fmt_string{"  [{:.6f}, {:.6e}]"}, ",\n", "[\n", "\n]\n")); 
+              action(fmt_string{"[{:.6f}, {:.6e}]"}, ", ", "[", "]"));
 
-            chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
-            connect(chart_view_, &QTreeView::customContextMenuRequested,
-              [this, m = std::move(menu)](const QPoint& pos) { m->popup(chart_view_->viewport()->mapToGlobal(pos)); });
+            pc_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
+            connect(pc_chart_view_, &QTreeView::customContextMenuRequested,
+              [this, m = std::move(menu)](const QPoint& pos) { m->popup(pc_chart_view_->viewport()->mapToGlobal(pos)); });
           }
         
           auto* chart = new QChart;
-          chart_view_->setChart(chart);
+          pc_chart_view_->setChart(chart);
 
           auto* axis_x = new QValueAxis;//static_cast<QValueAxis*>(chart_->axes(Qt::Horizontal)[0]);
           axis_x->setLabelFormat("%.2f");
@@ -293,10 +296,10 @@ namespace xpm
           axis_x->setRange(0.0, 1);
           chart->addAxis(axis_x, Qt::AlignBottom);
 
-          axis_y_ = new QLogValueAxis;//static_cast<QLogValueAxis*>(chart_->axes(Qt::Vertical)[0]);
-          axis_y_->setLabelFormat("%.0e");
-          axis_y_->setTitleText("Capillary pressure, Pa");
-          chart->addAxis(axis_y_, Qt::AlignLeft);
+          pc_axis_y_ = new QLogValueAxis;//static_cast<QLogValueAxis*>(chart_->axes(Qt::Vertical)[0]);
+          pc_axis_y_->setLabelFormat("%.0e");
+          pc_axis_y_->setTitleText("Capillary pressure, Pa");
+          chart->addAxis(pc_axis_y_, Qt::AlignLeft);
 
           line_series_ = new QLineSeries;
           line_series_->setName("total");
@@ -305,18 +308,62 @@ namespace xpm
 
           chart->addSeries(line_series_);
           line_series_->attachAxis(axis_x);
-          line_series_->attachAxis(axis_y_);
+          line_series_->attachAxis(pc_axis_y_);
 
-          plot_tabs->addTab(chart_view_, "Pc");
+          plot_tabs->addTab(pc_chart_view_, "Pc");
         }
 
         {
-          auto* chart_view = new QChartView;
-          chart_view->setRenderHint(QPainter::Antialiasing);
-          chart_view->setBackgroundBrush(Qt::GlobalColor::white);
+          kr_chart_view_ = new QChartView;
+          kr_chart_view_->setRenderHint(QPainter::Antialiasing);
+          kr_chart_view_->setBackgroundBrush(Qt::GlobalColor::white);
+
+          {
+            auto menu = std::make_unique<QMenu>();
+            
+            auto text = [this](auto format, auto sep, auto begin, auto end) {
+              auto view =
+                std::views::transform(invasion_task_.kr_curves(),
+                  [format](const dpl::vector3d& p) { return fmt::format(format, p.x(), p.y(), p.z()); })
+                | std::views::reverse;
+
+              std::stringstream ss;
+              ss << begin << *std::begin(view);
+              for (const auto& s : view | std::views::drop(1))
+                ss << sep << s;
+              ss << end;
+
+              return ss.str();
+            };
+
+            using fmt_string = fmt::format_string<const double&, const double&, const double&>;
+
+            connect(menu->addAction("Copy"), &QAction::triggered,
+              [text] {
+                QApplication::clipboard()->setText(QString::fromStdString(
+                  text(fmt_string{"{:.6f}\t{:.6e}\t{:.6e}"}, "\n", "", "\n")));
+              });
+
+            connect(menu->addAction("Copy JSON"), &QAction::triggered,
+              [text] {
+                QApplication::clipboard()->setText(QString::fromStdString(
+                  fmt::format(
+                    "[\n"
+                    "  {},\n"
+                    "  {}\n"
+                    "]\n",
+                    text(fmt_string{"[{0:.6f}, {1:.6e}]"}, ", ", "[", "]"),
+                    text(fmt_string{"[{0:.6f}, {2:.6e}]"}, ", ", "[", "]"))
+                ));
+              });
+
+            kr_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
+            connect(kr_chart_view_, &QTreeView::customContextMenuRequested,
+              [this, m = std::move(menu)](const QPoint& pos) { m->popup(kr_chart_view_->viewport()->mapToGlobal(pos)); });
+          }
 
           auto* chart = new QChart;
-          chart_view->setChart(chart);
+          kr_chart_view_->setChart(chart);
 
           auto* axis_x = new QValueAxis;
           axis_x->setLabelFormat("%.2f");
@@ -324,19 +371,19 @@ namespace xpm
           axis_x->setRange(0, 1);
           chart->addAxis(axis_x, Qt::AlignBottom);
 
-          auto* axis_y = new QValueAxis;
-          axis_y->setLabelFormat("%.2f");
-          axis_y->setTitleText("Relative permeability");
-          axis_y->setRange(0, 1);
-          chart->addAxis(axis_y, Qt::AlignLeft);
+          kr_axis_y_ = new QValueAxis;
+          kr_axis_y_->setLabelFormat("%.2f");
+          kr_axis_y_->setTitleText("Relative permeability");
+          kr_axis_y_->setRange(0, 1);
+          chart->addAxis(kr_axis_y_, Qt::AlignLeft);
 
-          kro_series_ = new QLineSeries;
-          kro_series_->setPointsVisible(true);
-          kro_series_->setName("oil");
+          kr0_series_ = new QLineSeries;
+          kr0_series_->setPointsVisible(true);
+          kr0_series_->setName("water");
 
-          krg_series_ = new QLineSeries;
-          krg_series_->setPointsVisible(true);
-          krg_series_->setName("gas");
+          kr1_series_ = new QLineSeries;
+          kr1_series_->setPointsVisible(true);
+          kr1_series_->setName("phase 1");
           // line_series->setPointsVisible(true);
 
           // for (auto size = 50, i = 0; i <= size; ++i) {
@@ -352,19 +399,18 @@ namespace xpm
           
           // pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda)
 
-
           // line_series->append(0.1, 0.1);
           // line_series->append(0.5, 0.8);
 
-          chart->addSeries(kro_series_);
-          kro_series_->attachAxis(axis_x);
-          kro_series_->attachAxis(axis_y);
+          chart->addSeries(kr0_series_);
+          kr0_series_->attachAxis(axis_x);
+          kr0_series_->attachAxis(kr_axis_y_);
 
-          chart->addSeries(krg_series_);
-          krg_series_->attachAxis(axis_x);
-          krg_series_->attachAxis(axis_y);
+          chart->addSeries(kr1_series_);
+          kr1_series_->attachAxis(axis_x);
+          kr1_series_->attachAxis(kr_axis_y_);
 
-          plot_tabs->addTab(chart_view, "kr");
+          plot_tabs->addTab(kr_chart_view_, "kr");
         }
 
 
@@ -459,40 +505,44 @@ namespace xpm
     }
 
     void LaunchInvasion() {
-      // auto macro_pore_volume = 0.0;
-      //
-      // for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-      //   if (pni_.connected(i))
-      //     macro_pore_volume += pn_.node_[attribs::volume][*i];
-      //
-      // for (std::size_t i{0}; i < pn_.throat_count(); ++i)
-      //   if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
-      //     macro_pore_volume += pn_.throat_[attribs::volume][i];
-      //
-      // auto unit_darcy_pore_volume = (pn_.physical_size/img_.dim).prod()*startup_.microporous_poro;
-      //
-      // idx1d_t micro_voxels = 0;
-      //
-      // for (voxel_idx_t i{0}; i < img_.size; ++i)
-      //   if (pni_.connected(i))
-      //     ++micro_voxels;
+      {
+        auto* chart = pc_chart_view_->chart();
+        auto* darcy_pc_series = new QLineSeries;
+        chart->addSeries(darcy_pc_series);
+
+        for (auto& p : startup_.micro_pc)
+          darcy_pc_series->append(p.x(), p.y());
+        darcy_pc_series->setName("microporous");
+        darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
+        darcy_pc_series->attachAxis(pc_axis_y_);
+        chart->legend()->markers(darcy_pc_series)[0]->setVisible(false);
+        darcy_pc_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
+      }
 
       {
-        auto* chart = chart_view_->chart();
-        auto* microporous_pc_series = new QLineSeries;
-        chart->addSeries(microporous_pc_series);
+        auto* chart = kr_chart_view_->chart();
 
-        // auto frac = micro_voxels*unit_darcy_pore_volume/(micro_voxels*unit_darcy_pore_volume + macro_pore_volume);
+        auto* darcy_kr0_series = new QLineSeries;
+        chart->addSeries(darcy_kr0_series);
 
-        for (auto& p : startup_.capillary_pressure)
-          microporous_pc_series->append(/*frac**/p.x(), p.y());
-        microporous_pc_series->setName("microporous");
-        microporous_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-        microporous_pc_series->attachAxis(axis_y_);
-        auto pen = microporous_pc_series->pen();
-        pen.setWidth(pen.width() + 1);
-        microporous_pc_series->setPen(pen);
+        for (auto& p : startup_.micro_kr0)
+          darcy_kr0_series->append(p.x(), p.y());
+        darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
+        darcy_kr0_series->attachAxis(kr_axis_y_);
+        chart->legend()->markers(darcy_kr0_series)[0]->setVisible(false);
+        darcy_kr0_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
+
+        auto* darcy_kr1_series = new QLineSeries;
+        chart->addSeries(darcy_kr1_series);
+
+        for (auto& p : startup_.micro_kr1)
+          darcy_kr1_series->append(p.x(), p.y());
+        darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
+        darcy_kr1_series->attachAxis(kr_axis_y_);
+        chart->legend()->markers(darcy_kr1_series)[0]->setVisible(false);
+        darcy_kr1_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
       }
+
 
       using props = hydraulic_properties::equilateral_triangle_properties;
 
@@ -505,12 +555,12 @@ namespace xpm
           if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
             min_r_cap_throat = min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
 
-        axis_y_->setRange(
+        pc_axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
           pow(10., floor(log10(1./props::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*props::r_cap_piston_with_films(0, min_r_cap_throat)),
-            startup_.capillary_pressure.empty() ? 0 : startup_.capillary_pressure.front().y()))))*1.01
+            startup_.micro_pc.empty() ? 0 : startup_.micro_pc.front().y()))))*1.01
         );
       }
 
@@ -521,7 +571,7 @@ namespace xpm
         double theta = 0.0;
 
         using namespace std::ranges::views;
-        auto query = startup_.capillary_pressure | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
+        auto query = startup_.micro_pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
         std::vector<dpl::vector2d> pc_to_sw{query.begin(), query.end()};
         // std::cout << fmt::format("first size {}\n", pc_to_sw.size());
         pc_to_sw.resize(std::ranges::unique(pc_to_sw, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_to_sw.begin());
@@ -530,52 +580,65 @@ namespace xpm
         using pc_sw_span = std::span<const dpl::vector2d>;
 
 
+
         
+
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch, &invasion_task_,
-          startup_.microporous_poro, theta, pc_sw_span{pc_to_sw}, startup_.microporous_perm*0.001*presets::darcy_to_m2, *startup_.solver.decomposition);
+          absolute_rate_,
+          startup_.micro_poro, startup_.micro_perm*0.001*presets::darcy_to_m2,
+          theta,
+          pc_sw_span{pc_to_sw}, startup_.micro_kr0, startup_.micro_kr1,
+          *startup_.solver.decomposition);
 
-        auto last_inv_idx = std::numeric_limits<idx1d_t>::max();
+        auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
-        auto update = [this, theta, start, &pc_to_sw, &last_inv_idx] {
-          if (last_inv_idx == invasion_task_.inv_idx())
+        auto update = [this, theta, start, &pc_to_sw, &last_progress_idx] {
+          if (last_progress_idx == invasion_task_.progress_idx())
             return;
 
-          last_inv_idx = invasion_task_.inv_idx();
 
-          // auto r_cap = invasion_task_.last_r_cap();
-          // auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
-          // auto area_of_films = props::area_of_films(theta, r_cap);
-          //
-          // auto map_satur = [](double x) { return x/2. + 0.25; };
-          //
-          // dpl::sfor<6>([&](auto face_idx) {
-          //   dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-          //
-          //   for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-          //     if (auto v_idx = voxel_idx_t{idx1d}; pni_.connected(v_idx) && invasion_task_.invaded(v_idx))
-          //       face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
-          //     ++i;
-          //   }
-          // });
-          //
-          // for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-          //   if (pni_.connected(i) && invasion_task_.invaded(macro_idx_t{i}))
-          //     macro_colors->SetTypedComponent(*i, 0,
-          //       map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
-          //
-          // {
-          //   vtkIdType throat_net_idx = 0;
-          //
-          //   for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
-          //     if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
-          //       if (pni_.connected(l) && invasion_task_.invaded(i))
-          //         throat_colors->SetTypedComponent(throat_net_idx, 0,
-          //           map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
-          //
-          //       ++throat_net_idx;
-          //     }
-          //   }
-          // }
+          last_progress_idx = invasion_task_.progress_idx();
+
+          auto r_cap = invasion_task_.r_cap();
+          auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
+          auto area_of_films = props::area_of_films(theta, r_cap);
+          
+          auto map_satur = [](double x) { return x/2. + 0.25; };
+          
+          dpl::sfor<6>([&](auto face_idx) {
+            dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+          
+            for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
+              if (auto v_idx = voxel_idx_t{idx1d}; pni_.connected(v_idx) && invasion_task_.invaded(v_idx))
+                face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
+              else
+                face.GetColorArray()->SetTypedComponent(i, 0, 0.0);
+              ++i;
+            }
+          });
+          
+          for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+            if (pni_.connected(i) && invasion_task_.invaded(macro_idx_t{i}))
+              macro_colors->SetTypedComponent(*i, 0,
+                map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
+            else
+              macro_colors->SetTypedComponent(*i, 0, 0.0);
+          
+          {
+            vtkIdType throat_net_idx = 0;
+          
+            for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
+              if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
+                if (pni_.connected(l) && invasion_task_.invaded(i))
+                  throat_colors->SetTypedComponent(throat_net_idx, 0,
+                    map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
+                else
+                  throat_colors->SetTypedComponent(throat_net_idx, 0, 0.0);
+          
+                ++throat_net_idx;
+              }
+            }
+          }
           
           QMetaObject::invokeMethod(this,
             [this, start] {
@@ -583,22 +646,18 @@ namespace xpm
 
               UpdateStatus(invasion_task_.finished()
                 ? fmt::format("done {}s", duration_cast<seconds>(system_clock::now() - start).count())
-                : fmt::format("{:.1f} %", 100.*invasion_task_.inv_idx()/(*pni_.connected_count())));
+                : fmt::format("{:.1f} %", 100.*invasion_task_.progress_idx()/(*pni_.connected_count())));
 
               line_series_->clear();
-              
+              kr0_series_->clear();
+              kr1_series_->clear();
+
               for (auto p : invasion_task_.pc_curve())
                 line_series_->append(p.x(), p.y());
 
-              kro_series_->clear();
-              kro_series_->append(1, 1);
-
-              krg_series_->clear();
-              krg_series_->append(1, 0);
-
               for (auto [sw, kro, krg] : invasion_task_.kr_curves()) {
-                kro_series_->append(sw, kro/absolute_flow_rate);
-                krg_series_->append(sw, krg/absolute_flow_rate);                
+                kr0_series_->append(sw, kro);
+                kr1_series_->append(sw, krg);                
               }
 
               dpl::sfor<6>([&](auto face_idx) {
@@ -647,7 +706,7 @@ namespace xpm
           processors = {4, 4, 3};
       }
 
-      auto const_permeability = startup_.microporous_perm*0.001*presets::darcy_to_m2;
+      auto const_permeability = startup_.micro_perm*0.001*presets::darcy_to_m2;
       
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
         startup_.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
@@ -721,7 +780,7 @@ namespace xpm
         std::cout << "decomposition...";
 
         
-        auto [_, mapping] = pni_.generate_mapping(processors, [this](auto) { return true; });
+        auto [_, mapping] = pni_.generate_mapping(processors);
 
         // for (auto i = 0; i < processors.prod(); ++i)
         //   std::cout << std::format("\nblock {}, rows {}--{}, size {}",
@@ -733,7 +792,7 @@ namespace xpm
 
 
         idx1d_t nrows = *pni_.connected_count();
-        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, const_permeability, [this](auto) { return true; });
+        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_, const_permeability});
 
 
         std::cout << " done\n\n";
@@ -780,10 +839,11 @@ namespace xpm
       }
 
       {
-        auto [inlet, outlet] = pni_.flow_rates(pressure, const_permeability, [this](auto) { return true; });
+        
+        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, const_permeability});
           
         std::cout << fmt::format(
-          "microprs perm: {} mD\n"
+          "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
@@ -792,7 +852,7 @@ namespace xpm
           outlet/pn_.physical_size.x()/darcy_to_m2*1000,
           residual, iters);
 
-        absolute_flow_rate = inlet;
+        absolute_rate_ = inlet;
       }
       
 

@@ -5,7 +5,6 @@
 
 #include <dpl/soa.hpp>
 #include <dpl/graph/dc_graph.hpp>
-#include <dpl/hypre/InputDeprec.hpp>
 #include <dpl/hypre/mpi_module.hpp>
 
 #include <boost/format.hpp>
@@ -361,17 +360,19 @@ namespace xpm
     }
 
 
-    double coef(std::size_t i) const {
-      using eq_tri = hydraulic_properties::equilateral_triangle_properties;
+    
+
+    double macro_macro_coef(std::size_t i, macro_idx_t l, macro_idx_t r, auto cond) const {
       using namespace attribs;
-
-      auto [left, right] = throat_[adj][i];
-
+      
       return -1.0/(
-        throat_[length0][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][*left])) +
-        throat_[length][i]/eq_tri::conductance(eq_tri::area(throat_[r_ins][i])) +
-        (inner_node(right) ? throat_[length1][i]/eq_tri::conductance(eq_tri::area(node_[r_ins][*right])) : 0.0));
+        throat_[length0][i]/cond(l)
+      + throat_[length][i]/cond(i)
+      + (inner_node(r) ? throat_[length1][i]/cond(r) : 0.0));
     }
+
+    double macro_macro_coef(std::size_t i, macro_idx_t l, macro_idx_t r) const;
+
 
     bool eval_inlet_outlet_connectivity() const {
       disjoint_sets ds(*node_count() + 2);
@@ -394,7 +395,7 @@ namespace xpm
       for (std::size_t i = 0; i < throat_count(); ++i) {
         auto [l, r] = throat_[attribs::adj][i];
 
-        auto coef = this->coef(i);
+        auto coef = macro_macro_coef(i, l, r);
 
         if (r == inlet()) {
           builder.add_b(*l, coef/**1 Pa*/);
@@ -413,8 +414,8 @@ namespace xpm
 
 
      
-    void connectivity_flow_summary(const dpl::hypre::mpi::solve_result& solve  /*const std::unique_ptr<double[]>& pressure*/) const {
-      auto& [pressure, residual, iter] = solve; 
+    void connectivity_flow_summary(const dpl::hypre::mpi::solve_result& solve) const {
+      const auto& [pressure, residual, iter] = solve; 
 
       disjoint_sets ds(*node_count());
       std::vector<bool> connected_inlet(*node_count());
@@ -424,51 +425,49 @@ namespace xpm
         auto rep = ds.find_set(*i);
         return connected_inlet[rep] && connected_outlet[rep];
       };
+
+      for (auto [l, r] : throat_.span(attribs::adj))
+        if (inner_node(r))
+          ds.union_set(*l, *r);
       
-      {
-        for (auto [l, r] : throat_.span(attribs::adj))
-          if (inner_node(r))
-            ds.union_set(*l, *r);
+      for (auto [l, r] : throat_.span(attribs::adj))
+        if (r == inlet())
+          connected_inlet[ds.find_set(*l)] = true;
+        else if (r == outlet())
+          connected_outlet[ds.find_set(*l)] = true;
       
-        for (auto [l, r] : throat_.span(attribs::adj))
-          if (r == inlet())
-            connected_inlet[ds.find_set(*l)] = true;
-          else if (r == outlet())
-            connected_outlet[ds.find_set(*l)] = true;
-      
-        idx1d_t disconnected_macro = 0;
+      idx1d_t disconnected_macro = 0;
         
-        for (macro_idx_t i{0}; i < node_count(); ++i)
-          if (!connected(i))
-            ++disconnected_macro;
+      for (macro_idx_t i{0}; i < node_count(); ++i)
+        if (!connected(i))
+          ++disconnected_macro;
       
-        double inlet_flow = 0;
-        double outlet_flow = 0;
+      double inlet_flow = 0;
+      double outlet_flow = 0;
       
-        std::cout << fmt::format("  isolated {} nodes", disconnected_macro);
+      std::cout << fmt::format("  isolated {} nodes", disconnected_macro);
       
-        for (std::size_t i = 0; i < throat_count(); ++i) {
-          auto [l, r] = throat_[attribs::adj][i];
+      for (std::size_t i = 0; i < throat_count(); ++i) {
+        auto [l, r] = throat_[attribs::adj][i];
       
-          if (r == inlet())
-            if (connected(l))
-              inlet_flow += coef(i)*(1 - pressure[*l]);
+        if (r == inlet())
+          if (connected(l))
+            inlet_flow += macro_macro_coef(i, l, r)*(pressure[*l] - 1);
       
-          if (r == outlet())
-            if (connected(l))
-              outlet_flow += coef(i)*(pressure[*l]);
-        }
-      
-        std::cout << fmt::format(R"(
-  inlet perm: {:.6f} mD
-  outlet perm: {:.6f} mD
-  residual: {:.4g}, iterations: {}
-)",
-          -inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
-          -outlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
-          residual,
-          iter);
+        if (r == outlet())
+          if (connected(l))
+            outlet_flow += macro_macro_coef(i, l, r)*(0 - pressure[*l]);
       }
+      
+      std::cout << fmt::format(
+        "\n"
+        "  inlet perm: {:.6f} mD\n"
+        "  outlet perm: {:.6f} mD\n"
+        "  residual: {:.4g}, iterations: {}\n",
+        inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
+        outlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
+        residual,
+        iter);
     }
 
     void connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations) const {
@@ -492,7 +491,35 @@ namespace xpm
     }
   };
 
+  struct single_phase_conductance
+  {
+    const pore_network* pn;
+    double darcy_perm;
 
+    explicit single_phase_conductance(const pore_network* const pn)
+      : pn(pn) {}
+
+    single_phase_conductance(const pore_network* const pn, const double darcy_perm)
+      : pn(pn), darcy_perm(darcy_perm) {}
+
+    double operator()(std::size_t i) const {
+      using props = hydraulic_properties::equilateral_triangle_properties;
+      return props::conductance_single_phase(props::area(pn->throat_[attribs::r_ins][i]));
+    }
+
+    double operator()(macro_idx_t i) const {
+      using props = hydraulic_properties::equilateral_triangle_properties;
+      return props::conductance_single_phase(props::area(pn->node_[attribs::r_ins][*i]));
+    }
+
+    double operator()(voxel_idx_t) const {
+      return darcy_perm;
+    }
+  };
+
+  inline double pore_network::macro_macro_coef(std::size_t i, macro_idx_t l, macro_idx_t r) const {
+    return macro_macro_coef(i, l, r, single_phase_conductance{this});
+  }
 
 
   class image_data
@@ -583,17 +610,13 @@ namespace xpm
           ++microporous_voxels;
         }
 
-      // #ifdef XPM_DEBUG_OUTPUT // NOLINTNEXTLINE(clang-diagnostic-misleading-indentation)
       std::cout << fmt::format(
-R"(image voxels
-  total: {:L}
-  pore: {:L}
-  solid: {:L}
-  microprs: {:L}
-
-)",
-        size_, pore_voxels, solid_voxels, microporous_voxels); 
-      // #endif
+        "image voxels\n"
+        "  total: {:L}\n"
+        "  pore: {:L} | {:.1f}%\n"
+        "  solid: {:L}\n"
+        "  microprs: {:L}\n\n",
+        size_, pore_voxels, 100.*pore_voxels/size_, solid_voxels, microporous_voxels); 
     }
 
     /**
@@ -774,7 +797,8 @@ R"(image voxels
     }
 
 
-    std::tuple<idx1d_t, rows_mapping> generate_mapping(const dpl::vector3i& blocks, auto filter) const {
+    template<typename Filter = default_maps::true_t>
+    std::tuple<idx1d_t, rows_mapping> generate_mapping(const dpl::vector3i& blocks, Filter filter = {}) const {
       auto block_size = pn_->physical_size/blocks;
 
       using pair = std::pair<net_idx_t, int>;
@@ -796,7 +820,7 @@ R"(image voxels
         for (macro_idx_t i{0}; i < pn_->node_count(); ++i)
           if (connected(i)) { // macro node
             net_idx_t net_idx = net(i); 
-            idx_to_block[*net_idx] = {net_idx, filter(net_idx)
+            idx_to_block[*net_idx] = {net_idx, filter(i)
               ? eval_block(pn_->node_[attribs::pos][*i])
               : rows_mapping::invalid_block};
           }
@@ -812,7 +836,7 @@ R"(image voxels
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) { // darcy node
                 net_idx_t net_idx = net(idx1d);
-                idx_to_block[*net_idx] = {net_idx, filter(net_idx)
+                idx_to_block[*net_idx] = {net_idx, filter(idx1d)
                   ? eval_block(cell_size*(ijk + 0.5))
                   : rows_mapping::invalid_block};
               }
@@ -945,14 +969,15 @@ R"(image voxels
       return {gen.acquire(), std::move(de_to_throat), std::move(throat_to_de)};
     }
 
-    std::tuple</*HYPRE_BigInt, */size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
-      idx1d_t nrows, const dpl::strong_vector<net_tag, idx1d_t>& forward, double const_permeability, auto filter) const {
+    template<typename Filter = default_maps::true_t>
+    std::tuple<size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
+      idx1d_t nrows, const dpl::strong_vector<net_tag, idx1d_t>& forward, auto term, Filter filter = {}) const {
 
       dpl::hypre::ls_known_storage_builder builder{nrows, [&forward, this](auto i) { return forward[this->net(i)]; }};
 
       for (std::size_t i = 0; i < pn_->throat_count(); ++i)
         if (auto [l, r] = pn_->throat_[attribs::adj][i];
-          pn_->inner_node(r) && connected(l) && filter(l) && filter(r) && filter(i)) // macro-macro // TODO: order
+          pn_->inner_node(r) && connected(l) && filter(i) && filter(l) && filter(r)) // macro-macro
           builder.reserve(l, r);
 
       {
@@ -978,18 +1003,18 @@ R"(image voxels
       builder.allocate();
 
       for (std::size_t i = 0; i < pn_->throat_count(); ++i)
-        if (auto [l, r] = pn_->throat_[attribs::adj][i]; connected(l) && filter(i) && filter(l)) {
-          auto coef = pn_->coef(i);
+        if (auto [l, r] = pn_->throat_[attribs::adj][i]; connected(l) && filter(l)) {
+          auto coef = pn_->macro_macro_coef(i, l, r, term);
 
           if (pn_->inner_node(r)) {// macro-macro
-            if (filter(r))
+            if (filter(i) && filter(r))
               builder.set(l, r, coef);
           }
-          else if (r == pn_->inlet()) { // macro-inlet      // TODO FILTER: INLET MUST BE FILLED
+          else if (r == pn_->inlet()) { // macro-inlet
             builder.add_b(l, coef/**1 Pa*/);
             builder.add_diag(l, coef);
           }
-          else { // macro-outlet                            // TODO FILTER: OUTLET MUST BE FILLED
+          else { // macro-outlet
             // builder.add_b(l, coef/**0 Pa*/);
             builder.add_diag(l, coef);
           }
@@ -1004,15 +1029,15 @@ R"(image voxels
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
-            if (voxel_idx_t inlet_idx1d = img_->idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) { // darcy-inlet
-              auto coef = -2*cell_size.x()*const_permeability;
+            if (auto inlet_idx1d = img_->idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) { // darcy-inlet
+              auto coef = -2*cell_size.x()*term(inlet_idx1d);
 
               builder.add_b(inlet_idx1d, coef/**1 Pa*/);
               builder.add_diag(inlet_idx1d, coef);
             }
 
-            if (voxel_idx_t outlet_idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) { // darcy-outlet
-              auto coef = -2*cell_size.x()*const_permeability;
+            if (auto outlet_idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) { // darcy-outlet
+              auto coef = -2*cell_size.x()*term(outlet_idx1d);
 
               // builder.add_b(outlet_idx1d), coef/**0 Pa*/);
               builder.add_diag(outlet_idx1d, coef);
@@ -1023,19 +1048,14 @@ R"(image voxels
                 if (auto velem = img_->velem[idx1d]; velem && filter(velem)) { // macro-darcy
                   macro_idx_t adj_macro_idx = velem;
 
-                  using eq_tri = hydraulic_properties::equilateral_triangle_properties;
-
                   auto li = cell_size.x()/2;
-                  auto gi = const_permeability;
-                  
+                  auto gi = term(idx1d);
+
                   auto lj = pn_->node_[attribs::r_ins][*adj_macro_idx];
-                  auto gj = eq_tri::conductance(eq_tri::area(lj));
-                  
-                  auto lt = (cell_size*(ijk + 0.5) - pn_->node_[attribs::pos][*adj_macro_idx]).length() - li - lj;
+                  auto gj = term(adj_macro_idx);
+
+                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pn_->node_[attribs::pos][*adj_macro_idx]).length() - li - lj);
                   auto gt = gj;
-                  
-                  if (lt < 0)
-                    lt = 0;
                   
                   auto coef = -1.0/(li/gi + lt/gt + lj/gj);
 
@@ -1045,7 +1065,7 @@ R"(image voxels
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
                     if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == presets::microporous && filter(adj_idx1d)) { // darcy-darcy
-                      auto coef = -cell_size.x()*const_permeability;
+                      auto coef = -cell_size.x()*(2/(1/term(idx1d) + 1/term(adj_idx1d)));
                       builder.set(idx1d, adj_idx1d, coef);
                     }
                 });
@@ -1053,12 +1073,12 @@ R"(image voxels
           }
       }
 
-      return {/**connected_count_, */builder.nvalues(), builder.acquire()};
+      return {builder.nvalues(), builder.acquire()};
     }
 
-
+    template<typename Filter = default_maps::true_t>
     std::pair<double, double> flow_rates(
-      const dpl::strong_vector<net_tag, HYPRE_Complex>& pressure, double const_permeability, auto filter) const {
+      const dpl::strong_vector<net_tag, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
       auto inlet_flow = 0.0;
       auto outlet_flow = 0.0;
 
@@ -1070,11 +1090,11 @@ R"(image voxels
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
-            if (auto idx1d = img_->idx_map(0, j, k); connected(idx1d) && filter(idx1d)) // darcy-inlet
-              inlet_flow += -2*cell_x*const_permeability*(pressure[net(idx1d)] - 1);
+            if (auto inlet_idx1d = img_->idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) // darcy-inlet
+              inlet_flow += -2*cell_x*term(inlet_idx1d)*(pressure[net(inlet_idx1d)] - 1);
 
-            if (auto idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(idx1d) && filter(idx1d)) // darcy-outlet
-              outlet_flow += -2*cell_x*const_permeability*(0 - pressure[net(idx1d)]);
+            if (auto outlet_idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) // darcy-outlet
+              outlet_flow += -2*cell_x*term(outlet_idx1d)*(0 - pressure[net(outlet_idx1d)]);
           }
       }
 
@@ -1082,12 +1102,12 @@ R"(image voxels
         auto [l, r] = pn_->throat_[attribs::adj][i];
 
         if (r == pn_->inlet()) { // macro-inlet
-          if (connected(l) && filter(i) && filter(l))
-            inlet_flow += pn_->coef(i)*(pressure[net(l)] - 1);
+          if (connected(l) && filter(l))
+            inlet_flow += pn_->macro_macro_coef(i, l, r, term)*(pressure[net(l)] - 1);
         }
         else if (r == pn_->outlet()) { // macro-outlet
-          if (connected(l) && filter(i) && filter(l))
-            outlet_flow += pn_->coef(i)*(0 - pressure[net(l)]);
+          if (connected(l) && filter(l))
+            outlet_flow += pn_->macro_macro_coef(i, l, r, term)*(0 - pressure[net(l)]);
         }
       }
 
@@ -1114,4 +1134,6 @@ R"(image voxels
       return volume;
     }
   };
+
+  
 }
