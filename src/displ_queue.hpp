@@ -38,16 +38,24 @@ namespace xpm
     }
   };
 
-  struct pressure_compare
+  struct pressure_less
   {
     bool operator()(const displ_event& l, const displ_event& r) const {
-      return l.pressure_cap() < r.pressure_cap();  
+      return l.pressure_cap() < r.pressure_cap();
     }
   };
 
+  struct pressure_more
+  {
+    bool operator()(const displ_event& l, const displ_event& r) const {
+      return l.pressure_cap() > r.pressure_cap();  
+    }
+  };
+
+  template<typename Comparator>
   class displ_queue
   {
-    std::multiset<displ_event, pressure_compare> set_;
+    std::multiset<displ_event, Comparator> set_;
 
   public:
     void insert(displ_elem elem, std::size_t local_idx, double r_cap) {

@@ -10,8 +10,11 @@
 #include <numbers>
 #include <iostream>
 #include <fstream>
+#include <qmath.h>
 
 #include <fmt/format.h>
+
+#include <boost/math/tools/roots.hpp>
 
 template <>
 struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
@@ -135,25 +138,30 @@ namespace xpm
 
   namespace hydraulic_properties
   {
-    class equilateral_triangle_properties
+    struct equilateral_triangle_properties
     {
-      static double sqr(double x) { return x*x; }
+      static constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
+      static constexpr auto beta = std::numbers::pi/3/2;
+      static constexpr auto sin_beta = 0.5;
+      static constexpr auto corners = 3;
 
-    public:
-      // struct shape
-      // {
-      //   static constexpr double area(double r_ins = 1) {
-      //     return 5.19615242271*r_ins*r_ins;
-      //   }
-      // };
+      static constexpr double sqr(double x) { return x*x; }
 
-      static double area(double r_ins = 1) {
-        return 5.19615242271*sqr(r_ins);
+      static constexpr double area(double r_ins = 1) {
+        return 3*sqrt_3*sqr(r_ins);
+      }
+
+      static constexpr double perimeter(double r_ins = 1) {
+        return 6*sqrt_3*r_ins;
+      }
+
+      static constexpr auto shape_factor() {
+        return area()/sqr(perimeter());
       }
 
       // k*G, k - coefficient, G - shape factor
       static double conductance_single_phase(double area = 1, double viscosity = 1) {
-        return 0.0288675134595*sqr(area)/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
+        return sqrt_3/60*sqr(area)/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
       }
 
       static double conductance_films(double theta, double film_area = 1) {
@@ -165,23 +173,190 @@ namespace xpm
           )/3.0;
       }
 
-      /**
-       * \brief checks existence of wetting films
-       */
-      static bool has_films(double theta) {
-        return theta < std::numbers::pi/3;
+      // static double r_cap_collapse(double theta_adv, double r_ins = 1) {
+      //   return r_ins*1.73205080757/(1.73205080757*cos(theta_adv) - sin(theta_adv));
+      // }
+
+      // static double r_cap_piston_no_films_valvatne(double theta, double r_ins = 1) {
+      //   static constexpr auto sqrt_pi_G = 0.3887800753890535401856827809473435907176788021745640816548206175;
+      //   return r_ins/std::cos(theta)/(1 + 2*sqrt_pi_G);
+      // }
+
+      static constexpr bool has_films(double theta_rec) {
+        return theta_rec < std::numbers::pi/3;
       }
 
-      static double r_cap_piston_with_films(double theta, double r_ins = 1) {      
-        return r_ins/(std::cos(theta) + 0.759835685652*std::sqrt(1.04719755120 - theta + std::cos(theta)*std::sin(theta)));          
+      static double r_cap_piston_no_films(double theta, double r_ins = 1) {      
+        return r_ins/(2*cos(theta));          
       }
 
-      static double area_of_films(double theta, double r_cap = 1) {
+      static double r_cap_snap_off_valv(double theta, double r_ins = 1) {
+        return r_ins/(cos(theta) - sin(theta)/sqrt_3);
+      }
+
+      static double area_of_films(double theta, double r_cap = 1) { // TODO: replace with area_corners_valv
         return sqr(r_cap)*(
           -0.5435164422364771 + 3*theta + 1.7320508075688772*std::cos(2*theta) +
           1.7320508075688772*std::sin(0.5235987755982988 - 2*theta)
         );
       }
+
+      static double r_cap_piston_with_films(double theta_rec, double r_ins = 1) {  // TODO: replace with Valvatne
+        return r_ins/(std::cos(theta_rec) + 0.759835685652*std::sqrt(1.04719755120 - theta_rec + std::cos(theta_rec)*std::sin(theta_rec)));          
+      }
+
+      static double r_cap_piston_with_films_valvatne(double theta, double r_ins = 1) {
+        using namespace std;
+
+        auto cos_theta = cos(theta);
+
+        auto S1 = corners*(cos_theta*cos(theta + beta)/sin_beta + theta + beta - numbers::pi/2);
+        auto S2 = corners*(cos(theta + beta)/sin_beta);
+        auto S3 = 2*corners*(numbers::pi/2 - theta - beta);
+
+        auto D = S1 - 2*S2*cos_theta + S3;
+
+        // return r_ins*cos_theta*(-1 + sqrt(1 + 4*G*D/sqr(cos_theta)))/(4*D*G);
+
+        return r_ins/(1 + sqrt(1 + 4*shape_factor()*D/sqr(cos_theta)))/cos_theta;
+      }
+
+      static double b_length(double theta, double r_cap) { // ab length in promef
+        return r_cap*cos(theta + beta)/sin_beta;
+      }
+
+      static double r_cap_hinging(double b, double theta_h) {
+        return b*sin_beta/cos(theta_h + beta);
+      }
+
+      static double hinging(double b, double r_cap) {
+        return std::acos(b*sin_beta/r_cap) - beta;
+      }
+
+      static double area_corners_valv(double theta, double r_cap = 1) { // = area_of_films
+        return sqr(r_cap)*corners*(cos(theta)*cos(theta + beta)/sin_beta + theta + beta - std::numbers::pi/2);
+      }
+
+      static double simple_balance(double theta, double r_cap, double r_ins) {
+        using namespace std;
+      
+        auto A_eff = area(r_ins) - area_corners_valv(theta, r_cap);
+        auto L_os = r_ins/2/shape_factor() - 2*corners*b_length(theta, r_cap);
+        auto L_ow = 2*r_cap*corners*(numbers::pi/2 - beta - theta);
+      
+        return A_eff/(L_ow + L_os*cos(theta)) - r_cap;
+      }
+
+      static double pinned_balance(double b_rec, double theta_adv, double r_cap, double r_ins) {
+        using namespace std;
+
+        auto theta_h = hinging(b_rec, r_cap);
+
+        auto A_eff = area(r_ins) - area_corners_valv(theta_h, r_cap);
+        auto L_os = r_ins/2/shape_factor() - 2*corners*b_rec;
+        auto L_ow = 2*r_cap*corners*asin(b_rec*sin_beta/r_cap);
+
+        return A_eff/(L_ow + L_os*cos(theta_adv)) - r_cap;
+      }
+
+      /**
+       * \brief
+       *   theta_rec < Pi/3 (60 Deg)
+       *   theta_rec <= theta_adv < Pi/3 (60 Deg)
+       */
+      static double r_cap_piston_secondary(double theta_rec, double r_cap_min, double theta_adv, double r_ins) {
+        auto b_rec = b_length(theta_rec, r_cap_min);
+
+        auto pc_for_hinge_adv = 1/r_cap_hinging(b_rec, theta_adv);
+        auto pc_for_hinge_rec = 1/r_cap_min;
+
+        auto func = [=](double pc) { return pinned_balance(b_rec, theta_adv, 1/pc, r_ins); };
+
+        uintmax_t max = 64;
+
+        auto fa = func(pc_for_hinge_adv);
+        auto fb = func(pc_for_hinge_rec);
+
+        if (fa*fb < 0) // hinging has solution
+          return 1/boost::math::tools::toms748_solve(
+            func,
+            pc_for_hinge_adv,
+            pc_for_hinge_rec,
+            fa,
+            fb,
+            boost::math::tools::eps_tolerance<double>(),
+            max).first;
+
+        return r_cap_piston_with_films_valvatne(theta_adv, r_ins); // non-hinging
+      }
+
+
+
+
+
+
+
+
+
+      // static double r_cap_by_alpha(double ab, double alpha) {
+      //   return ab/2.0/sin(alpha);
+      // }
+      //
+      // static double alpha(double ab, double r_cap) { // loooks like alpha is not theta_h (hinging)
+      //   /*
+      //    * alpha = Pi/3 - thetaH
+      //    * thetaH [0; 5Pi/6]
+      //    * alpha [-Pi/2; Pi/3]
+      //    *
+      //    * |rCap| >= ab/2
+      //   */
+      //
+      //   return asin(ab/2.0/r_cap);
+      // }
+      //
+      // static double ab_length(double theta_rec, double r_cap) { // b_i in Valvatne
+      //   return r_cap*(1.7320508075688772*cos(theta_rec) - sin(theta_rec));
+      // }
+      //
+      // static double ab_length(double theta_rec, double ratio, double r_ins) {
+      //   auto cos_theta = cos(theta_rec);
+      //   auto sin_theta = sin(theta_rec);
+      //   return r_ins*ratio*(1.7320508075688772*cos_theta - sin_theta)/
+      //     (cos_theta + 0.7598356856515925*sqrt(1.0471975511965976 - theta_rec + cos_theta*sin_theta));
+      // }
+      //
+      //
+      // class pinned_to_single
+      // {
+      //   double ab;  
+      //   double t0;
+      //   double t1;
+      //
+      // public:
+      //   // elem.drainageRatio = pnm.capillary_radius_global/equilateral_triangle_properties::rCap_PLD_with_wetting_films(elem.phase1ContactAngle[0], elem.rInsEffectivePc);
+      //   // auto pinnedToSingle = phase_properties<DefPhase>::sign*equilateral_triangle_properties::rCap(elem.abLength, pinnedAlpha);
+      //
+      //   pinned_to_single(double theta_rec, double theta_adv, double ratio) {
+      //     ab = ab_length(theta_rec, ratio);    
+      //     t0 = (6.928203230275509- 4.*ab)*cos(theta_adv);
+      //     t1 = 1.7320508075688772*(ab*ab - 4.0)/ab;
+      //   }
+      //
+      //   std::tuple<double, double> operator()(double alpha) const {
+      //     auto sinAlpha = sin(alpha);
+      //     auto cosAlpha = cos(alpha);    
+      //
+      //     return std::make_tuple(
+      //       t0 + t1*sinAlpha + ab*(cosAlpha + alpha/sinAlpha),
+      //       t1*cosAlpha + ab*((1.0 - alpha*cosAlpha/sinAlpha)/sinAlpha - sinAlpha));
+      //   }
+      //
+      //
+      //   double find_alpha() const {
+      //     using namespace std::numbers;
+      //     return boost::math::tools::newton_raphson_iterate(*this, 1e-9, -2.0000*pi/3.0, 1.00000*pi/3.0, 22);  
+      //   }
+      // };
     };
   }
 
@@ -339,7 +514,7 @@ namespace xpm
   struct startup_settings
   {
     bool use_cache = true;
-    bool save_cache = false;
+    bool save_cache = true;
     bool loaded = false;
 
     struct {
@@ -356,11 +531,11 @@ namespace xpm
       }
     } image;
 
-    double micro_perm = -999; /* mD */
-    double micro_poro = -999; /* fraction */
-    std::vector<dpl::vector2d> micro_pc;
-    std::vector<dpl::vector2d> micro_kr0;
-    std::vector<dpl::vector2d> micro_kr1;
+    double darcy_perm = -999; /* mD */
+    double darcy_poro = -999; /* fraction */
+    std::vector<dpl::vector2d> darcy_pc; /* [Sw, Pc] */
+    std::vector<dpl::vector2d> darcy_kr0;
+    std::vector<dpl::vector2d> darcy_kr1;
     
 
     struct
@@ -381,12 +556,12 @@ namespace xpm
     void load(const nlohmann::json& j) {
       image.load(j["image"]);
 
-      if (auto microprs = j.find("microporosity"); microprs != j.end()) {
-        micro_perm = (*microprs)["permeability"];
-        micro_poro = (*microprs)["porosity"];
-        micro_pc = (*microprs)["capillary_pressure"];
-        micro_kr0 = (*microprs)["relative_permeability"][0];
-        micro_kr1 = (*microprs)["relative_permeability"][1];
+      if (auto micro = j.find("microporosity"); micro != j.end()) {
+        darcy_perm = (*micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
+        darcy_poro = (*micro)["porosity"];
+        darcy_pc = (*micro)["capillary_pressure"];
+        darcy_kr0 = (*micro)["relative_permeability"][0];
+        darcy_kr1 = (*micro)["relative_permeability"][1];
       }
 
       solver.load(j["solver"]);

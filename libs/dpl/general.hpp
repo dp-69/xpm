@@ -283,13 +283,13 @@ namespace dpl
   //   }  
   // };
 
-  struct extrapolant
+  namespace extrapolant
   {
     static inline constexpr struct linear_t {} linear;
     static inline constexpr struct flat_t {} flat;
-  };
+  }
 
-  struct lerp_base
+  namespace lerp_base
   {
     struct linear {};
     struct log10 {};

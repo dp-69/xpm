@@ -510,7 +510,7 @@ namespace xpm
         auto* darcy_pc_series = new QLineSeries;
         chart->addSeries(darcy_pc_series);
 
-        for (auto& p : startup_.micro_pc)
+        for (auto& p : startup_.darcy_pc)
           darcy_pc_series->append(p.x(), p.y());
         darcy_pc_series->setName("microporous");
         darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
@@ -525,7 +525,7 @@ namespace xpm
         auto* darcy_kr0_series = new QLineSeries;
         chart->addSeries(darcy_kr0_series);
 
-        for (auto& p : startup_.micro_kr0)
+        for (auto& p : startup_.darcy_kr0)
           darcy_kr0_series->append(p.x(), p.y());
         darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         darcy_kr0_series->attachAxis(kr_axis_y_);
@@ -535,7 +535,7 @@ namespace xpm
         auto* darcy_kr1_series = new QLineSeries;
         chart->addSeries(darcy_kr1_series);
 
-        for (auto& p : startup_.micro_kr1)
+        for (auto& p : startup_.darcy_kr1)
           darcy_kr1_series->append(p.x(), p.y());
         darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         darcy_kr1_series->attachAxis(kr_axis_y_);
@@ -560,7 +560,7 @@ namespace xpm
           pow(10., floor(log10(1./props::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*props::r_cap_piston_with_films(0, min_r_cap_throat)),
-            startup_.micro_pc.empty() ? 0 : startup_.micro_pc.front().y()))))*1.01
+            startup_.darcy_pc.empty() ? 0 : startup_.darcy_pc.front().y()))))*1.01
         );
       }
 
@@ -571,54 +571,59 @@ namespace xpm
         double theta = 0.0;
 
         using namespace std::ranges::views;
-        auto query = startup_.micro_pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
-        std::vector<dpl::vector2d> pc_to_sw{query.begin(), query.end()};
+        auto query = startup_.darcy_pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
+        std::vector<dpl::vector2d> pc_inv{query.begin(), query.end()};
         // std::cout << fmt::format("first size {}\n", pc_to_sw.size());
-        pc_to_sw.resize(std::ranges::unique(pc_to_sw, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_to_sw.begin());
+        pc_inv.resize(std::ranges::unique(pc_inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_inv.begin());
         // std::cout << fmt::format("second size {}\n", pc_to_sw.size());
 
         using pc_sw_span = std::span<const dpl::vector2d>;
 
 
 
-        
 
-        auto invasion_future = std::async(std::launch::async, &invasion_task::launch, &invasion_task_,
+        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &invasion_task_,
+          startup_,
           absolute_rate_,
-          startup_.micro_poro, startup_.micro_perm*0.001*presets::darcy_to_m2,
           theta,
-          pc_sw_span{pc_to_sw}, startup_.micro_kr0, startup_.micro_kr1,
-          *startup_.solver.decomposition);
+          pc_sw_span{pc_inv});
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
-        auto update = [this, theta, start, &pc_to_sw, &last_progress_idx] {
+        auto update = [this, theta, start, &pc_inv, &last_progress_idx] {
           if (last_progress_idx == invasion_task_.progress_idx())
             return;
 
 
           last_progress_idx = invasion_task_.progress_idx();
 
-          auto r_cap = invasion_task_.r_cap();
-          auto darcy_saturation = 1.0 - (pc_to_sw.empty() ? 0.0 : solve(pc_sw_span{pc_to_sw}, 1/r_cap, dpl::extrapolant::flat));
+          auto r_cap = invasion_task_.state().r_cap;
+          auto darcy_saturation = 1.0 - (pc_inv.empty() ? 0.0 : solve(pc_sw_span{pc_inv}, 1/r_cap, dpl::extrapolant::flat));
           auto area_of_films = props::area_of_films(theta, r_cap);
           
           auto map_satur = [](double x) { return x/2. + 0.25; };
-          
+
+
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
           
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (auto v_idx = voxel_idx_t{idx1d}; pni_.connected(v_idx) && invasion_task_.invaded(v_idx))
+              if (auto v_idx = voxel_idx_t{idx1d};
+                pni_.connected(v_idx) &&
+                invasion_task_.state().macro_voxel[pni_.net(v_idx)].phase() == phase_config::phase1())
                 face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
               else
                 face.GetColorArray()->SetTypedComponent(i, 0, 0.0);
+
               ++i;
             }
           });
+
           
+
           for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) && invasion_task_.invaded(macro_idx_t{i}))
+            if (pni_.connected(i) &&
+              invasion_task_.state().macro_voxel[pni_.net(macro_idx_t{i})].phase() == phase_config::phase1())
               macro_colors->SetTypedComponent(*i, 0,
                 map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
             else
@@ -629,7 +634,8 @@ namespace xpm
           
             for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
               if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
-                if (pni_.connected(l) && invasion_task_.invaded(i))
+                if (pni_.connected(l) &&
+                  invasion_task_.state().throat[i].phase() == phase_config::phase1())
                   throat_colors->SetTypedComponent(throat_net_idx, 0,
                     map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
                 else
@@ -706,10 +712,8 @@ namespace xpm
           processors = {4, 4, 3};
       }
 
-      auto const_permeability = startup_.micro_perm*0.001*presets::darcy_to_m2;
-      
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
-        startup_.image.path.stem(), const_permeability/presets::darcy_to_m2*1e3);
+        startup_.image.path.stem(), startup_.darcy_perm/presets::darcy_to_m2*1e3);
 
       InitLutNodeThroat(lut_node_throat_);
       InitLutPoreSolidMicro(lut_pore_solid_micro_);
@@ -792,7 +796,7 @@ namespace xpm
 
 
         idx1d_t nrows = *pni_.connected_count();
-        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_, const_permeability});
+        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_, startup_.darcy_perm});
 
 
         std::cout << " done\n\n";
@@ -840,14 +844,14 @@ namespace xpm
 
       {
         
-        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, const_permeability});
+        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, startup_.darcy_perm});
           
         std::cout << fmt::format(
           "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
-          const_permeability/darcy_to_m2*1000,
+          startup_.darcy_perm/darcy_to_m2*1000,
           inlet/pn_.physical_size.x()/darcy_to_m2*1000,
           outlet/pn_.physical_size.x()/darcy_to_m2*1000,
           residual, iters);

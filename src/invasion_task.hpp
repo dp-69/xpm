@@ -3,6 +3,44 @@
 #include "pore_network_image.hpp"
 
 namespace xpm {
+  class pressure_cache
+  {
+    static inline std::unique_ptr<std::unordered_map<std::size_t, double>> cache_ = nullptr;
+
+    static auto path() {
+      return std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("cache") / "solve.json";
+    }
+
+  public:
+    static void load() {
+      cache_ = std::make_unique<std::unordered_map<std::size_t, double>>();
+
+      try {
+        for (const auto& j : nlohmann::json::parse(std::ifstream{path()})) {
+          (*cache_)[std::stoull(j["hash"].get<std::string>(), nullptr, 16)] = j["value"].get<double>();
+        }
+      }
+      catch (...) {}
+    }
+
+    static void save() {
+      nlohmann::json arr;
+
+      for (auto [hash, value] : *cache_) {
+        nlohmann::json j;
+        j["hash"] = fmt::format("{:x}", hash);
+        j["value"] = value;
+        arr.push_back(j);
+      }
+
+      std::ofstream{path()} << arr.dump(2);
+    }
+
+    static auto& cache() {
+      return *cache_;
+    }
+  };
+
   class invasion_task {
 
     struct phase_state
@@ -19,6 +57,7 @@ namespace xpm {
     public:
       const pore_network_image* pni;
       const phase_state* state;
+      bool darcy_filter;
 
       bool operator()(macro_idx_t i) const {
         if constexpr (phase1)
@@ -35,10 +74,12 @@ namespace xpm {
       }
 
       bool operator()(voxel_idx_t i) const {
-        if constexpr (phase1)
-          return state->macro_voxel[pni->net(i)].phase() == phase_config::phase1(); // TODO: irrelevant for darcy nodes
-        else
-          return true /*state->macro_voxel[pni->net(i)].phase() == phase_config::phase0()*/;
+        return darcy_filter;
+
+        // if constexpr (phase1)
+        //   return state->macro_voxel[pni->net(i)].phase() == phase_config::phase1();
+        // else
+        //   return true /*state->macro_voxel[pni->net(i)].phase() == phase_config::phase0()*/;
       }
     };
 
@@ -153,16 +194,8 @@ namespace xpm {
       return dc_graph_;
     }
 
-    bool invaded(voxel_idx_t i) const  {
-      return state_.macro_voxel[pni_->net(i)].phase() == phase_config::phase1();
-    }
-
-    bool invaded(macro_idx_t i) const {
-      return state_.macro_voxel[pni_->net(i)].phase() == phase_config::phase1();
-    }
-
-    bool invaded(std::size_t i) const {
-      return state_.throat[i].phase() == phase_config::phase1();
+    auto& state() {
+      return state_;
     }
 
     auto& pc_curve() const {
@@ -173,16 +206,8 @@ namespace xpm {
       return kr_curves_;
     }
 
-    // auto last_r_cap() {
-    //   return state_.r_cap;
-    // }
-
     auto progress_idx() const {
       return progress_idx_;
-    }
-
-    auto r_cap() const {
-      return state_.r_cap;
     }
 
     bool finished() const {
@@ -213,15 +238,13 @@ namespace xpm {
       kr_curves_.reserve(1000);
     }
 
-    void launch(
+    void launch_primary(
+      const startup_settings& settings,
       double absolute_rate,
-      double darcy_porosity,
-      double darcy_perm,
       double theta,
-      std::span<const dpl::vector2d> darcy_pc_to_sw,
-      std::span<const dpl::vector2d> darcy_kr0,
-      std::span<const dpl::vector2d> darcy_kr1,
-      const dpl::vector3i& procs) {
+      std::span<const dpl::vector2d> darcy_pc_inv) {
+
+      pressure_cache::load();
 
       using props = hydraulic_properties::equilateral_triangle_properties;
 
@@ -230,7 +253,7 @@ namespace xpm {
 
       double darcy_r_cap_const;
 
-      if (darcy_pc_to_sw.empty()) {
+      if (darcy_pc_inv.empty()) {
         auto min_r_cap_throat = std::numeric_limits<double>::max();
       
         for (std::size_t i{0}; i < pn_->throat_count(); ++i)
@@ -241,12 +264,12 @@ namespace xpm {
         darcy_r_cap_const = min_r_cap_throat;
       }
       else
-        darcy_r_cap_const = 1/darcy_pc_to_sw.front().x();
+        darcy_r_cap_const = 1/darcy_pc_inv.front().x();
 
       dpl::strong_vector<net_tag, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
 
-      displ_queue queue;
+      displ_queue<pressure_less> queue;
 
       for (std::size_t i{0}; i < pn_->throat_count(); ++i)
         if (auto [l, r] = pn_->throat_[attribs::adj][i]; pn_->inlet() == r) // inlet macro nodes TODO: voxels inlet needed
@@ -265,62 +288,93 @@ namespace xpm {
 
       state_.r_cap = queue.front().radius_cap;
 
-      auto total_pore_volume = pni_->total_pore_volume(darcy_porosity);
+      auto total_pore_volume = pni_->total_pore_volume(settings.darcy_poro);
 
       dpl::vector2d last_pc_point{2, -1};
       double last_kr_sw = 1.0;
       kr_curves_.emplace_back(1, 1, 0);
 
-      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*darcy_porosity;
+      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*settings.darcy_poro;
 
       auto eval_inv_volume = [&] {
         return
           inv_volume_coefs[0] + inv_volume_coefs[2]*state_.r_cap*state_.r_cap
-        + (1 - (darcy_pc_to_sw.empty() ? 0.0 : solve(darcy_pc_to_sw, 1/state_.r_cap, dpl::extrapolant::flat)))*unit_darcy_pore_volume*inv_darcy_count
+        + (1 - (darcy_pc_inv.empty() ? 0.0 : solve(darcy_pc_inv, 1/state_.r_cap, dpl::extrapolant::flat)))*unit_darcy_pore_volume*inv_darcy_count
         ;
       };
 
       auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume()/total_pore_volume, 1/state_.r_cap}; };
 
       auto rel_calc = [=, this](auto phase1) {
-        auto darcy_sw = darcy_kr0.empty() ? std::numeric_limits<double>::quiet_NaN() : solve(darcy_pc_to_sw, 1/state_.r_cap, dpl::extrapolant::flat);
-        double kr_val = std::numeric_limits<double>::quiet_NaN();
+        auto darcy_sw = settings.darcy_kr0.empty()
+          ? std::numeric_limits<double>::quiet_NaN()
+          : solve(darcy_pc_inv, 1/state_.r_cap, dpl::extrapolant::flat);
+
+        double kr_val = 0.0;
 
         if constexpr (phase1) {
-          if (!darcy_kr1.empty())
-            kr_val = std::max(0.0, solve(darcy_kr1, darcy_sw, dpl::extrapolant::flat));
+          if (!settings.darcy_kr1.empty())
+            kr_val = std::max(0.0, solve(std::span{settings.darcy_kr1}, darcy_sw, dpl::extrapolant::flat));
         }
         else {
-          if (!darcy_kr0.empty())
-            kr_val = std::max(0.0, solve(darcy_kr0, darcy_sw, dpl::extrapolant::flat));
+          if (!settings.darcy_kr0.empty())
+            kr_val = std::max(0.0, solve(std::span{settings.darcy_kr0}, darcy_sw, dpl::extrapolant::flat));
         }
 
+        static constexpr auto perm_threshold = 1e-6*presets::darcy_to_m2;
 
-        filter_functor<phase1> filter{pni_, &state_};
-        auto [nrows, mapping] = pni_->generate_mapping(procs, filter);
+        bool darcy_filter = kr_val*settings.darcy_perm > perm_threshold;
 
-        std::conditional_t<phase1, phase1_coef_functor, phase0_coef_functor> term{pni_, &state_, theta, kr_val*darcy_perm};
+
+        filter_functor<phase1> filter{pni_, &state_, darcy_filter};
+        auto [nrows, mapping] = pni_->generate_mapping(*settings.solver.decomposition, filter);
+
+        std::conditional_t<phase1, phase1_coef_functor, phase0_coef_functor> term{pni_, &state_, theta, kr_val*settings.darcy_perm};
 
         auto [nvalues, input] = pni_->generate_pressure_input(nrows, mapping.forward, term, filter);
 
-        dpl::strong_vector<net_tag, double> pressure(*pni_->connected_count());
+        using namespace std::chrono;
 
-        auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
+        auto hash = std::hash<std::string_view>{}(
+          std::string_view{reinterpret_cast<char*>(input.values.get()), nvalues*sizeof(HYPRE_Complex)});
 
-        {
-          // solve(input, {0, nrows - 1}, decomposed_pressure.get(), 1e-9, 19);
+        std::cout << fmt::format("ph{} | K: {:.2e} mD | hash: {:x}\n", // kr: {:.2e}, dar_sw: {:.4f}, 
+          int{phase1}, kr_val*settings.darcy_perm/presets::darcy_to_m2, hash); /*kr_val, darcy_sw, */
 
-          dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, 1e-9, 19);
-          std::system(fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), dpl::hypre::mpi::mpi_exec).c_str()); // NOLINT(concurrency-mt-unsafe)
-          std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values(nrows);
+
+        auto found = pressure_cache::cache().find(hash);
+
+        if (found == pressure_cache::cache().end()) {
+          dpl::strong_vector<net_tag, double> pressure(*pni_->connected_count());
+          auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
+
+          {
+            // solve(input, {0, nrows - 1}, decomposed_pressure.get(), settings.solver.tolerance, settings.solver.max_iterations);
+
+            auto t0 = high_resolution_clock::now();
+            dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, settings.solver.tolerance, settings.solver.max_iterations);
+            auto t1 = high_resolution_clock::now();
+            std::system(fmt::format("mpiexec -np {} \"{}\" -s", settings.solver.decomposition->prod(), dpl::hypre::mpi::mpi_exec).c_str()); // NOLINT(concurrency-mt-unsafe)
+            auto t2 = high_resolution_clock::now();
+            std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values(nrows);
+
+            std::cout << fmt::format("save matrix: {} s, solve matrix: {} s\n",
+              duration_cast<seconds>(t1 - t0).count(),
+              duration_cast<seconds>(t2 - t1).count());
+          }
+          
+          for (HYPRE_BigInt i = 0; i < nrows; ++i)
+            pressure[mapping.backward[i]] = decomposed_pressure[i];
+
+          auto [inlet, outlet] = pni_->flow_rates(pressure, term, filter);
+
+          pressure_cache::cache()[hash] = inlet;
+          pressure_cache::save();
+
+          return inlet;
         }
-        
-        for (HYPRE_BigInt i = 0; i < nrows; ++i)
-          pressure[mapping.backward[i]] = decomposed_pressure[i];
 
-        auto [inlet, outlet] = pni_->flow_rates(pressure, term, filter);
-
-        return inlet;
+        return found->second;
       };
 
       auto rel_calc_report = [=, this](double sw) {
@@ -328,12 +382,6 @@ namespace xpm {
         auto inv = rel_calc(std::true_type{});
 
         kr_curves_.emplace_back(sw, def/absolute_rate, inv/absolute_rate);
-
-        // std::cout << fmt::format(
-        //   "Sw: {:.4f}, S_def: {:.4f} mD, S_inv: {:.4f} mD\n", //
-        //   sw,
-        //   def/pn_->physical_size.x()/presets::darcy_to_m2*1000,
-        //   inv/pn_->physical_size.x()/presets::darcy_to_m2*1000);
       };
 
       for (progress_idx_ = 0; !queue.empty(); ++progress_idx_) {
@@ -379,6 +427,7 @@ namespace xpm {
           inv_volume_coefs[0] += pn_->node_[attribs::volume][local_idx];
           inv_volume_coefs[2] += pn_->node_[attribs::volume][local_idx]*
             -props::area_of_films(theta)/props::area(pn_->node_[attribs::r_ins][local_idx]);
+
 
           for (auto ab : dc_graph_.edges(*net_idx))
             if (net_idx_t b_net_idx{target(ab, dc_graph_)}; b_net_idx != outlet_idx) // not outlet
@@ -482,52 +531,45 @@ namespace xpm {
         }
       }
 
-      auto end_pc = 1/state_.r_cap;
-      auto max_dacry_pc = darcy_pc_to_sw.back().x();
 
-      add_to_pc_curve(eval_pc_point());
+      if (!darcy_pc_inv.empty()) {
+        auto end_pc = 1/state_.r_cap;
+        auto max_dacry_pc = darcy_pc_inv.back().x();
 
-      if (!darcy_pc_to_sw.empty()) {
-        auto steps = 10;
+        add_to_pc_curve(eval_pc_point());
 
-        auto step = std::pow(10, (std::log10(max_dacry_pc) - std::log10(end_pc))/steps);
+        { /* Capillary pressure */
+          auto steps = 10;
 
-        for (auto i = 0; i < steps; ++i) {
-          state_.r_cap /= step;
-          // std::cout << fmt::format("adding points: {:.2e} Sw\n", eval_pc_point().y());
-          add_to_pc_curve(eval_pc_point());
+          auto step = std::pow(10, (std::log10(max_dacry_pc) - std::log10(end_pc))/steps);
+
+          for (auto i = 0; i < steps; ++i) {
+            state_.r_cap /= step;
+            add_to_pc_curve(eval_pc_point());
+          }
         }
 
-        // for (auto mult : {1.25, 1.5, 1.75, 2., 2.}) {   // {1.004, 1.008, 1.016, 1.032, 1.064, 1.128}
-        //   // std::this_thread::sleep_for(std::chrono::milliseconds{1250});
-        //   last_r_cap_ /= mult;
-        //
-        //   std::cout << fmt::format("adding points: {} Sw\n", eval_pc_point().y());
-        //
-        //   add_to_pc_curve(eval_pc_point());
-        // }
-      }
+        ++progress_idx_;
 
-      ++progress_idx_;
+        state_.r_cap = 1/end_pc;
 
-      state_.r_cap = 1/end_pc;
+        auto darcy_sw = solve(darcy_pc_inv, state_.r_cap, dpl::extrapolant::flat);
 
-      if (!darcy_kr0.empty()) {
-        auto steps = 7;
+        if (!settings.darcy_kr0.empty()) {
+          auto steps = 6;
 
-        auto step = std::pow(10, (std::log10(max_dacry_pc/10) - std::log10(end_pc))/steps);
+          for (auto i = 0; i < steps; ++i) {
+            auto target_sw = darcy_sw*(1 - i*(1./steps));
+            // std::cout << fmt::format("{:.5f}\n", target_sw);
+            state_.r_cap = 1/solve(std::span{settings.darcy_pc}, target_sw, dpl::extrapolant::flat);
 
-        state_.r_cap /= step;
+            rel_calc_report(1 - eval_inv_volume()/total_pore_volume);
+            ++progress_idx_;
+          }
 
-        for (auto i = 1; i < steps; ++i) {
-          state_.r_cap /= step;
-          rel_calc_report(1 - eval_inv_volume()/total_pore_volume);
+          kr_curves_.emplace_back(0, 0, 1);
           ++progress_idx_;
         }
-
-        state_.r_cap = 1/max_dacry_pc;
-        rel_calc_report(1 - eval_inv_volume()/total_pore_volume);
-        ++progress_idx_;
       }
 
       finished_ = true;

@@ -970,7 +970,7 @@ namespace xpm
     }
 
     template<typename Filter = default_maps::true_t>
-    std::tuple<size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
+    std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
       idx1d_t nrows, const dpl::strong_vector<net_tag, idx1d_t>& forward, auto term, Filter filter = {}) const {
 
       dpl::hypre::ls_known_storage_builder builder{nrows, [&forward, this](auto i) { return forward[this->net(i)]; }};
