@@ -60,6 +60,9 @@ namespace xpm
 
     constexpr explicit phase_config(unsigned char v = 0) : value(v) {}
 
+    /**
+     * \brief phase in the center
+     */
     auto phase() const {
       return value & phase_bits_;
     }
@@ -140,10 +143,10 @@ namespace xpm
   {
     struct equilateral_triangle_properties
     {
-      static constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
-      static constexpr auto beta = std::numbers::pi/3/2;
-      static constexpr auto sin_beta = 0.5;
-      static constexpr auto corners = 3;
+      static inline constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
+      static inline constexpr auto beta = std::numbers::pi/3/2;
+      static inline constexpr auto sin_beta = 0.5;
+      static inline constexpr auto corners = 3;
 
       static constexpr double sqr(double x) { return x*x; }
 
@@ -160,7 +163,7 @@ namespace xpm
       }
 
       // k*G, k - coefficient, G - shape factor
-      static double conductance_single_phase(double area = 1, double viscosity = 1) {
+      static double conductance_single(double area = 1, double viscosity = 1) {
         return sqrt_3/60*sqr(area)/viscosity;   // = std::sqrt(3)/60 = k*G*A^2/mu for eq tri
       }
 
@@ -190,11 +193,11 @@ namespace xpm
         return r_ins/(2*cos(theta));          
       }
 
-      static double r_cap_snap_off_valv(double theta, double r_ins = 1) {
+      static double r_cap_snap_off(double theta, double r_ins = 1) {
         return r_ins/(cos(theta) - sin(theta)/sqrt_3);
       }
 
-      static double area_of_films(double theta, double r_cap = 1) { // TODO: replace with area_corners_valv
+      static double area_films(double theta, double r_cap = 1) { // TODO: replace with area_corners_valv
         return sqr(r_cap)*(
           -0.5435164422364771 + 3*theta + 1.7320508075688772*std::cos(2*theta) +
           1.7320508075688772*std::sin(0.5235987755982988 - 2*theta)
@@ -233,14 +236,14 @@ namespace xpm
         return std::acos(b*sin_beta/r_cap) - beta;
       }
 
-      static double area_corners_valv(double theta, double r_cap = 1) { // = area_of_films
+      static double area_corners(double theta, double r_cap = 1) { // = area_films
         return sqr(r_cap)*corners*(cos(theta)*cos(theta + beta)/sin_beta + theta + beta - std::numbers::pi/2);
       }
 
       static double simple_balance(double theta, double r_cap, double r_ins) {
         using namespace std;
       
-        auto A_eff = area(r_ins) - area_corners_valv(theta, r_cap);
+        auto A_eff = area(r_ins) - area_corners(theta, r_cap);
         auto L_os = r_ins/2/shape_factor() - 2*corners*b_length(theta, r_cap);
         auto L_ow = 2*r_cap*corners*(numbers::pi/2 - beta - theta);
       
@@ -252,7 +255,7 @@ namespace xpm
 
         auto theta_h = hinging(b_rec, r_cap);
 
-        auto A_eff = area(r_ins) - area_corners_valv(theta_h, r_cap);
+        auto A_eff = area(r_ins) - area_corners(theta_h, r_cap);
         auto L_os = r_ins/2/shape_factor() - 2*corners*b_rec;
         auto L_ow = 2*r_cap*corners*asin(b_rec*sin_beta/r_cap);
 
@@ -434,6 +437,7 @@ namespace xpm
     };
   }
 
+
   namespace presets
   {
     static inline constexpr auto pore = voxel_property::phase_t{0};
@@ -531,8 +535,8 @@ namespace xpm
       }
     } image;
 
-    double darcy_perm = -999; /* mD */
-    double darcy_poro = -999; /* fraction */
+    double darcy_perm = std::numeric_limits<double>::quiet_NaN(); /* mD */
+    double darcy_poro = std::numeric_limits<double>::quiet_NaN(); /* fraction */
     std::vector<dpl::vector2d> darcy_pc; /* [Sw, Pc] */
     std::vector<dpl::vector2d> darcy_kr0;
     std::vector<dpl::vector2d> darcy_kr1;

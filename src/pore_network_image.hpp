@@ -25,9 +25,9 @@ namespace xpm
     std::unique_ptr<net_idx_t[]> backward;
     std::vector<dpl::hypre::index_range> block_rows;
 
-    rows_mapping(idx1d_t rows, int blocks) {
+    rows_mapping(net_idx_t rows, int blocks) {
       forward.resize(rows);
-      backward = std::make_unique<net_idx_t[]>(rows);
+      backward = std::make_unique<net_idx_t[]>(*rows);
       block_rows = std::vector<dpl::hypre::index_range>(blocks);
     }
   };
@@ -180,7 +180,15 @@ namespace xpm
       attribs::length1_t, double,
       attribs::volume_t, double
     > throat_;
-    
+
+
+    auto& operator()(const auto key, const macro_idx_t i) {
+      return node_[key][*i];
+    }
+
+    auto& operator()(const auto key, const std::size_t i) {
+      return throat_[key][i];
+    }
 
     enum class file_format
     {
@@ -504,12 +512,12 @@ namespace xpm
 
     double operator()(std::size_t i) const {
       using props = hydraulic_properties::equilateral_triangle_properties;
-      return props::conductance_single_phase(props::area(pn->throat_[attribs::r_ins][i]));
+      return props::conductance_single(props::area(pn->throat_[attribs::r_ins][i]));
     }
 
     double operator()(macro_idx_t i) const {
       using props = hydraulic_properties::equilateral_triangle_properties;
-      return props::conductance_single_phase(props::area(pn->node_[attribs::r_ins][*i]));
+      return props::conductance_single(props::area(pn->node_[attribs::r_ins][*i]));
     }
 
     double operator()(voxel_idx_t) const {
@@ -524,7 +532,7 @@ namespace xpm
 
   class image_data
   {
-    idx1d_t size_;
+    voxel_idx_t size_;
     idx3d_t dim_;
     map_idx3_t<voxel_idx_t> idx1d_mapper_;
 
@@ -586,10 +594,10 @@ namespace xpm
     void read_image(const auto& image_path, parse::image_dict input_config) {
       std::ifstream is(image_path);
       is.seekg(0, std::ios_base::end);
-      size_ = static_cast<idx1d_t>(is.tellg());
+      size_ = voxel_idx_t(is.tellg());  // NOLINT(cppcoreguidelines-narrowing-conversions)
       is.seekg(0, std::ios_base::beg);
-      phase.resize(size_);
-      is.read(reinterpret_cast<char*>(phase.data()), size_);
+      phase.resize(voxel_idx_t{size_});
+      is.read(reinterpret_cast<char*>(phase.data()), *size_);
 
       size_t pore_voxels = 0;
       size_t solid_voxels = 0;
@@ -616,7 +624,7 @@ namespace xpm
         "  pore: {:L} | {:.1f}%\n"
         "  solid: {:L}\n"
         "  microprs: {:L}\n\n",
-        size_, pore_voxels, 100.*pore_voxels/size_, solid_voxels, microporous_voxels); 
+        size_, pore_voxels, 100.*pore_voxels/ *size_, solid_voxels, microporous_voxels);   // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
     }
 
     /**
@@ -631,7 +639,7 @@ namespace xpm
       boost::iostreams::mapped_file_source file(network_path.string() + "_VElems.raw");
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
-      velem.resize(dim_.prod());
+      velem.resize(voxel_idx_t{dim_.prod()});
 
       // auto* ptr = velem.get();
 
@@ -720,7 +728,7 @@ namespace xpm
     }
 
     void evaluate_isolated() {
-      auto gross_total_size = *pn_->node_count() + img_->size();
+      auto gross_total_size = *pn_->node_count() + *img_->size();
 
       disjoint_sets ds(gross_total_size);
 
@@ -773,7 +781,7 @@ namespace xpm
           }
       }
 
-      total_to_net_map_.resize(gross_total_size);
+      total_to_net_map_.resize(total_idx_t{gross_total_size});
 
       for (macro_idx_t i{0}; i < pn_->node_count(); ++i) {
         auto total_idx = total(i);
@@ -789,7 +797,7 @@ namespace xpm
         total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
       }
 
-      net_to_total_map_.resize(*connected_count_);
+      net_to_total_map_.resize(connected_count_);
 
       for (total_idx_t i{0}; i < gross_total_size; ++i)
         if (total_to_net_map_[i] != isolated_idx_)
@@ -850,7 +858,7 @@ namespace xpm
 
       auto block_count = blocks.prod();
 
-      rows_mapping mapping{*connected_count_, block_count};
+      rows_mapping mapping{connected_count_, block_count};
       
       auto count_per_block = std::make_unique<idx1d_t[]>(block_count);
 

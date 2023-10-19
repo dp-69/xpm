@@ -117,9 +117,9 @@ namespace xpm
 
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
-    startup_settings startup_;
+    startup_settings settings_;
 
-    invasion_task invasion_task_{pni_};
+    invasion_task invasion_task_{pni_, settings_};
 
 
     std::string status_ = "<nothing>";
@@ -475,7 +475,7 @@ namespace xpm
       std::locale::global(std::locale("en_US.UTF-8"));
 
       if (std::filesystem::exists("config.json"))
-        startup_.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
+        settings_.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
 
       InitGUI();
 
@@ -510,7 +510,7 @@ namespace xpm
         auto* darcy_pc_series = new QLineSeries;
         chart->addSeries(darcy_pc_series);
 
-        for (auto& p : startup_.darcy_pc)
+        for (auto& p : settings_.darcy_pc)
           darcy_pc_series->append(p.x(), p.y());
         darcy_pc_series->setName("microporous");
         darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
@@ -525,7 +525,7 @@ namespace xpm
         auto* darcy_kr0_series = new QLineSeries;
         chart->addSeries(darcy_kr0_series);
 
-        for (auto& p : startup_.darcy_kr0)
+        for (auto& p : settings_.darcy_kr0)
           darcy_kr0_series->append(p.x(), p.y());
         darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         darcy_kr0_series->attachAxis(kr_axis_y_);
@@ -535,7 +535,7 @@ namespace xpm
         auto* darcy_kr1_series = new QLineSeries;
         chart->addSeries(darcy_kr1_series);
 
-        for (auto& p : startup_.darcy_kr1)
+        for (auto& p : settings_.darcy_kr1)
           darcy_kr1_series->append(p.x(), p.y());
         darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         darcy_kr1_series->attachAxis(kr_axis_y_);
@@ -544,7 +544,7 @@ namespace xpm
       }
 
 
-      using props = hydraulic_properties::equilateral_triangle_properties;
+      using eq_tr = hydraulic_properties::equilateral_triangle_properties;
 
       {
         using namespace std;
@@ -557,25 +557,24 @@ namespace xpm
 
         pc_axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
-          pow(10., floor(log10(1./props::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
+          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
           pow(10., ceil(log10(max(
-            1/(0.7*props::r_cap_piston_with_films(0, min_r_cap_throat)),
-            startup_.darcy_pc.empty() ? 0 : startup_.darcy_pc.front().y()))))*1.01
+            1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
+            settings_.darcy_pc.empty() ? 0 : settings_.darcy_pc.front().y()))))*1.01
         );
       }
 
       invasion_task_.init();
+      invasion_task_.generate_graph();
 
       consumer_future_ = std::async(std::launch::async, [this] {
         auto start = std::chrono::system_clock::now();
-        double theta = 0.0;
+        double theta = 0*std::numbers::pi/180;
 
         using namespace std::ranges::views;
-        auto query = startup_.darcy_pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
+        auto query = settings_.darcy_pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
         std::vector<dpl::vector2d> pc_inv{query.begin(), query.end()};
-        // std::cout << fmt::format("first size {}\n", pc_to_sw.size());
         pc_inv.resize(std::ranges::unique(pc_inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_inv.begin());
-        // std::cout << fmt::format("second size {}\n", pc_to_sw.size());
 
         using pc_sw_span = std::span<const dpl::vector2d>;
 
@@ -583,7 +582,6 @@ namespace xpm
 
 
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &invasion_task_,
-          startup_,
           absolute_rate_,
           theta,
           pc_sw_span{pc_inv});
@@ -594,23 +592,19 @@ namespace xpm
           if (last_progress_idx == invasion_task_.progress_idx())
             return;
 
-
           last_progress_idx = invasion_task_.progress_idx();
 
-          auto r_cap = invasion_task_.state().r_cap;
-          auto darcy_saturation = 1.0 - (pc_inv.empty() ? 0.0 : solve(pc_sw_span{pc_inv}, 1/r_cap, dpl::extrapolant::flat));
-          auto area_of_films = props::area_of_films(theta, r_cap);
+          auto& state = invasion_task_.state();
+          auto darcy_saturation = 1.0 - (pc_inv.empty() ? 0.0 : solve(pc_sw_span{pc_inv}, 1/state.r_cap_global, dpl::extrapolant::flat));
           
           auto map_satur = [](double x) { return x/2. + 0.25; };
-
 
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
           
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
               if (auto v_idx = voxel_idx_t{idx1d};
-                pni_.connected(v_idx) &&
-                invasion_task_.state().macro_voxel[pni_.net(v_idx)].phase() == phase_config::phase1())
+                pni_.connected(v_idx) && state.config(pni_.net(v_idx)).phase() == phase_config::phase1())
                 face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
               else
                 face.GetColorArray()->SetTypedComponent(i, 0, 0.0);
@@ -619,29 +613,27 @@ namespace xpm
             }
           });
 
-          
+          using namespace attribs;
 
           for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
-            if (pni_.connected(i) &&
-              invasion_task_.state().macro_voxel[pni_.net(macro_idx_t{i})].phase() == phase_config::phase1())
+            if (pni_.connected(i) && state.config(pni_.net(i)).phase() == phase_config::phase1())
               macro_colors->SetTypedComponent(*i, 0,
-                map_satur(1.0 - area_of_films/props::area(pn_.node_[attribs::r_ins][*i])));
+                map_satur(1.0 - eq_tr::area_corners(theta, state.r_cap(pni_.net(i)))/eq_tr::area(r_ins(pn_, i))));
             else
               macro_colors->SetTypedComponent(*i, 0, 0.0);
           
           {
-            vtkIdType throat_net_idx = 0;
-          
+            vtkIdType t_inner_idx = 0;
+
             for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
-              if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r)) {
-                if (pni_.connected(l) &&
-                  invasion_task_.state().throat[i].phase() == phase_config::phase1())
-                  throat_colors->SetTypedComponent(throat_net_idx, 0,
-                    map_satur(1.0 - area_of_films/props::area(pn_.throat_[attribs::r_ins][i])));
+              if (auto [l, r] = adj(pn_, i); pn_.inner_node(r)) {
+                if (pni_.connected(l) && state.config(i).phase() == phase_config::phase1())
+                  throat_colors->SetTypedComponent(t_inner_idx, 0,
+                    map_satur(1.0 - eq_tr::area_corners(theta, state.r_cap(i))/eq_tr::area(r_ins(pn_, i))));
                 else
-                  throat_colors->SetTypedComponent(throat_net_idx, 0, 0.0);
+                  throat_colors->SetTypedComponent(t_inner_idx, 0, 0.0);
           
-                ++throat_net_idx;
+                ++t_inner_idx;
               }
             }
           }
@@ -688,9 +680,9 @@ namespace xpm
       using clock = std::chrono::high_resolution_clock;
       using seconds = std::chrono::seconds;
 
-      std::cout << fmt::format("image path: {}\n\n", startup_.image.path);
+      std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
 
-      auto pnm_path = ProcessImage(startup_.image.path)/"";
+      auto pnm_path = ProcessImage(settings_.image.path)/"";
 
       auto begin_init_time = clock::now();
 
@@ -698,8 +690,8 @@ namespace xpm
 
       dpl::vector3i processors{1};
 
-      if (startup_.solver.decomposition)
-        processors = *startup_.solver.decomposition;
+      if (settings_.solver.decomposition)
+        processors = *settings_.solver.decomposition;
       else {
         if (auto proc_count = std::thread::hardware_concurrency();
           proc_count == 12)
@@ -713,7 +705,7 @@ namespace xpm
       }
 
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
-        startup_.image.path.stem(), startup_.darcy_perm/presets::darcy_to_m2*1e3);
+        settings_.image.path.stem(), settings_.darcy_perm/presets::darcy_to_m2*1e3);
 
       InitLutNodeThroat(lut_node_throat_);
       InitLutPoreSolidMicro(lut_pore_solid_micro_);
@@ -733,7 +725,7 @@ namespace xpm
       #endif
 
       #ifdef _WIN32
-        pn_.connectivity_flow_summary(startup_.solver.tolerance, startup_.solver.max_iterations);
+        pn_.connectivity_flow_summary(settings_.solver.tolerance, settings_.solver.max_iterations);
       #else
         pn_.connectivity_flow_summary_MPI(startup.solver.tolerance, startup.solver.max_iterations);
       #endif
@@ -741,8 +733,8 @@ namespace xpm
       std::cout << '\n';
 
       {
-        img_.read_image(startup_.image.path, startup_.image.phases);
-        img_.set_dim(startup_.loaded ? startup_.image.size : std::round(std::cbrt(img_.size())));
+        img_.read_image(settings_.image.path, settings_.image.phases);
+        img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
 
         img_.read_icl_velems(pnm_path);
 
@@ -770,14 +762,14 @@ namespace xpm
       HYPRE_Int iters = 0;
 
 
-      if (startup_.use_cache && std::filesystem::exists(cache_path)) {
+      if (settings_.use_cache && std::filesystem::exists(cache_path)) {
         std::cout << "using cached pressure\n\n";
 
         std::ifstream is(cache_path, std::ifstream::binary);
         is.seekg(0, std::ios_base::end);
         auto nrows = is.tellg()/sizeof(HYPRE_Complex);
         is.seekg(0, std::ios_base::beg);
-        pressure.resize(nrows);
+        pressure.resize(net_idx_t(nrows));
         is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));
       }
       else {
@@ -796,7 +788,7 @@ namespace xpm
 
 
         idx1d_t nrows = *pni_.connected_count();
-        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_, startup_.darcy_perm});
+        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_, settings_.darcy_perm});
 
 
         std::cout << " done\n\n";
@@ -806,7 +798,7 @@ namespace xpm
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
-        dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, startup_.solver.tolerance, startup_.solver.max_iterations);
+        dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, settings_.solver.tolerance, settings_.solver.max_iterations);
 
         std::cout
           << " done\n\n"
@@ -826,7 +818,7 @@ namespace xpm
           std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
           std::tie(decomposed_pressure, residual, iters) = dpl::hypre::mpi::load_values(nrows);
 
-          pressure.resize(nrows);
+          pressure.resize(net_idx_t(nrows));
 
           for (HYPRE_BigInt i = 0; i < nrows; ++i)
             pressure[mapping.backward[i]] = decomposed_pressure[i];
@@ -834,7 +826,7 @@ namespace xpm
 
         std::cout << "pressure solved\n\n";
 
-        if (startup_.save_cache) {
+        if (settings_.save_cache) {
           std::filesystem::create_directory("cache");
           std::ofstream cache_stream(cache_path, std::ofstream::binary);
           cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)**pni_.connected_count());
@@ -844,14 +836,14 @@ namespace xpm
 
       {
         
-        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, startup_.darcy_perm});
+        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, settings_.darcy_perm});
           
         std::cout << fmt::format(
           "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
-          startup_.darcy_perm/darcy_to_m2*1000,
+          settings_.darcy_perm/darcy_to_m2*1000,
           inlet/pn_.physical_size.x()/darcy_to_m2*1000,
           outlet/pn_.physical_size.x()/darcy_to_m2*1000,
           residual, iters);
@@ -892,7 +884,7 @@ namespace xpm
             
         img_glyph_mapper_.Init(scale_factor);
         {
-          std::vector<bool> filter(img_.size());
+          std::vector<bool> filter(*img_.size());
           for (voxel_idx_t i{0}; i < img_.size(); ++i)
             filter[*i] = img_.phase[i] == microporous;
 

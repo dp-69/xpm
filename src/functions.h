@@ -48,7 +48,6 @@ namespace xpm
   
   std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
     using namespace attribs;
-
     
     vtkNew<vtkPolyData> polydata;
       

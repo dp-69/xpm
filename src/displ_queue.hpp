@@ -6,21 +6,6 @@
 
 namespace xpm
 {
-  // struct occupancy_arrays
-  // {
-  //   dpl::strong_array<net_tag, dpl::vector2d> macro;
-  //
-  //   /**
-  //    * \brief total, i.e. normal throat index
-  //    */
-  //   dpl::strong_array<size_t, double> throat; // TODO: if size_t, then should be simple array
-  //
-  //   double occupancy(net_idx_t idx, double r_cap) {
-  //     auto [c0, c1] = macro[idx];
-  //     return c0 + c1*r_cap;
-  //   }
-  // };
-
   enum struct displ_elem : unsigned char {
     macro,
     voxel,
@@ -38,24 +23,17 @@ namespace xpm
     }
   };
 
-  struct pressure_less
-  {
-    bool operator()(const displ_event& l, const displ_event& r) const {
-      return l.pressure_cap() < r.pressure_cap();
-    }
-  };
-
-  struct pressure_more
-  {
-    bool operator()(const displ_event& l, const displ_event& r) const {
-      return l.pressure_cap() > r.pressure_cap();  
-    }
-  };
-
-  template<typename Comparator>
+  template<bool ascending>
   class displ_queue
   {
-    std::multiset<displ_event, Comparator> set_;
+    struct comparator
+    {
+      bool operator()(const displ_event& l, const displ_event& r) const {
+        return std::conditional_t<ascending, std::less<double>, std::greater<double>>{}(l.pressure_cap(), r.pressure_cap());
+      }
+    };
+
+    std::multiset<displ_event, comparator> set_;
 
   public:
     void insert(displ_elem elem, std::size_t local_idx, double r_cap) {

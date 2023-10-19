@@ -33,9 +33,17 @@
 #endif
 
 
+// namespace dpl {
+//   template<typename Derived>
+//   struct key_interface {
+//   }
+// }
 
 #define def_static_key(name) \
-  inline constexpr struct name##_t {} name;
+  inline constexpr struct name##_t { \
+    auto& operator()(auto& s, const auto i) const { return s(*this, i); } \
+    auto& operator()(auto* s, const auto i) const { return (*s)(*this, i); } \
+  } name;
 
 namespace dpl
 {
@@ -113,11 +121,25 @@ namespace dpl
   public:
     strong_vector() = default;
 
-    explicit strong_vector(std::size_t size)
-      : uptr_{std::make_unique<ValueType[]>(size)} {}
+    template <std::integral T>
+    explicit strong_vector(strong_integer<T, KeyTag> size)
+      : uptr_{std::make_unique<ValueType[]>(*size)} {}
 
-    void resize(std::size_t size) {
-      uptr_ = std::make_unique<ValueType[]>(size);
+    template <std::integral T>
+    explicit strong_vector(strong_integer<T, KeyTag> size, ValueType value)
+      : strong_vector{size} {
+      std::fill_n(uptr_.get(), *size, value);
+    }
+
+    template <std::integral T>
+    void resize(strong_integer<T, KeyTag> size) {
+      uptr_ = std::make_unique<ValueType[]>(*size);
+    }
+
+    template <std::integral T>
+    void resize(strong_integer<T, KeyTag> size, ValueType value) {
+      resize(size);
+      std::fill_n(uptr_.get(), *size, value);
     }
 
     template <std::integral T>
@@ -143,16 +165,9 @@ namespace dpl
   public:
     strong_vector() = default;
 
-    explicit strong_vector(std::size_t size)
-      : vec_(size) {}
-
     template <std::integral T>
     explicit strong_vector(strong_integer<T, KeyTag> size)
       : vec_(*size) {}
-
-    void resize(std::size_t size) {
-      vec_.resize(size);
-    }
 
     template <std::integral T>
     auto operator[](strong_integer<T, KeyTag> index) {
@@ -169,7 +184,8 @@ namespace dpl
   class strong_vector<KeyTag, ValueTag, ValueType> : public strong_vector<KeyTag, strong_integer<ValueType, ValueTag>> {};
 
 
-  // constexpr std::size_t operator "" _uz (std::size_t x) { return x; }
+
+
 
   template <typename... T>
   constexpr bool always_false = false;

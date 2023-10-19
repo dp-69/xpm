@@ -122,9 +122,6 @@ namespace dpl::graph
 
     helper::smart_pool<et_traits::node> et_pool_;
 
-    /**
-     * \brief dfs for et-only, fast direct etnte
-     */
     void init_with_dfs(dc_graph& g, dc_properties props) {
       g_ = &g;
       props_ = props;
@@ -177,8 +174,6 @@ namespace dpl::graph
     }    
 
 
-    #ifdef ET_AS_AUG_AVL
-    #else
     edge_t find_replacement(et_ptr hdr_a, et_ptr hdr_b) {
       if (
         et_algo::node_height(et_nt::get_parent(hdr_a)) <
@@ -254,7 +249,6 @@ namespace dpl::graph
     //     ++iter_ba;
     //   }
     // }
-    #endif
 
     /**
      * \return true if reconnected
