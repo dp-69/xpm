@@ -43,7 +43,10 @@
   inline constexpr struct name##_t { \
     auto& operator()(auto& s, const auto i) const { return s(*this, i); } \
     auto& operator()(auto* s, const auto i) const { return (*s)(*this, i); } \
-  } name;
+  } name;  // NOLINT(bugprone-macro-parentheses)
+
+
+
 
 namespace dpl
 {

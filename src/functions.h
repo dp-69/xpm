@@ -40,15 +40,13 @@ namespace xpm
     auto norm = dir.normalise();
     
     return {
-      asin(norm.z())/3.141592654*180.0, 
+      asin(norm.z())/std::numbers::pi*180.0, 
       0.0f,                                                  
-      (atan2(-norm.x(), norm.y())/3.141592654*180.0)      
+      (atan2(-norm.x(), norm.y())/std::numbers::pi*180.0)      
     };
   }
   
   std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
-    using namespace attribs;
-    
     vtkNew<vtkPolyData> polydata;
       
     vtkNew<vtkSphereSource> cylinder;
@@ -84,10 +82,10 @@ namespace xpm
       
     vtkNew<vtkPoints> points;
       
-    for (idx1d_t i = 0; i < pnm.node_count(); ++i) {
-      points->InsertNextPoint(pnm.node_[pos][i]);
-      scale_array->InsertNextTuple1(pnm.node_[r_ins][i]);
-      color_array->InsertNextTuple1(color_map(macro_idx_t{i}));
+    for (macro_idx_t i{0}; i < pnm.node_count(); ++i) {
+      points->InsertNextPoint(attrib::pos(pnm, i));
+      scale_array->InsertNextTuple1(attrib::r_ins(pnm, i));
+      color_array->InsertNextTuple1(color_map(i));
     }
       
     polydata->SetPoints(points);
@@ -107,8 +105,6 @@ namespace xpm
   }
 
   std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(const pore_network& pn, vtkLookupTable* lut, const auto& color_map) {
-    using namespace attribs;
-
     vtkNew<vtkPolyData> polydata;
       
     vtkNew<vtkCylinderSource> cylinder;
@@ -121,8 +117,6 @@ namespace xpm
     throat_glyphs->SetSourceConnection(cylinder->GetOutputPort());
     throat_glyphs->SetInputData(polydata);
     
-                     
-
     vtkNew<vtkFloatArray> orient_array;
     orient_array->SetName("orient");
     orient_array->SetNumberOfComponents(3);
@@ -138,10 +132,6 @@ namespace xpm
     polydata->GetPointData()->AddArray(scale_array);
     throat_glyphs->SetScaleArray(scale_array->GetName());
     throat_glyphs->SetScaleModeToScaleByVectorComponents();
-
-
-
-      
       
 
     vtkNew<vtkFloatArray> color_array;
@@ -156,20 +146,17 @@ namespace xpm
 
     vtkNew<vtkPoints> points;
 
+    
+
+    using namespace attrib;
     for (std::size_t i = 0, count = pn.throat_count(); i < count; ++i)
-      if (auto [l, r] = pn.throat_[adj][i];
-        /*pnm.inner_node(l) && */pn.inner_node(r)) {
-        auto& n0_pos = pn.node_[pos][*l];
-
-        points->InsertNextPoint(n0_pos);
-        orient_array->InsertNextTuple(angles_for_j_norm(pn.node_[pos][*r] - n0_pos));
-
-        scale_array->InsertNextTuple(dpl::vector3d{
-          pn.throat_[r_ins][i],
-          (pn.node_[pos][*r] - n0_pos).length(),
-          pn.throat_[r_ins][i]
-        });
-
+      if (auto [l, r] = adj(pn, i); pn.inner_node(r)) {
+        auto& l_pos = pos(pn, l);
+        auto lr_vec = pos(pn, r) - l_pos;
+        
+        points->InsertNextPoint(l_pos);
+        orient_array->InsertNextTuple(angles_for_j_norm(lr_vec));
+        scale_array->InsertNextTuple(dpl::vector3d{r_ins(pn, i), lr_vec.length(), r_ins(pn, i)});
         color_array->InsertNextTuple1(color_map(i));
       }
 
@@ -177,7 +164,6 @@ namespace xpm
       
     auto actor = vtkSmartPointer<vtkActor>::New();
     actor->SetMapper(throat_glyphs);
-      
 
     actor->GetProperty()->SetSpecularColor(1, 1, 1);
     actor->GetProperty()->SetSpecular(0);
@@ -186,13 +172,10 @@ namespace xpm
     actor->GetProperty()->SetDiffuse(0.9);
 
       
-      
     vtkNew<vtkNamedColors> colors;
     actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
     return {actor, color_array};        
   }
-
-  
 
 
   namespace test
@@ -232,9 +215,9 @@ namespace xpm
 
       auto g = GenerateGraph();
 
-      dc_properties props{g};
+      dc_traits props{g};
 
-      dc_context<dc_properties> context;
+      dc_context<dc_traits> context;
 
       context.init_with_dfs(g, props);
 
@@ -257,10 +240,10 @@ namespace xpm
         for (int i = 0; i < g.vertex_count(); ++i) {
           auto hdr = et_algo::get_header(props.get_entry(i));
 
-          auto v_ref = dc_properties::get_vertex(
+          auto v_ref = dc_traits::get_vertex(
             *std::ranges::find_if(
               range<et_traits>(hdr),
-              dc_properties::is_loop_edge));
+              dc_traits::is_loop_edge));
 
           std::cout << fmt::format("vertex {} : root {}\n", i, v_ref);
         }
@@ -342,7 +325,7 @@ namespace xpm
       t0 = system_clock::now();
 
       for (int i = 0; i < total_size; i++) {
-        dpl::graph::dc_properties::set_vertex(&input[i], i);
+        dpl::graph::dc_traits::set_vertex(&input[i], i);
         algo::push_back(header_a, &input[i]);
       }
 

@@ -113,7 +113,6 @@ namespace xpm
     pore_network pn_;
     image_data img_;
     pore_network_image pni_{pn_, img_};
-    // occupancy_arrays occupancy_arrays_;
 
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
@@ -544,7 +543,7 @@ namespace xpm
       }
 
 
-      using eq_tr = hydraulic_properties::equilateral_triangle_properties;
+      using eq_tr = hydraulic_properties::equilateral_triangle;
 
       {
         using namespace std;
@@ -552,12 +551,12 @@ namespace xpm
         auto min_r_cap_throat = numeric_limits<double>::max();
 
         for (size_t i{0}; i < pn_.throat_count(); ++i)
-          if (auto [l, r] = pn_.throat_[attribs::adj][i]; pn_.inner_node(r) && pni_.connected(l))
-            min_r_cap_throat = min(min_r_cap_throat, pn_.throat_[attribs::r_ins][i]);
+          if (auto [l, r] = pn_.throat_[attrib::adj][i]; pn_.inner_node(r) && pni_.connected(l))
+            min_r_cap_throat = min(min_r_cap_throat, pn_.throat_[attrib::r_ins][i]);
 
         pc_axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
-          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attribs::r_ins)))))),
+          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attrib::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
             settings_.darcy_pc.empty() ? 0 : settings_.darcy_pc.front().y()))))*1.01
@@ -613,7 +612,7 @@ namespace xpm
             }
           });
 
-          using namespace attribs;
+          using namespace attrib;
 
           for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
             if (pni_.connected(i) && state.config(pni_.net(i)).phase() == phase_config::phase1())
@@ -865,7 +864,7 @@ namespace xpm
         assembly->AddPart(actor);
         
         std::tie(actor, throat_colors) = CreateThroatActor(pn_, lut_pressure_, [&](std::size_t i) {
-          auto [l, r] = pn_.throat_[attribs::adj][i];
+          auto [l, r] = pn_.throat_[attrib::adj][i];
 
           return pni_.connected(l)
             ? /*0*/ (pressure[pni_.net(l)] + pressure[pni_.net(r)])/2

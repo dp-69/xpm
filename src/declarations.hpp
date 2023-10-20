@@ -141,7 +141,7 @@ namespace xpm
 
   namespace hydraulic_properties
   {
-    struct equilateral_triangle_properties
+    struct equilateral_triangle
     {
       static inline constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
       static inline constexpr auto beta = std::numbers::pi/3/2;
@@ -150,17 +150,9 @@ namespace xpm
 
       static constexpr double sqr(double x) { return x*x; }
 
-      static constexpr double area(double r_ins = 1) {
-        return 3*sqrt_3*sqr(r_ins);
-      }
-
-      static constexpr double perimeter(double r_ins = 1) {
-        return 6*sqrt_3*r_ins;
-      }
-
-      static constexpr auto shape_factor() {
-        return area()/sqr(perimeter());
-      }
+      static constexpr double area(double r_ins = 1) { return 3*sqrt_3*sqr(r_ins); }
+      static constexpr double perimeter(double r_ins = 1) { return 6*sqrt_3*r_ins; }
+      static constexpr auto shape_factor() { return area()/sqr(perimeter()); }
 
       // k*G, k - coefficient, G - shape factor
       static double conductance_single(double area = 1, double viscosity = 1) {
@@ -175,15 +167,6 @@ namespace xpm
           + 0.28*0.0481125224325
           )/3.0;
       }
-
-      // static double r_cap_collapse(double theta_adv, double r_ins = 1) {
-      //   return r_ins*1.73205080757/(1.73205080757*cos(theta_adv) - sin(theta_adv));
-      // }
-
-      // static double r_cap_piston_no_films_valvatne(double theta, double r_ins = 1) {
-      //   static constexpr auto sqrt_pi_G = 0.3887800753890535401856827809473435907176788021745640816548206175;
-      //   return r_ins/std::cos(theta)/(1 + 2*sqrt_pi_G);
-      // }
 
       static constexpr bool has_films(double theta_rec) {
         return theta_rec < std::numbers::pi/3;
@@ -204,11 +187,11 @@ namespace xpm
         );
       }
 
-      static double r_cap_piston_with_films(double theta_rec, double r_ins = 1) {  // TODO: replace with Valvatne
-        return r_ins/(std::cos(theta_rec) + 0.759835685652*std::sqrt(1.04719755120 - theta_rec + std::cos(theta_rec)*std::sin(theta_rec)));          
+      static double r_cap_piston_with_films(double theta, double r_ins = 1) {  // TODO: replace with Valvatne
+        return r_ins/(std::cos(theta) + 0.759835685652*std::sqrt(1.04719755120 - theta + std::cos(theta)*std::sin(theta)));          
       }
 
-      static double r_cap_piston_with_films_valvatne(double theta, double r_ins = 1) {
+      static double r_cap_piston_with_films_valvatne_full(double theta, double r_ins = 1) {
         using namespace std;
 
         auto cos_theta = cos(theta);
@@ -219,7 +202,15 @@ namespace xpm
 
         auto D = S1 - 2*S2*cos_theta + S3;
 
+        return r_ins/(1 + sqrt(1 + 4*shape_factor()*D/sqr(cos_theta)))/cos_theta;
         // return r_ins*cos_theta*(-1 + sqrt(1 + 4*G*D/sqr(cos_theta)))/(4*D*G);
+      }
+
+      static double r_cap_piston_with_films_valvatne(double theta, double r_ins = 1) {
+        using namespace std;
+
+        auto cos_theta = cos(theta);
+        auto D = corners*(numbers::pi/2 - cos_theta*cos(theta + beta)/sin_beta - theta - beta);
 
         return r_ins/(1 + sqrt(1 + 4*shape_factor()*D/sqr(cos_theta)))/cos_theta;
       }
@@ -448,7 +439,7 @@ namespace xpm
   }
 
   
-  namespace attribs {
+  namespace attrib {
     def_static_key(pos)
     def_static_key(r_ins)
     def_static_key(adj)

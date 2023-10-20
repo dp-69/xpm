@@ -5,7 +5,7 @@
 
 namespace dpl::graph
 {
-  class dc_properties
+  class dc_traits
   {
     using et_ptr = et_traits::node_ptr;
     using et_cptr = et_traits::const_node_ptr;
@@ -16,9 +16,9 @@ namespace dpl::graph
     const dc_graph* g_;
 
   public:
-    dc_properties() = default;
+    dc_traits() = default;
 
-    explicit dc_properties(const dc_graph& graph)
+    explicit dc_traits(const dc_graph& graph)
       : g_(&graph) {}
 
     static edge_desc get_directed_edge(et_cptr n) {

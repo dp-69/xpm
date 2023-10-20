@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dc_properties.hpp"
+#include "dc_traits.hpp"
 
 #include <boost/graph/two_bit_color_map.hpp>
 #include <boost/property_map/function_property_map.hpp>
@@ -111,7 +111,7 @@ namespace dpl::graph
     using edge_t = dc_graph::edge_descriptor;
 
     dc_graph* g_;
-    dc_properties props_; // TODO: INIT
+    dc_traits traits_; // TODO: INIT
     // std::unique_ptr<std::list<edge_t>[]> nte_edges;
 
     static inline constexpr auto null_edge_ = std::numeric_limits<edge_t>::max();
@@ -122,9 +122,9 @@ namespace dpl::graph
 
     helper::smart_pool<et_traits::node> et_pool_;
 
-    void init_with_dfs(dc_graph& g, dc_properties props) {
+    void init_with_dfs(dc_graph& g, dc_traits props) {
       g_ = &g;
-      props_ = props;
+      traits_ = props;
 
       // saved_replacement_indices.reserve(g.edge_count());
 
@@ -139,38 +139,37 @@ namespace dpl::graph
       };
 
       auto tree_edge_stack = std::vector<et_ptr>(vertex_count + 1);     
-      euler_tour_visitor<dc_graph, dc_properties> visitor{props_, &et_pool_, tree_edge_stack.data()};
+      euler_tour_visitor<dc_graph, dc_traits> visitor{traits_, &et_pool_, tree_edge_stack.data()};
 
       for (std::size_t i = 0; i < g.vertex_count(); ++i) {
         if (color_map[i] != color_t::two_bit_black) {
           depth_first_visit(g, i, visitor, color_map); // tree edges
 
-          for (et_ptr et : range<et_nt>(et_algo::get_header(props_.get_entry(i))))
-            if (dc_properties::is_loop_edge(et))
-              for (edge_t de : g.edges(dc_properties::get_vertex(et)))
-                if (props_.is_null_entry(de)) // non-tree edges
-                  props_.set_non_tree_edge(de);
+          for (et_ptr et : range<et_nt>(et_algo::get_header(traits_.get_entry(i))))
+            if (dc_traits::is_loop_edge(et))
+              for (edge_t de : g.edges(dc_traits::get_vertex(et)))
+                if (traits_.is_null_entry(de)) // non-tree edges
+                  traits_.set_non_tree_edge(de);
         }
       }
     }
 
     void adjacent_edges_remove(vertex_t v, const dc_graph& g) {
       for (edge_t de : g.edges(v))
-        if (!props_.is_null_entry(de) && !props_.is_tree_edge(de))
+        if (!traits_.is_null_entry(de) && !traits_.is_tree_edge(de))
           non_tree_edge_remove(de);
 
       for (edge_t de : g.edges(v))
-        if (!props_.is_null_entry(de))
+        if (!traits_.is_null_entry(de))
           tree_edge_split_and_reconnect(de);
 
-      props_.set_entry(v, nullptr);
+      traits_.set_entry(v, nullptr);
       // TODO: release vertex?
     }
 
     void non_tree_edge_remove(edge_t ab) {
-      edge_t ba = opposite(ab, *g_);
-      props_.set_null_entry(ab);
-      props_.set_null_entry(ba);
+      traits_.set_null_entry(ab);
+      traits_.set_null_entry(opposite(ab, *g_));
     }    
 
 
@@ -179,19 +178,19 @@ namespace dpl::graph
         et_algo::node_height(et_nt::get_parent(hdr_a)) <
         et_algo::node_height(et_nt::get_parent(hdr_b)))
         for (et_ptr et_entry : range<et_nt>(hdr_a)) {
-          if (dc_properties::is_loop_edge(et_entry)) {
-            for (edge_t ab : g_->edges(dc_properties::get_vertex(et_entry)))
-              if (!props_.is_null_entry(ab) && !props_.is_tree_edge(ab))
-                if (et_algo::get_header(props_.get_entry(target(ab, *g_))) == hdr_b)
+          if (dc_traits::is_loop_edge(et_entry)) {
+            for (edge_t ab : g_->edges(dc_traits::get_vertex(et_entry)))
+              if (!traits_.is_null_entry(ab) && !traits_.is_tree_edge(ab))
+                if (et_algo::get_header(traits_.get_entry(target(ab, *g_))) == hdr_b)
                   return ab;
           }
         }
       else
         for (et_ptr et_entry : range<et_nt>(hdr_b)) {
-          if (dc_properties::is_loop_edge(et_entry)) {
-            for (edge_t ba : g_->edges(dc_properties::get_vertex(et_entry)))
-              if (!props_.is_null_entry(ba) && !props_.is_tree_edge(ba))
-                if (et_algo::get_header(props_.get_entry(target(ba, *g_))) == hdr_a)
+          if (dc_traits::is_loop_edge(et_entry)) {
+            for (edge_t ba : g_->edges(dc_traits::get_vertex(et_entry)))
+              if (!traits_.is_null_entry(ba) && !traits_.is_tree_edge(ba))
+                if (et_algo::get_header(traits_.get_entry(target(ba, *g_))) == hdr_a)
                   return opposite(ba, *g_);
           }
         }
@@ -256,8 +255,8 @@ namespace dpl::graph
     bool tree_edge_split_and_reconnect(edge_t ab) { // TODO: check release of entries
       auto ba = opposite(ab, *g_);
 
-      et_ptr et_ab = props_.get_tree_edge_entry(ab);
-      et_ptr et_ba = props_.get_tree_edge_entry(ba);
+      et_ptr et_ab = traits_.get_tree_edge_entry(ab);
+      et_ptr et_ba = traits_.get_tree_edge_entry(ba);
       
       et_ptr et_hdr_a = et_algo::get_header(et_ab);
       et_ptr et_hdr_b = et_pool_.acquire();
@@ -270,8 +269,8 @@ namespace dpl::graph
         et_algo::swap_tree(et_hdr_a, et_hdr_b);        
       }      
                                                                 
-      props_.set_null_entry(ab);
-      props_.set_null_entry(ba);
+      traits_.set_null_entry(ab);
+      traits_.set_null_entry(ba);
 
 
 
@@ -313,14 +312,14 @@ namespace dpl::graph
       if (ab = find_replacement(et_hdr_a, et_hdr_b); ab != null_edge_) {                                
         ba = opposite(ab, *g_);        
 
-        et_ptr replace_a_entry = props_.get_ordering_vertex_entry(ab);
-        et_ptr replace_b_entry = props_.get_ordering_vertex_entry(ba);                                        
+        et_ptr replace_a_entry = traits_.get_ordering_vertex_entry(ab);
+        et_ptr replace_b_entry = traits_.get_ordering_vertex_entry(ba);                                        
 
         Props::set_directed_edge(et_ab, ab);
         Props::set_directed_edge(et_ba, ba);
 
-        props_.set_tree_edge_entry(ab, et_ab);
-        props_.set_tree_edge_entry(ba, et_ba);
+        traits_.set_tree_edge_entry(ab, et_ab);
+        traits_.set_tree_edge_entry(ba, et_ba);
 
         // et
         cyclic<et_algo>::cut(et_hdr_a, replace_a_entry);
