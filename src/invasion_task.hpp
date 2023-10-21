@@ -188,8 +188,8 @@ namespace xpm {
     double total_pore_volume_;
 
     dpl::graph::dc_graph g_;
-    std::unordered_map<dpl::graph::dc_graph::edge_descriptor, std::size_t> de_to_throat_idx_;
-    std::unique_ptr<dpl::graph::dc_graph::edge_descriptor[]> throat_idx_to_de_;
+    std::unordered_map<dpl::graph::dc_graph::edge_t, std::size_t> de_to_throat_idx_;
+    std::unique_ptr<dpl::graph::dc_graph::edge_t[]> throat_idx_to_de_;
 
     dpl::graph::dc_context<dpl::graph::dc_traits> dc_context_;
 
@@ -305,7 +305,7 @@ namespace xpm {
 
       net_idx_t outlet_idx = pni_->connected_count();
       dc_traits traits{g_};
-      et_traits::node_ptr outlet_entry = traits.get_entry(*outlet_idx); 
+      et_traits::node_ptr outlet_entry = traits.get_entry(dc_graph::vertex_t(*outlet_idx)); 
 
       auto freeze_cluster = [&](et_traits::node_ptr hdr) {
         auto area_corners = eq_tr::area_corners(theta, state_.r_cap_global);
@@ -316,7 +316,7 @@ namespace xpm {
 
             traits.set_entry(v, nullptr);
 
-            if (net_idx_t net_idx{v}; state_.config(net_idx).layout() == phase_config::bulk_films()) {  // NOLINT(clang-diagnostic-float-equal)
+            if (net_idx_t net_idx{*v}; state_.config(net_idx).layout() == phase_config::bulk_films()) {  // NOLINT(clang-diagnostic-float-equal)
               state_.local(net_idx) = state_.r_cap_global;
 
               auto macro_idx = pni_->macro(net_idx);
@@ -329,7 +329,7 @@ namespace xpm {
             for (auto vu : g_.edges(v)) {
               auto t_idx = de_to_throat_idx_[vu]; // TODO: CHECK edge is MACRO-MACRO throat
 
-              if (pni_->is_macro(net_idx_t{target(vu, g_)})
+              if (pni_->is_macro(net_idx_t{*target(vu, g_)})
                 && state_.config(t_idx).layout() == phase_config::bulk_films()
                 && state_.mobile(t_idx)) {  // NOLINT(clang-diagnostic-float-equal)
 
@@ -439,7 +439,7 @@ namespace xpm {
         auto phase1_connected = [&] {
           for (auto [l, r] : pn_->throat_.span(adj))
             if (r == pn_->inlet() && pni_->connected(l)) // macro-inlet
-              if (traits.get_entry(*pni_->net(l)))
+              if (traits.get_entry(dc_graph::vertex_t(*pni_->net(l))))
                 return true;
 
           {
@@ -449,7 +449,7 @@ namespace xpm {
             for (k = 0; k < img_->dim().z(); ++k)
               for (j = 0; j < img_->dim().y(); ++j)
                 if (voxel_idx_t idx1d{img_->idx_map(0, j, k)}; img_->phase[idx1d] == presets::microporous) // darcy-inlet
-                  if (traits.get_entry(*pni_->net(idx1d)))
+                  if (traits.get_entry(dc_graph::vertex_t(*pni_->net(idx1d))))
                     return true;
           }
 
@@ -509,7 +509,7 @@ namespace xpm {
           auto macro_idx = macro_idx_t(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
           auto net_idx = pni_->net(macro_idx);
 
-          if (traits.get_entry(*net_idx)) { /* && et_algo::get_header(et) == et_algo::get_header(outlet_entry)*/
+          if (traits.get_entry(dc_graph::vertex_t(*net_idx))) { /* && et_algo::get_header(et) == et_algo::get_header(outlet_entry)*/
             state_.r_cap_global = std::max(r_cap, state_.r_cap_global);
             state_.config(net_idx) = phase_config{phase_config::phase0()};
             
@@ -518,7 +518,7 @@ namespace xpm {
             inv_volume_coef0 += vol;
 
             {
-              auto v = *net_idx;
+              dc_graph::vertex_t v(*net_idx);
 
               for (auto de : g_.edges(v))
                 if (!traits.is_null_entry(de) && !traits.is_tree_edge(de))
@@ -537,7 +537,7 @@ namespace xpm {
         else if (elem == displ_elem::throat) {
           auto [l, r] = adj(pn_, local_idx);
 
-          if (traits.get_entry(*pni_->net(l)) || (r != pn_->inlet() && traits.get_entry(*pni_->net(r)))) {   /* && et_algo::get_header(l_et) == outlet_hdr*/  /* && et_algo::get_header(r_et) == outlet_hdr*/
+          if (traits.get_entry(dc_graph::vertex_t(*pni_->net(l))) || (r != pn_->inlet() && traits.get_entry(dc_graph::vertex_t(*pni_->net(r))))) {   /* && et_algo::get_header(l_et) == outlet_hdr*/  /* && et_algo::get_header(r_et) == outlet_hdr*/
             state_.r_cap_global = std::max(r_cap, state_.r_cap_global);
             state_.config(local_idx) = phase_config{phase_config::phase0()};
             
@@ -614,9 +614,11 @@ namespace xpm {
             explored_throat[i] = true;
           }
 
+      using namespace dpl::graph;
+
       net_idx_t outlet_idx = pni_->connected_count();
-      dpl::graph::dc_traits traits{g_};
-      dpl::graph::et_traits::node_ptr outlet_entry = traits.get_entry(*outlet_idx);
+      dc_traits traits{g_};
+      et_traits::node_ptr outlet_entry = traits.get_entry(dc_graph::vertex_t(*outlet_idx));
 
       dpl::vector3d inv_volume_coefs{0};
       idx1d_t inv_darcy_count{0};
@@ -755,9 +757,9 @@ namespace xpm {
           inv_volume_coefs[2] -= volume(pn_, macro_idx)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, macro_idx));
 
           
-
-          for (auto ab : g_.edges(*net_idx))
-            if (net_idx_t b_net_idx{target(ab, g_)}; b_net_idx != outlet_idx) // not outlet
+          
+          for (auto ab : g_.edges(dc_graph::vertex_t(*net_idx)))
+            if (net_idx_t b_net_idx{*target(ab, g_)}; b_net_idx != outlet_idx) // not outlet
               if (pni_->is_macro(b_net_idx)) { // macro (throat)
                 if (auto t_idx = de_to_throat_idx_[ab]; !explored_throat[t_idx]) {
                   queue.insert(t_idx, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, t_idx)));
@@ -783,8 +785,8 @@ namespace xpm {
 
           ++inv_darcy_count;
 
-          for (auto ab : g_.edges(*net_idx))
-            if (net_idx_t b_net_idx{target(ab, g_)}; b_net_idx != outlet_idx) // not outlet
+          for (auto ab : g_.edges(dc_graph::vertex_t(*net_idx)))
+            if (net_idx_t b_net_idx{*target(ab, g_)}; b_net_idx != outlet_idx) // not outlet
               if (!explored[b_net_idx])
                 if (pni_->is_macro(b_net_idx)) { // macro
                   auto b_macro_idx = pni_->macro(b_net_idx);
@@ -796,7 +798,7 @@ namespace xpm {
                   explored[b_net_idx] = true;
                 }
         }
-        else { // throa
+        else { // throat
           auto [l, r] = adj(pn_, local_idx);
 
           state_.config(local_idx) = phase_config::phase1_bulk_films();

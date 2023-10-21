@@ -54,10 +54,10 @@ namespace dpl::hypre
     }
   };
 
-  template<typename Projection = std::identity>
+  template<typename Proj = std::identity>
   class ls_known_storage_builder
   {
-    Projection proj_;
+    Proj proj_;
 
     HYPRE_BigInt nrows_;
     size_t nvalues_;
@@ -67,7 +67,7 @@ namespace dpl::hypre
     std::unique_ptr<HYPRE_Int[]> off_relative_;
 
   public:
-    explicit ls_known_storage_builder(HYPRE_BigInt nrows, Projection proj = {})
+    explicit ls_known_storage_builder(HYPRE_BigInt nrows, Proj proj = {})
       : proj_(proj) {
       nrows_ = nrows;
       lks_.ncols = std::make_unique<HYPRE_Int[]>(nrows);

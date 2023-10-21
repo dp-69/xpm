@@ -683,6 +683,14 @@ namespace xpm
     total_idx_t total(macro_idx_t i) const { return total_idx_t{*i}; }
     total_idx_t total(voxel_idx_t i) const { return total_idx_t{*pn_->node_count() + *i}; }
 
+    struct vertex_proj_t
+    {
+      const pore_network_image* pni;
+
+      auto operator()(const net_idx_t i) const { return dpl::graph::dc_graph::vertex_t{*i}; }
+      auto operator()(const auto i) const { return (*this)(pni->net(i)); }
+    };
+
   public:
     pore_network_image(pore_network& pn, image_data& img)
       : pn_(&pn), img_(&img) {}
@@ -878,12 +886,13 @@ namespace xpm
       return {filtered_count, std::move(mapping)};
     }
 
+    
 
     template <bool Outlet = false>
     std::tuple<
       dpl::graph::dc_graph,
-      std::unordered_map<dpl::graph::dc_graph::edge_descriptor, std::size_t>,
-      std::unique_ptr<dpl::graph::dc_graph::edge_descriptor[]>>
+      std::unordered_map<dpl::graph::dc_graph::edge_t, std::size_t>,
+      std::unique_ptr<dpl::graph::dc_graph::edge_t[]>>
     generate_dc_graph() const {
       using namespace dpl::graph;
       using namespace presets;
@@ -893,17 +902,17 @@ namespace xpm
       if constexpr (Outlet)
         ++vertex_count;
 
-      graph_generator<net_idx_t> gen(*vertex_count);
-      std::unordered_map<dc_graph::edge_descriptor, std::size_t> de_to_throat;
-      auto throat_to_de = std::make_unique<dc_graph::edge_descriptor[]>(pn_->throat_count());
+      graph_generator gen(*vertex_count, vertex_proj_t{this});
+      std::unordered_map<dc_graph::edge_t, std::size_t> de_to_throat;
+      auto throat_to_de = std::make_unique<dc_graph::edge_t[]>(pn_->throat_count());
 
       for (auto [l, r] : pn_->throat_.span(attrib::adj))
         if (connected(l))
           if (pn_->inner_node(r)) // macro-macro
-            gen.reserve(net(l), net(r));
+            gen.reserve(l, r);
           else if constexpr (Outlet) {
             if (pn_->outlet() == r) // macro-outlet
-              gen.reserve(net(l), vertex_count - 1);
+              gen.reserve(l, vertex_count - 1);
           }
 
       {
@@ -915,17 +924,17 @@ namespace xpm
           for (j = 0; j < img_->dim().y(); ++j) {
             if constexpr (Outlet) 
               if (voxel_idx_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
-                gen.reserve(net(adj_idx1d), vertex_count - 1);
+                gen.reserve(adj_idx1d, vertex_count - 1);
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
-                  gen.reserve(net(img_->velem[idx1d]), net(idx1d));
+                  gen.reserve(img_->velem[idx1d], idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
                     if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
-                      gen.reserve(net(idx1d), net(adj_idx1d));
+                      gen.reserve(idx1d, adj_idx1d);
                 });
               }
           }
@@ -937,14 +946,14 @@ namespace xpm
       for (std::size_t i{0} ; i < pn_->throat_count(); ++i)
         if (auto [l, r] = attrib::adj(pn_, i); connected(l))
           if (pn_->inner_node(r)) { // macro-macro 
-            auto [lr, rl] = gen.set(net(l), net(r));
+            auto [lr, rl] = gen.set(l, r);
             de_to_throat[lr] = i;
             de_to_throat[rl] = i;
             throat_to_de[i] = lr;
           }
           else if constexpr (Outlet) {
             if (pn_->outlet() == r) // macro-outlet
-              gen.set(net(l), vertex_count - 1);
+              gen.set(l, vertex_count - 1);
           }
 
       {
@@ -956,17 +965,17 @@ namespace xpm
           for (j = 0; j < img_->dim().y(); ++j) {
             if constexpr (Outlet)
               if (voxel_idx_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
-                gen.set(net(adj_idx1d), vertex_count - 1);
+                gen.set(adj_idx1d, vertex_count - 1);
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
-                  gen.set(net(img_->velem[idx1d]), net(idx1d));
+                  gen.set(img_->velem[idx1d], idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
                     if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
-                      gen.set(net(idx1d), net(adj_idx1d));
+                      gen.set(idx1d, adj_idx1d);
                 });
               }
           }

@@ -107,8 +107,8 @@ namespace dpl::graph
     using et_ptr = et_traits::node_ptr;
     using et_nt = et_traits;
 
-    using vertex_t = dc_graph::vertex_descriptor;
-    using edge_t = dc_graph::edge_descriptor;
+    using vertex_t = dc_graph::vertex_t;
+    using edge_t = dc_graph::edge_t;
 
     dc_graph* g_;
     dc_traits traits_; // TODO: INIT
@@ -130,19 +130,16 @@ namespace dpl::graph
 
       auto vertex_count = num_vertices(g);                 
 
-      using color_t = boost::two_bit_color_type;
-      auto color_uptr = std::make_unique<color_t[]>(vertex_count);
+      auto color_uptr = std::make_unique<boost::two_bit_color_type[]>(vertex_count);
 
-      boost::iterator_property_map color_map{
-        color_uptr.get(),
-        boost::identity_property_map{}
-      };
+      auto color_map = boost::make_function_property_map<dc_graph::vertex_t>(
+        [&](dc_graph::vertex_t v) -> boost::two_bit_color_type& { return color_uptr[*v]; });
 
       auto tree_edge_stack = std::vector<et_ptr>(vertex_count + 1);     
       euler_tour_visitor<dc_graph, dc_traits> visitor{traits_, &et_pool_, tree_edge_stack.data()};
 
-      for (std::size_t i = 0; i < g.vertex_count(); ++i) {
-        if (color_map[i] != color_t::two_bit_black) {
+      for (dc_graph::vertex_t i{0}; i < g.vertex_count(); ++i) {
+        if (color_map[i] != boost::two_bit_color_type::two_bit_black) {
           depth_first_visit(g, i, visitor, color_map); // tree edges
 
           for (et_ptr et : range<et_nt>(et_algo::get_header(traits_.get_entry(i))))

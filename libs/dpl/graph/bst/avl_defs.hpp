@@ -127,18 +127,18 @@ namespace dpl::graph
     //   tag = reinterpret_cast<size_t>(p) | bit | (tag & balance);
     // }
     
-    template <std::integral Int> 
-    static Int get_value(std::size_t tag) {
+    template <std::integral T> 
+    static T get_value(std::size_t tag) {
       return (tag & ptr) >> 3;  // NOLINT(performance-no-int-to-ptr)
     }
 
-    template <std::integral Int> 
-    static void set_value(std::size_t& tag, Int v) {
+    template <std::integral T> 
+    static void set_value(std::size_t& tag, T v) {
       tag = v << 3 | (tag & balance);
     }
 
-    template <std::integral Int> 
-    static void set_value_bit(std::size_t& tag, Int v) {
+    template <std::integral T> 
+    static void set_value_bit(std::size_t& tag, T v) {
       tag = v << 3 | bit | (tag & balance);
     }
 

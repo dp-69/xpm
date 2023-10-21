@@ -565,8 +565,8 @@ namespace xpm
   };
 
   inline void crop(
-    const std::filesystem::path& src_p, dpl::vector3i src_size, dpl::vector3i src_origin,
-    const std::filesystem::path& dst_p, dpl::vector3i dst_size) {
+    const std::filesystem::path& src_p, const dpl::vector3i& src_size, const dpl::vector3i& src_origin,
+    const std::filesystem::path& dst_p, const dpl::vector3i& dst_size) {
 
     auto src_total_size = src_size.prod();
     auto dst_total_size = dst_size.prod();
@@ -591,17 +591,5 @@ namespace xpm
 
     std::ofstream os(dst_p);
     os.write(reinterpret_cast<char*>(dst.data()), dst_total_size);
-
-
-    // if (connected(idx1d) && filter(idx1d)) {
-    //   if (auto velem = img_->velem[idx1d]; velem && filter(velem)) // macro-darcy
-    //     builder.reserve(velem, idx1d);
-    //
-    //   dpl::sfor<3>([&](auto d) {
-    //     if (ijk[d] < img_->dim()[d] - 1)
-    //       if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == presets::microporous && filter(adj_idx1d)) // darcy-darcy
-    //         builder.reserve(idx1d, adj_idx1d);
-    //   });
-    // }
   }
 }

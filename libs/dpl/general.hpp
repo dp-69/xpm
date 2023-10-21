@@ -32,20 +32,11 @@
   #include <ranges>
 #endif
 
-
-// namespace dpl {
-//   template<typename Derived>
-//   struct key_interface {
-//   }
-// }
-
 #define def_static_key(name) \
   inline constexpr struct name##_t { \
     auto& operator()(auto& s, const auto i) const { return s(*this, i); } \
     auto& operator()(auto* s, const auto i) const { return (*s)(*this, i); } \
   } name;  // NOLINT(bugprone-macro-parentheses)
-
-
 
 
 namespace dpl
@@ -97,20 +88,20 @@ namespace dpl
   };
 
 
-  template <typename>
-  struct strong_traits {};
-
-  template <std::integral T>
-  struct strong_traits<T> {
-    static auto& get(const T& x) { return x; }
-    static auto& get(T& x) { return x; }
-  };
-
-  template <std::integral T, typename Tag>
-  struct strong_traits<strong_integer<T, Tag>> {
-    static auto& get(const strong_integer<T, Tag>& x) { return *x; }
-    static auto& get(strong_integer<T, Tag>& x) { return *x; }
-  };
+  // template <typename>
+  // struct strong_traits {};
+  //
+  // template <std::integral T>
+  // struct strong_traits<T> {
+  //   static auto& get(const T& x) { return x; }
+  //   static auto& get(T& x) { return x; }
+  // };
+  //
+  // template <std::integral T, typename Tag>
+  // struct strong_traits<strong_integer<T, Tag>> {
+  //   static auto& get(const strong_integer<T, Tag>& x) { return *x; }
+  //   static auto& get(strong_integer<T, Tag>& x) { return *x; }
+  // };
 
 
   template <typename...>
@@ -390,7 +381,10 @@ namespace dpl
   // }
 }
 
-
-
-
-
+template <std::integral T, typename Tag>
+struct std::hash<dpl::strong_integer<T, Tag>>
+{
+  std::size_t operator()(const dpl::strong_integer<T, Tag>& k) const {
+    return std::hash<T>()(*k);
+  }
+};

@@ -180,28 +180,28 @@ namespace xpm
 
   namespace test
   {
-    inline auto GenerateGraph() {
-      using namespace dpl::graph;
-
-      int vertex_count = 6;
-
-      std::pair<int, int> edges[] = {
-        {0, 1}, {1, 2}, {2, 0},
-        {3, 4}, {5, 2}, {5, 1}, {5, 0}
-      };
-
-      graph_generator gen(vertex_count);
-
-      for (auto [l, r] : edges)
-        gen.reserve(l, r);
-
-      gen.allocate();
-
-      for (auto [l, r] : edges)
-        gen.set(l, r);
-
-      return gen.acquire();
-    }
+    // inline auto GenerateGraph() {
+    //   using namespace dpl::graph;
+    //
+    //   int vertex_count = 6;
+    //
+    //   std::pair<int, int> edges[] = {
+    //     {0, 1}, {1, 2}, {2, 0},
+    //     {3, 4}, {5, 2}, {5, 1}, {5, 0}
+    //   };
+    //
+    //   graph_generator gen(vertex_count);
+    //
+    //   for (auto [l, r] : edges)
+    //     gen.reserve(l, r);
+    //
+    //   gen.allocate();
+    //
+    //   for (auto [l, r] : edges)
+    //     gen.set(l, r);
+    //
+    //   return gen.acquire();
+    // }
 
     inline void DFS_CHECK() {
       using namespace dpl::graph;
@@ -213,7 +213,8 @@ namespace xpm
       //   }
       // }
 
-      auto g = GenerateGraph();
+      dpl::graph::dc_graph g;
+      // auto g = GenerateGraph();
 
       dc_traits props{g};
 
@@ -237,7 +238,7 @@ namespace xpm
 
 
       auto print_clusters = [&]() {
-        for (int i = 0; i < g.vertex_count(); ++i) {
+        for (dc_graph::vertex_t i{0}; i < g.vertex_count(); ++i) {
           auto hdr = et_algo::get_header(props.get_entry(i));
 
           auto v_ref = dc_traits::get_vertex(
@@ -274,7 +275,7 @@ namespace xpm
 
       print_clusters();
 
-      for (std::size_t i = 0; i < g.vertex_count(); ++i)
+      for (dc_graph::vertex_t i{0}; i < g.vertex_count(); ++i)
         context.adjacent_edges_remove(i, g);
 
       std::cout << '\n';
@@ -324,9 +325,9 @@ namespace xpm
 
       t0 = system_clock::now();
 
-      for (int i = 0; i < total_size; i++) {
-        dpl::graph::dc_traits::set_vertex(&input[i], i);
-        algo::push_back(header_a, &input[i]);
+      for (dpl::graph::dc_graph::vertex_t i{0}; i < total_size; i++) {
+        dpl::graph::dc_traits::set_vertex(&input[*i], i);
+        algo::push_back(header_a, &input[*i]);
       }
 
       t1 = system_clock::now();
