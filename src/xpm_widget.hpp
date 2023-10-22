@@ -292,7 +292,7 @@ namespace xpm
           auto* axis_x = new QValueAxis;//static_cast<QValueAxis*>(chart_->axes(Qt::Horizontal)[0]);
           axis_x->setLabelFormat("%.2f");
           axis_x->setTitleText("Water saturation");
-          axis_x->setRange(0.0, 1);
+          axis_x->setRange(0, 1);
           chart->addAxis(axis_x, Qt::AlignBottom);
 
           pc_axis_y_ = new QLogValueAxis;//static_cast<QLogValueAxis*>(chart_->axes(Qt::Vertical)[0]);
@@ -602,7 +602,7 @@ namespace xpm
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
           
             for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (auto v_idx = voxel_idx_t{idx1d};
+              if (auto v_idx = voxel_t{idx1d};
                 pni_.connected(v_idx) && state.config(pni_.net(v_idx)).phase() == phase_config::phase1())
                 face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
               else
@@ -614,7 +614,7 @@ namespace xpm
 
           using namespace attrib;
 
-          for (macro_idx_t i{0}; i < pn_.node_count(); ++i)
+          for (macro_t i{0}; i < pn_.node_count(); ++i)
             if (pni_.connected(i) && state.config(pni_.net(i)).phase() == phase_config::phase1())
               macro_colors->SetTypedComponent(*i, 0,
                 map_satur(1.0 - eq_tr::area_corners(theta, state.r_cap(pni_.net(i)))/eq_tr::area(r_ins(pn_, i))));
@@ -756,7 +756,7 @@ namespace xpm
 
       using namespace presets;
 
-      dpl::strong_vector<net_tag, double> pressure;
+      dpl::strong_vector<net_t, double> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
       HYPRE_Int iters = 0;
 
@@ -768,7 +768,7 @@ namespace xpm
         is.seekg(0, std::ios_base::end);
         auto nrows = is.tellg()/sizeof(HYPRE_Complex);
         is.seekg(0, std::ios_base::beg);
-        pressure.resize(net_idx_t(nrows));
+        pressure.resize(net_t(nrows));
         is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));
       }
       else {
@@ -817,7 +817,7 @@ namespace xpm
           std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
           std::tie(decomposed_pressure, residual, iters) = dpl::hypre::mpi::load_values(nrows);
 
-          pressure.resize(net_idx_t(nrows));
+          pressure.resize(net_t(nrows));
 
           for (HYPRE_BigInt i = 0; i < nrows; ++i)
             pressure[mapping.backward[i]] = decomposed_pressure[i];
@@ -857,7 +857,7 @@ namespace xpm
         vtkSmartPointer<vtkActor> actor;
 
         std::tie(actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
-          [&](macro_idx_t i) {
+          [&](macro_t i) {
             return pni_.connected(i) ? /*0*/ pressure[pni_.net(i)] : std::numeric_limits<double>::quiet_NaN();
           });
 
@@ -884,7 +884,7 @@ namespace xpm
         img_glyph_mapper_.Init(scale_factor);
         {
           std::vector<bool> filter(*img_.size());
-          for (voxel_idx_t i{0}; i < img_.size(); ++i)
+          for (voxel_t i{0}; i < img_.size(); ++i)
             filter[*i] = img_.phase[i] == microporous;
 
           cout << "3D faces...";
@@ -902,8 +902,8 @@ namespace xpm
             idx1d_t i = 0;
             for (auto idx1d : face.GetIndices())
               face.GetColorArray()->SetTypedComponent(i++, 0, 
-                pni_.connected(voxel_idx_t{idx1d})
-                  ? /*0*/ pressure[pni_.net(voxel_idx_t{idx1d})]
+                pni_.connected(voxel_t{idx1d})
+                  ? /*0*/ pressure[pni_.net(voxel_t{idx1d})]
                   : std::numeric_limits<double>::quiet_NaN()
               );
 

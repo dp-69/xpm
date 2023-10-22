@@ -380,8 +380,9 @@ namespace xpm
 
 
 
-
-
+  // #define def_strong_type(name, value_type) \
+  //   struct name##_tag {}; \
+  //   using name##_t = dpl::strong_integer<value_type, name##_tag>;
 
   /**
    * \brief maximum node count
@@ -390,13 +391,13 @@ namespace xpm
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
   struct voxel_tag {};
-  using voxel_idx_t = dpl::strong_integer<idx1d_t, voxel_tag>;
+  using voxel_t = dpl::strong_integer<idx1d_t, voxel_tag>;
 
   struct macro_tag {};
-  using macro_idx_t = dpl::strong_integer<idx1d_t, macro_tag>;
+  using macro_t = dpl::strong_integer<idx1d_t, macro_tag>;
 
   struct net_tag {};
-  using net_idx_t = dpl::strong_integer<idx1d_t, net_tag>;
+  using net_t = dpl::strong_integer<idx1d_t, net_tag>;
 
   namespace voxel_property
   {
@@ -418,8 +419,8 @@ namespace xpm
       velem_t() : strong_integer(not_valid) {}
       constexpr explicit velem_t(const value_type v) : strong_integer(v) {}
 
-      constexpr operator macro_idx_t() const {
-        return macro_idx_t{value};
+      constexpr operator macro_t() const {
+        return macro_t{value};
       }
 
       explicit constexpr operator bool() const {
@@ -440,13 +441,13 @@ namespace xpm
 
   
   namespace attrib {
-    def_static_key(pos)
-    def_static_key(r_ins)
-    def_static_key(adj)
-    def_static_key(length)
-    def_static_key(length0)
-    def_static_key(length1)
-    def_static_key(volume)
+    def_attrib(pos)
+    def_attrib(r_ins)
+    def_attrib(adj)
+    def_attrib(length)
+    def_attrib(length0)
+    def_attrib(length1)
+    def_attrib(volume)
   }
 
   using disjoint_sets = boost::disjoint_sets_with_storage<
@@ -487,7 +488,7 @@ namespace xpm
   };
 
   inline auto idx_mapper(idx3d_t dim) {
-    return map_idx3_t<voxel_idx_t>{dim};
+    return map_idx3_t<voxel_t>{dim};
   }
   
   namespace parse
@@ -582,7 +583,7 @@ namespace xpm
 
     idx3d_t ijk;
     auto& [i, j, k] = ijk;
-    voxel_idx_t idx1d{0};
+    voxel_t idx1d{0};
 
     for (k = 0; k < dst_size.z(); ++k)
       for (j = 0; j < dst_size.y(); ++j)

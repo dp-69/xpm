@@ -109,10 +109,6 @@ namespace dpl::graph
       return vertex_count_;
     }
 
-    // auto vertices() const {
-    //   return std::ranges::subrange{vertex_iterator{0}, vertex_iterator(vertex_count_)};
-    // }
-
     auto edge_count() const {
       return edge_count_;
     }

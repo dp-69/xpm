@@ -32,7 +32,7 @@
   #include <ranges>
 #endif
 
-#define def_static_key(name) \
+#define def_attrib(name) \
   inline constexpr struct name##_t { \
     auto& operator()(auto& s, const auto i) const { return s(*this, i); } \
     auto& operator()(auto* s, const auto i) const { return (*s)(*this, i); } \
@@ -46,6 +46,7 @@ namespace dpl
   {
     // using difference_type = std::make_signed_t<T>;
     using value_type = T;
+    // using tag = Tag;
 
     value_type value;
 
@@ -107,42 +108,36 @@ namespace dpl
   template <typename...>
   class strong_vector {};
 
-  template <typename KeyTag, typename ValueType>
-  class strong_vector<KeyTag, ValueType>
+  template <typename T, typename Tag, typename ValueType>
+  class strong_vector<strong_integer<T, Tag>, ValueType>
   {
     std::unique_ptr<ValueType[]> uptr_;
 
   public:
     strong_vector() = default;
 
-    template <std::integral T>
-    explicit strong_vector(strong_integer<T, KeyTag> size)
+    explicit strong_vector(strong_integer<T, Tag> size)
       : uptr_{std::make_unique<ValueType[]>(*size)} {}
 
-    template <std::integral T>
-    explicit strong_vector(strong_integer<T, KeyTag> size, ValueType value)
+    explicit strong_vector(strong_integer<T, Tag> size, ValueType value)
       : strong_vector{size} {
       std::fill_n(uptr_.get(), *size, value);
     }
 
-    template <std::integral T>
-    void resize(strong_integer<T, KeyTag> size) {
+    void resize(strong_integer<T, Tag> size) {
       uptr_ = std::make_unique<ValueType[]>(*size);
     }
 
-    template <std::integral T>
-    void resize(strong_integer<T, KeyTag> size, ValueType value) {
+    void resize(strong_integer<T, Tag> size, ValueType value) {
       resize(size);
       std::fill_n(uptr_.get(), *size, value);
     }
 
-    template <std::integral T>
-    auto& operator[](strong_integer<T, KeyTag> index) {
+    auto& operator[](strong_integer<T, Tag> index) {
       return uptr_[*index];
     }
 
-    template <std::integral T>
-    auto& operator[](strong_integer<T, KeyTag> index) const {
+    auto& operator[](strong_integer<T, Tag> index) const {
       return uptr_[*index];
     }
 
@@ -151,33 +146,25 @@ namespace dpl
     }
   };
 
-  template <typename KeyTag>
-  class strong_vector<KeyTag, bool>
+  template <typename T, typename Tag>
+  class strong_vector<strong_integer<T, Tag>, bool>
   {
     std::vector<bool> vec_;
 
   public:
     strong_vector() = default;
 
-    template <std::integral T>
-    explicit strong_vector(strong_integer<T, KeyTag> size)
+    explicit strong_vector(strong_integer<T, Tag> size)
       : vec_(*size) {}
 
-    template <std::integral T>
-    auto operator[](strong_integer<T, KeyTag> index) {
+    auto operator[](strong_integer<T, Tag> index) {
       return vec_[*index];
     }
 
-    template <std::integral T>
-    auto operator[](strong_integer<T, KeyTag> index) const {
+    auto operator[](strong_integer<T, Tag> index) const {
       return vec_[*index];
     }
   };
-
-  template <typename KeyTag, typename ValueTag, typename ValueType>
-  class strong_vector<KeyTag, ValueTag, ValueType> : public strong_vector<KeyTag, strong_integer<ValueType, ValueTag>> {};
-
-
 
 
 

@@ -21,13 +21,13 @@ namespace xpm
   {
     static inline constexpr auto invalid_block = std::numeric_limits<int>::max();
 
-    dpl::strong_vector<net_tag, idx1d_t> forward;
-    std::unique_ptr<net_idx_t[]> backward;
+    dpl::strong_vector<net_t, idx1d_t> forward;
+    std::unique_ptr<net_t[]> backward;
     std::vector<dpl::hypre::index_range> block_rows;
 
-    rows_mapping(net_idx_t rows, int blocks) {
+    rows_mapping(net_t rows, int blocks) {
       forward.resize(rows);
-      backward = std::make_unique<net_idx_t[]>(*rows);
+      backward = std::make_unique<net_t[]>(*rows);
       block_rows = std::vector<dpl::hypre::index_range>(blocks);
     }
   };
@@ -147,14 +147,14 @@ namespace xpm
     // }
     
     
-    macro_idx_t parse_statoil_text_idx(std::integral auto idx) const {
+    macro_t parse_statoil_text_idx(std::integral auto idx) const {
       if (idx == -1)
         return node_count();
   
       if (idx == 0)
         return node_count() + 1;
     
-      return macro_idx_t{idx - 1};
+      return macro_t{idx - 1};
     }
 
   public:
@@ -173,7 +173,7 @@ namespace xpm
      * right is an inner or outer (inlet/outlet) node
      */
     dpl::soa<
-      attrib::adj_t, std::pair<macro_idx_t, macro_idx_t>,     
+      attrib::adj_t, std::pair<macro_t, macro_t>,     
       attrib::r_ins_t, double,
       attrib::length_t, double,
       attrib::length0_t, double,
@@ -181,8 +181,8 @@ namespace xpm
       attrib::volume_t, double
     > throat_;
 
-    auto& operator()(const auto key, const macro_idx_t i) { return node_[key][*i]; }
-    auto& operator()(const auto key, const macro_idx_t i) const { return node_[key][*i]; }
+    auto& operator()(const auto key, const macro_t i) { return node_[key][*i]; }
+    auto& operator()(const auto key, const macro_t i) const { return node_[key][*i]; }
 
     auto& operator()(const auto key, const std::size_t i) { return throat_[key][i]; }
     auto& operator()(const auto key, const std::size_t i) const { return throat_[key][i]; }
@@ -213,24 +213,24 @@ namespace xpm
 
     
     
-    macro_idx_t node_count() const {
-      return macro_idx_t(node_.size());
+    macro_t node_count() const {
+      return macro_t(node_.size());
     }
 
     std::size_t throat_count() const {
       return throat_.size();
     }
 
-    bool inner_node(macro_idx_t i) const {
+    bool inner_node(macro_t i) const {
       return i < node_count();
     }
 
     auto inlet() const {
-      return macro_idx_t{node_count()};
+      return macro_t{node_count()};
     }
 
     auto outlet() const {
-      return macro_idx_t{node_count() + 1};
+      return macro_t{node_count() + 1};
     }
 
     
@@ -367,7 +367,7 @@ namespace xpm
 
     
 
-    double macro_macro_coef(std::size_t i, macro_idx_t l, macro_idx_t r, auto cond) const {
+    double macro_macro_coef(std::size_t i, macro_t l, macro_t r, auto cond) const {
       using namespace attrib;
       
       return -1.0/(
@@ -376,7 +376,7 @@ namespace xpm
       + (inner_node(r) ? throat_[length1][i]/cond(r) : 0.0));
     }
 
-    double macro_macro_coef(std::size_t i, macro_idx_t l, macro_idx_t r) const;
+    double macro_macro_coef(std::size_t i, macro_t l, macro_t r) const;
 
 
     bool eval_inlet_outlet_connectivity() const {
@@ -426,7 +426,7 @@ namespace xpm
       std::vector<bool> connected_inlet(*node_count());
       std::vector<bool> connected_outlet(*node_count());
       
-      auto connected = [&](macro_idx_t i) {
+      auto connected = [&](macro_t i) {
         auto rep = ds.find_set(*i);
         return connected_inlet[rep] && connected_outlet[rep];
       };
@@ -443,7 +443,7 @@ namespace xpm
       
       idx1d_t disconnected_macro = 0;
         
-      for (macro_idx_t i{0}; i < node_count(); ++i)
+      for (macro_t i{0}; i < node_count(); ++i)
         if (!connected(i))
           ++disconnected_macro;
       
@@ -512,26 +512,26 @@ namespace xpm
       return props::conductance_single(props::area(attrib::r_ins(pn, i)));
     }
 
-    double operator()(macro_idx_t i) const {
+    double operator()(macro_t i) const {
       using props = hydraulic_properties::equilateral_triangle;
       return props::conductance_single(props::area(attrib::r_ins(pn, i)));
     }
 
-    double operator()(voxel_idx_t) const {
+    double operator()(voxel_t) const {
       return darcy_perm;
     }
   };
 
-  inline double pore_network::macro_macro_coef(std::size_t i, macro_idx_t l, macro_idx_t r) const {
+  inline double pore_network::macro_macro_coef(std::size_t i, macro_t l, macro_t r) const {
     return macro_macro_coef(i, l, r, single_phase_conductance{this});
   }
 
 
   class image_data
   {
-    voxel_idx_t size_;
+    voxel_t size_;
     idx3d_t dim_;
-    map_idx3_t<voxel_idx_t> idx1d_mapper_;
+    map_idx3_t<voxel_t> idx1d_mapper_;
 
   public:
     auto size() const {
@@ -552,19 +552,19 @@ namespace xpm
       idx1d_mapper_ = idx_mapper(dim_);
     }
 
-    dpl::strong_vector<voxel_tag, voxel_property::phase_t> phase;
+    dpl::strong_vector<voxel_t, voxel_property::phase_t> phase;
 
     /**
      * \brief
      *    for a void voxel - a macro node it belongs
      *    for a microporous voxel - an adjacent pore node
      */
-    dpl::strong_vector<voxel_tag, voxel_property::velem_t> velem;
+    dpl::strong_vector<voxel_t, voxel_property::velem_t> velem;
 
     void eval_microporous() {
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
-      voxel_idx_t idx1d{0};
+      voxel_t idx1d{0};
 
       for (k = 0; k < dim_.z(); ++k)
         for (j = 0; j < dim_.y(); ++j) 
@@ -574,12 +574,12 @@ namespace xpm
 
               dpl::sfor<3>([&](auto d) {
                 if (ijk[d] > 0)
-                  if (voxel_idx_t adj_idx = idx1d - idx_map(d); phase[adj_idx] == presets::pore)
+                  if (voxel_t adj_idx = idx1d - idx_map(d); phase[adj_idx] == presets::pore)
                     if (velem[adj_idx])
                       adj = velem[adj_idx];
 
                 if (ijk[d] < dim_[d] - 1)
-                  if (voxel_idx_t adj_idx = idx1d + idx_map(d); phase[adj_idx] == presets::pore)
+                  if (voxel_t adj_idx = idx1d + idx_map(d); phase[adj_idx] == presets::pore)
                     if (velem[adj_idx])
                       adj = velem[adj_idx];
               });
@@ -591,16 +591,16 @@ namespace xpm
     void read_image(const auto& image_path, parse::image_dict input_config) {
       std::ifstream is(image_path);
       is.seekg(0, std::ios_base::end);
-      size_ = voxel_idx_t(is.tellg());  // NOLINT(cppcoreguidelines-narrowing-conversions)
+      size_ = voxel_t(is.tellg());  // NOLINT(cppcoreguidelines-narrowing-conversions)
       is.seekg(0, std::ios_base::beg);
-      phase.resize(voxel_idx_t{size_});
+      phase.resize(voxel_t{size_});
       is.read(reinterpret_cast<char*>(phase.data()), *size_);
 
       size_t pore_voxels = 0;
       size_t solid_voxels = 0;
       size_t microporous_voxels = 0;
 
-      for (voxel_idx_t i{0}; i < size_; ++i)
+      for (voxel_t i{0}; i < size_; ++i)
         if (auto& value = phase[i];
           *value == input_config.pore) {
           value = presets::pore;
@@ -636,14 +636,14 @@ namespace xpm
       boost::iostreams::mapped_file_source file(network_path.string() + "_VElems.raw");
       const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
-      velem.resize(voxel_idx_t{dim_.prod()});
+      velem.resize(voxel_t{dim_.prod()});
 
       // auto* ptr = velem.get();
 
       idx3d_t velems_factor{1, dim_.x() + 2, (dim_.x() + 2)*(dim_.y() + 2)};
       idx3d_t ijk;
       auto& [i, j, k] = ijk;
-      voxel_idx_t idx1d{0};
+      voxel_t idx1d{0};
 
       for (k = 0; k < dim_.z(); ++k)
         for (j = 0; j < dim_.y(); ++j) 
@@ -661,33 +661,33 @@ namespace xpm
     pore_network* pn_;
     image_data* img_;
 
-    static inline constexpr net_idx_t isolated_idx_{std::numeric_limits<idx1d_t>::max()};
+    static inline constexpr net_t isolated_idx_{std::numeric_limits<idx1d_t>::max()};
 
     struct total_tag {};
-    using total_idx_t = dpl::strong_integer<idx1d_t, total_tag>;
+    using total_t = dpl::strong_integer<idx1d_t, total_tag>;
 
     /**
      * \brief
      *   .size() = pn_->node_count_ + img_->size
      *   maps total() index to compressed effective (flowing) index
      */
-    dpl::strong_vector<total_tag, net_tag, idx1d_t> total_to_net_map_;
-    dpl::strong_vector<net_tag, total_tag, idx1d_t> net_to_total_map_;
+    dpl::strong_vector<total_t, net_t> total_to_net_map_;
+    dpl::strong_vector<net_t, total_t> net_to_total_map_;
 
     /**
      * \brief connected/flowing
      */
-    net_idx_t connected_macro_count_{0};
-    net_idx_t connected_count_{0};
+    net_t connected_macro_count_{0};
+    net_t connected_count_{0};
 
-    total_idx_t total(macro_idx_t i) const { return total_idx_t{*i}; }
-    total_idx_t total(voxel_idx_t i) const { return total_idx_t{*pn_->node_count() + *i}; }
+    total_t total(macro_t i) const { return total_t{*i}; }
+    total_t total(voxel_t i) const { return total_t{*pn_->node_count() + *i}; }
 
     struct vertex_proj_t
     {
       const pore_network_image* pni;
 
-      auto operator()(const net_idx_t i) const { return dpl::graph::dc_graph::vertex_t{*i}; }
+      auto operator()(const net_t i) const { return dpl::graph::dc_graph::vertex_t{*i}; }
       auto operator()(const auto i) const { return (*this)(pni->net(i)); }
     };
 
@@ -703,32 +703,32 @@ namespace xpm
       return *img_;
     }
 
-    net_idx_t connected_macro_count() const { return connected_macro_count_; }
-    net_idx_t connected_count() const { return connected_count_; }
+    net_t connected_macro_count() const { return connected_macro_count_; }
+    net_t connected_count() const { return connected_count_; }
 
-    net_idx_t net(macro_idx_t i) const { return total_to_net_map_[total(i)]; }
-    net_idx_t net(voxel_idx_t i) const { return total_to_net_map_[total(i)]; }
+    net_t net(macro_t i) const { return total_to_net_map_[total(i)]; }
+    net_t net(voxel_t i) const { return total_to_net_map_[total(i)]; }
 
-    bool is_macro(net_idx_t i) const {
+    bool is_macro(net_t i) const {
       return i < connected_macro_count_;
     }
 
-    macro_idx_t macro(net_idx_t i) const {
-      return macro_idx_t{*net_to_total_map_[i]};
+    macro_t macro(net_t i) const {
+      return macro_t{*net_to_total_map_[i]};
     }
 
-    voxel_idx_t voxel(net_idx_t i) const {
-      return voxel_idx_t{*net_to_total_map_[i] - *pn_->node_count()};
+    voxel_t voxel(net_t i) const {
+      return voxel_t{*net_to_total_map_[i] - *pn_->node_count()};
     }
 
-    bool connected(macro_idx_t i) const {
+    bool connected(macro_t i) const {
       return net(i) != isolated_idx_;
     }
 
     /**
      * \brief if connected, the voxel must be microporous, i.e. the latter evaluation is redundant
      */
-    bool connected(voxel_idx_t i) const {
+    bool connected(voxel_t i) const {
       return net(i) != isolated_idx_;
     }
 
@@ -746,7 +746,7 @@ namespace xpm
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d{0};
+        voxel_t idx1d{0};
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j)
@@ -757,7 +757,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
+                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
                       ds.union_set(*total(idx1d), *total(adj_idx1d));
                 });
               }
@@ -778,17 +778,17 @@ namespace xpm
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
-            if (voxel_idx_t inlet_idx1d{img_->idx_map(0, j, k)}; img_->phase[inlet_idx1d] == microporous) // darcy-inlet
+            if (voxel_t inlet_idx1d{img_->idx_map(0, j, k)}; img_->phase[inlet_idx1d] == microporous) // darcy-inlet
               inlet[ds.find_set(*total(inlet_idx1d))] = true;
 
-            if (voxel_idx_t outlet_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; img_->phase[outlet_idx1d] == microporous) // darcy-outlet
+            if (voxel_t outlet_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; img_->phase[outlet_idx1d] == microporous) // darcy-outlet
               outlet[ds.find_set(*total(outlet_idx1d))] = true;
           }
       }
 
-      total_to_net_map_.resize(total_idx_t{gross_total_size});
+      total_to_net_map_.resize(total_t{gross_total_size});
 
-      for (macro_idx_t i{0}; i < pn_->node_count(); ++i) {
+      for (macro_t i{0}; i < pn_->node_count(); ++i) {
         auto total_idx = total(i);
         auto rep = ds.find_set(*total_idx); 
         total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_macro_count_++ : isolated_idx_;
@@ -796,7 +796,7 @@ namespace xpm
       
       connected_count_ = connected_macro_count_;
 
-      for (voxel_idx_t i{0}; i < img_->size(); ++i) {
+      for (voxel_t i{0}; i < img_->size(); ++i) {
         auto total_idx = total(i);
         auto rep = ds.find_set(*total_idx); 
         total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
@@ -804,7 +804,7 @@ namespace xpm
 
       net_to_total_map_.resize(connected_count_);
 
-      for (total_idx_t i{0}; i < gross_total_size; ++i)
+      for (total_t i{0}; i < gross_total_size; ++i)
         if (total_to_net_map_[i] != isolated_idx_)
           net_to_total_map_[total_to_net_map_[i]] = i;
     }
@@ -814,7 +814,7 @@ namespace xpm
     std::tuple<idx1d_t, rows_mapping> generate_mapping(const dpl::vector3i& blocks, Filter filter = {}) const {
       auto block_size = pn_->physical_size/blocks;
 
-      using pair = std::pair<net_idx_t, int>;
+      using pair = std::pair<net_t, int>;
 
       std::vector<pair> idx_to_block(*connected_count_);
 
@@ -830,9 +830,9 @@ namespace xpm
       };
 
       {
-        for (macro_idx_t i{0}; i < pn_->node_count(); ++i)
+        for (macro_t i{0}; i < pn_->node_count(); ++i)
           if (connected(i)) { // macro node
-            net_idx_t net_idx = net(i); 
+            net_t net_idx = net(i); 
             idx_to_block[*net_idx] = {net_idx, filter(i)
               ? eval_block(attrib::pos(pn_, i))
               : rows_mapping::invalid_block};
@@ -840,7 +840,7 @@ namespace xpm
 
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d{0};
+        voxel_t idx1d{0};
 
         auto cell_size = pn_->physical_size/img_->dim();
 
@@ -848,7 +848,7 @@ namespace xpm
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) { // darcy node
-                net_idx_t net_idx = net(idx1d);
+                net_t net_idx = net(idx1d);
                 idx_to_block[*net_idx] = {net_idx, filter(idx1d)
                   ? eval_block(cell_size*(ijk + 0.5))
                   : rows_mapping::invalid_block};
@@ -897,7 +897,7 @@ namespace xpm
       using namespace dpl::graph;
       using namespace presets;
 
-      net_idx_t vertex_count = connected_count_; // last is outlet
+      net_t vertex_count = connected_count_; // last is outlet
 
       if constexpr (Outlet)
         ++vertex_count;
@@ -918,12 +918,12 @@ namespace xpm
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d{0};
+        voxel_t idx1d{0};
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
             if constexpr (Outlet) 
-              if (voxel_idx_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+              if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
                 gen.reserve(adj_idx1d, vertex_count - 1);
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
@@ -933,7 +933,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
+                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
                       gen.reserve(idx1d, adj_idx1d);
                 });
               }
@@ -952,19 +952,23 @@ namespace xpm
             throat_to_de[i] = lr;
           }
           else if constexpr (Outlet) {
-            if (pn_->outlet() == r) // macro-outlet
-              gen.set(l, vertex_count - 1);
+            if (pn_->outlet() == r) { // macro-outlet
+              auto [lr, rl] = gen.set(l, vertex_count - 1);
+              de_to_throat[lr] = i;
+              de_to_throat[rl] = i;
+              throat_to_de[i] = lr;
+            }
           }
 
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d{0};
+        voxel_t idx1d{0};
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
             if constexpr (Outlet)
-              if (voxel_idx_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+              if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
                 gen.set(adj_idx1d, vertex_count - 1);
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
@@ -974,7 +978,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (voxel_idx_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
+                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous) // darcy-darcy
                       gen.set(idx1d, adj_idx1d);
                 });
               }
@@ -986,7 +990,7 @@ namespace xpm
 
     template<typename Filter = default_maps::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
-      idx1d_t nrows, const dpl::strong_vector<net_tag, idx1d_t>& forward, auto term, Filter filter = {}) const {
+      idx1d_t nrows, const dpl::strong_vector<net_t, idx1d_t>& forward, auto term, Filter filter = {}) const {
 
       using namespace attrib;
 
@@ -1000,7 +1004,7 @@ namespace xpm
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d{0};
+        voxel_t idx1d{0};
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j)
@@ -1042,7 +1046,7 @@ namespace xpm
         
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
-        voxel_idx_t idx1d{0};
+        voxel_t idx1d{0};
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
@@ -1063,7 +1067,7 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
                 if (auto velem = img_->velem[idx1d]; velem && filter(velem)) { // macro-darcy
-                  macro_idx_t adj_macro_idx = velem;
+                  macro_t adj_macro_idx = velem;
 
                   auto li = cell_size.x()/2;
                   auto gi = term(idx1d);
@@ -1095,7 +1099,7 @@ namespace xpm
 
     template<typename Filter = default_maps::true_t>
     std::pair<double, double> flow_rates(
-      const dpl::strong_vector<net_tag, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
+      const dpl::strong_vector<net_t, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
       auto inlet_flow = 0.0;
       auto outlet_flow = 0.0;
 
@@ -1136,17 +1140,17 @@ namespace xpm
 
       using namespace attrib;
 
-      for (macro_idx_t i{0}; i < pn_->node_count(); ++i)
+      for (macro_t i{0}; i < pn_->node_count(); ++i)
         if (connected(i))
           vol += volume(pn_, i);
 
       for (std::size_t i{0}; i < pn_->throat_count(); ++i)
-        if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && connected(l))
+        if (auto [l, r] = adj(pn_, i); connected(l))
           vol += volume(pn_, i);
         
       auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*darcy_porosity;
 
-      for (voxel_idx_t i{0}; i < img_->size(); ++i)
+      for (voxel_t i{0}; i < img_->size(); ++i)
         if (connected(i))
           vol += unit_darcy_pore_volume;
 

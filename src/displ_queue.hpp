@@ -36,8 +36,8 @@ namespace xpm
     std::multiset<displ_event, comparator> set_;
 
   public:
-    void insert(macro_idx_t i, double r_cap) { set_.emplace(displ_elem::macro, *i, r_cap); }
-    void insert(voxel_idx_t i, double r_cap) { set_.emplace(displ_elem::voxel, *i, r_cap); }
+    void insert(macro_t i, double r_cap) { set_.emplace(displ_elem::macro, *i, r_cap); }
+    void insert(voxel_t i, double r_cap) { set_.emplace(displ_elem::voxel, *i, r_cap); }
     void insert(std::size_t i, double r_cap) { set_.emplace(displ_elem::throat, i, r_cap); }
 
     bool empty() const {
