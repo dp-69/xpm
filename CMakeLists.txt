@@ -152,6 +152,6 @@ if(NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)
   file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
   file(COPY_FILE
-    ${CMAKE_CURRENT_SOURCE_DIR}/config/config.json
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)
+    "${CMAKE_CURRENT_SOURCE_DIR}/files/config.json"
+    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json")
 endif()
