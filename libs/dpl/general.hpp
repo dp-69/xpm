@@ -27,6 +27,7 @@
 #include <type_traits>
 #include <cmath>
 #include <future>
+#include <vector>
 
 #ifdef __cpp_lib_ranges
   #include <ranges>

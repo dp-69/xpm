@@ -378,7 +378,7 @@ namespace xpm
               return ss.str();
             };
 
-            constexpr auto json_format =
+            static constexpr auto json_format =
               "[\n"
               "  {},\n"
               "  {}\n"
@@ -798,7 +798,7 @@ namespace xpm
       #ifdef _WIN32
         pn_.connectivity_flow_summary(settings_.solver.tolerance, settings_.solver.max_iterations);
       #else
-        pn_.connectivity_flow_summary_MPI(startup.solver.tolerance, startup.solver.max_iterations);
+        pn_.connectivity_flow_summary_MPI(settings_.solver.tolerance, settings_.solver.max_iterations);
       #endif
 
       std::cout << '\n';

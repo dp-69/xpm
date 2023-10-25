@@ -26,6 +26,7 @@
 #include <dpl/general.hpp>
 
 #include <ostream>
+#include <span>
 
 // TODO includes
 #include <nlohmann/json.hpp>
