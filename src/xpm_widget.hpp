@@ -126,9 +126,17 @@ namespace xpm
 
     QChartView* pc_chart_view_;
     QChartView* kr_chart_view_;
-    QLineSeries* line_series_;
-    QLineSeries* kr0_series_;
-    QLineSeries* kr1_series_;
+
+    struct curves_series
+    {
+      QLineSeries* pc;
+      QLineSeries* kr0;
+      QLineSeries* kr1;
+    };
+
+    curves_series primary_;
+    curves_series secondary_;
+
     double absolute_rate_;
 
 
@@ -255,31 +263,45 @@ namespace xpm
 
           {
             auto menu = std::make_unique<QMenu>();
-            
-            auto action = [this](auto format, auto sep, auto begin, auto end) {
-              return [=, this] {
-                auto view =
-                  std::views::transform(invasion_task_.pc_curve(),
-                    [format](const dpl::vector2d& p) { return fmt::format(format, p.x(), p.y()); })
-                  | std::views::reverse;
 
-                std::stringstream ss;
-                ss << begin << *std::begin(view);
-                for (const auto& s : view | std::views::drop(1))
+            auto action = [](
+              const std::vector<dpl::vector2d>& pc, auto back,
+              fmt::format_string<const double&, const double&> f, auto sep, auto begin, auto end) {
+              return [=, &pc] {
+                using namespace std;
+
+                list<string> rows;
+
+                using dst = conditional_t<back,
+                  back_insert_iterator<decltype(rows)>,
+                  front_insert_iterator<decltype(rows)>>;
+
+                ranges::transform(pc, dst(rows), [f](const dpl::vector2d& p) { return format(f, p.x(), p.y()); });
+
+                stringstream ss;
+                ss << begin << rows.front();
+                for (const auto& s : rows | views::drop(1))
                   ss << sep << s;
                 ss << end << '\n';
 
                 QApplication::clipboard()->setText(QString::fromStdString(ss.str()));
               };
             };
+            
 
-            using fmt_string = fmt::format_string<const double&, const double&>;
+            connect(menu->addAction("Copy (primary)"), &QAction::triggered,
+              action(invasion_task_.primary().pc, std::false_type{}, "{:.6f}\t{:.6e}", "\n", "", ""));
 
-            connect(menu->addAction("Copy"), &QAction::triggered,
-              action(fmt_string{"{:.6f}\t{:.6e}"}, "\n", "", ""));
+            connect(menu->addAction("Copy (seconary)"), &QAction::triggered,
+              action(invasion_task_.secondary().pc, std::true_type{}, "{:.6f}\t{:.6e}", "\n", "", ""));
 
-            connect(menu->addAction("Copy JSON"), &QAction::triggered,
-              action(fmt_string{"[{:.6f}, {:.6e}]"}, ", ", "[", "]"));
+            menu->addSeparator();
+
+            connect(menu->addAction("Copy JSON (primary)"), &QAction::triggered,
+              action(invasion_task_.primary().pc, std::false_type{}, "[{:.6f}, {:.6e}]", ", ", "[", "]"));
+
+            connect(menu->addAction("Copy JSON (secondary)"), &QAction::triggered,
+              action(invasion_task_.secondary().pc, std::true_type{}, "[{:.6f}, {:.6e}]", ", ", "[", "]"));
 
             pc_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
             connect(pc_chart_view_, &QTreeView::customContextMenuRequested,
@@ -300,14 +322,29 @@ namespace xpm
           pc_axis_y_->setTitleText("Capillary pressure, Pa");
           chart->addAxis(pc_axis_y_, Qt::AlignLeft);
 
-          line_series_ = new QLineSeries;
-          line_series_->setName("total");
-          line_series_->clear();
-          line_series_->setPointsVisible(true);
+          primary_.pc = new QLineSeries;
+          primary_.pc->setName("primary");
+          primary_.pc->clear();
+          primary_.pc->setPointsVisible(true);
 
-          chart->addSeries(line_series_);
-          line_series_->attachAxis(axis_x);
-          line_series_->attachAxis(pc_axis_y_);
+          secondary_.pc = new QLineSeries;
+          secondary_.pc->setName("secondary");
+          secondary_.pc->clear();
+          secondary_.pc->setPointsVisible(true);
+
+          chart->addSeries(primary_.pc);
+          primary_.pc->attachAxis(axis_x);
+          primary_.pc->attachAxis(pc_axis_y_);
+
+          {
+            auto* dummy = new QLineSeries;
+            chart->addSeries(dummy);
+            chart->addSeries(secondary_.pc);
+            chart->removeSeries(dummy);
+          }
+
+          secondary_.pc->attachAxis(axis_x);
+          secondary_.pc->attachAxis(pc_axis_y_);
 
           plot_tabs->addTab(pc_chart_view_, "Pc");
         }
@@ -319,40 +356,65 @@ namespace xpm
 
           {
             auto menu = std::make_unique<QMenu>();
-            
-            auto text = [this](auto format, auto sep, auto begin, auto end) {
-              auto view =
-                std::views::transform(invasion_task_.kr_curves(),
-                  [format](const dpl::vector3d& p) { return fmt::format(format, p.x(), p.y(), p.z()); })
-                | std::views::reverse;
 
-              std::stringstream ss;
-              ss << begin << *std::begin(view);
-              for (const auto& s : view | std::views::drop(1))
+            auto text = [](
+              const std::vector<dpl::vector3d>& kr, auto back,
+              fmt::format_string<const double&, const double&, const double&> f, auto sep, auto begin, auto end) {
+              using namespace std;
+              list<string> rows;
+                
+              using dst = conditional_t<back,
+                back_insert_iterator<decltype(rows)>,
+                front_insert_iterator<decltype(rows)>>;
+                
+              ranges::transform(kr, dst(rows), [f](const dpl::vector3d& p) { return format(f, p.x(), p.y(), p.z()); });
+
+              stringstream ss;
+              ss << begin << rows.front();
+              for (const auto& s : rows | views::drop(1))
                 ss << sep << s;
               ss << end;
 
               return ss.str();
             };
 
-            using fmt_string = fmt::format_string<const double&, const double&, const double&>;
+            constexpr auto json_format =
+              "[\n"
+              "  {},\n"
+              "  {}\n"
+              "]\n";
 
-            connect(menu->addAction("Copy"), &QAction::triggered,
-              [text] {
+            connect(menu->addAction("Copy (primary)"), &QAction::triggered,
+              [text, this] {
                 QApplication::clipboard()->setText(QString::fromStdString(
-                  text(fmt_string{"{:.6f}\t{:.6e}\t{:.6e}"}, "\n", "", "\n")));
+                  text(invasion_task_.primary().kr, std::false_type{}, "{:.6f}\t{:.6e}\t{:.6e}", "\n", "", "\n")));
               });
 
-            connect(menu->addAction("Copy JSON"), &QAction::triggered,
-              [text] {
+            connect(menu->addAction("Copy (secondary)"), &QAction::triggered,
+              [text, this] {
+                QApplication::clipboard()->setText(QString::fromStdString(
+                  text(invasion_task_.secondary().kr, std::true_type{}, "{:.6f}\t{:.6e}\t{:.6e}", "\n", "", "\n")));
+              });
+
+            menu->addSeparator();
+
+            connect(menu->addAction("Copy JSON (primary)"), &QAction::triggered,
+              [text, this] {
                 QApplication::clipboard()->setText(QString::fromStdString(
                   fmt::format(
-                    "[\n"
-                    "  {},\n"
-                    "  {}\n"
-                    "]\n",
-                    text(fmt_string{"[{0:.6f}, {1:.6e}]"}, ", ", "[", "]"),
-                    text(fmt_string{"[{0:.6f}, {2:.6e}]"}, ", ", "[", "]"))
+                    json_format,
+                    text(invasion_task_.primary().kr, std::false_type{}, "[{0:.6f}, {1:.6e}]", ", ", "[", "]"),
+                    text(invasion_task_.primary().kr, std::false_type{}, "[{0:.6f}, {2:.6e}]", ", ", "[", "]"))
+                ));
+              });            
+
+            connect(menu->addAction("Copy JSON (secondary)"), &QAction::triggered,
+              [text, this] {
+                QApplication::clipboard()->setText(QString::fromStdString(
+                  fmt::format(
+                    json_format,
+                    text(invasion_task_.secondary().kr, std::true_type{}, "[{0:.6f}, {1:.6e}]", ", ", "[", "]"),
+                    text(invasion_task_.secondary().kr, std::true_type{}, "[{0:.6f}, {2:.6e}]", ", ", "[", "]"))
                 ));
               });
 
@@ -376,38 +438,37 @@ namespace xpm
           kr_axis_y_->setRange(0, 1);
           chart->addAxis(kr_axis_y_, Qt::AlignLeft);
 
-          kr0_series_ = new QLineSeries;
-          kr0_series_->setPointsVisible(true);
-          kr0_series_->setName("water");
+          primary_.kr0 = new QLineSeries;
+          primary_.kr0->setPointsVisible(true);
+          primary_.kr0->setName("primary-wat");
 
-          kr1_series_ = new QLineSeries;
-          kr1_series_->setPointsVisible(true);
-          kr1_series_->setName("phase 1");
-          // line_series->setPointsVisible(true);
+          primary_.kr1 = new QLineSeries;
+          primary_.kr1->setPointsVisible(true);
+          primary_.kr1->setName("primary-ph1");
 
-          // for (auto size = 50, i = 0; i <= size; ++i) {
-          //   auto So = 1.*i/size;
-          //   auto Sor = 0.0;
-          //   auto Lambda = 2.0;
-          //   auto kro = std::pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda);
-          //   auto krg = std::pow((1 - So)/(1 - Sor), 2)*(1 - std::pow((So - Sor)/(1 - Sor), (2 + Lambda)/Lambda));
-          //
-          //   kro_series->append(So, kro);
-          //   krg_series->append(So, krg);
-          // }
-          
-          // pow((So - Sor)/(1 - Sor), (2 + 3*Lambda)/Lambda)
+          chart->addSeries(primary_.kr0);
+          primary_.kr0->attachAxis(axis_x);
+          primary_.kr0->attachAxis(kr_axis_y_);
 
-          // line_series->append(0.1, 0.1);
-          // line_series->append(0.5, 0.8);
+          chart->addSeries(primary_.kr1);
+          primary_.kr1->attachAxis(axis_x);
+          primary_.kr1->attachAxis(kr_axis_y_);
 
-          chart->addSeries(kr0_series_);
-          kr0_series_->attachAxis(axis_x);
-          kr0_series_->attachAxis(kr_axis_y_);
+          secondary_.kr0 = new QLineSeries;
+          secondary_.kr0->setPointsVisible(true);
+          secondary_.kr0->setName("secondary-wat");
 
-          chart->addSeries(kr1_series_);
-          kr1_series_->attachAxis(axis_x);
-          kr1_series_->attachAxis(kr_axis_y_);
+          secondary_.kr1 = new QLineSeries;
+          secondary_.kr1->setPointsVisible(true);
+          secondary_.kr1->setName("secondary-ph1");
+
+          chart->addSeries(secondary_.kr0);
+          secondary_.kr0->attachAxis(axis_x);
+          secondary_.kr0->attachAxis(kr_axis_y_);
+
+          chart->addSeries(secondary_.kr1);
+          secondary_.kr1->attachAxis(axis_x);
+          secondary_.kr1->attachAxis(kr_axis_y_);
 
           plot_tabs->addTab(kr_chart_view_, "kr");
         }
@@ -509,7 +570,7 @@ namespace xpm
         auto* darcy_pc_series = new QLineSeries;
         chart->addSeries(darcy_pc_series);
 
-        for (auto& p : settings_.darcy_pc)
+        for (auto& p : settings_.primary.pc)
           darcy_pc_series->append(p.x(), p.y());
         darcy_pc_series->setName("microporous");
         darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
@@ -524,7 +585,7 @@ namespace xpm
         auto* darcy_kr0_series = new QLineSeries;
         chart->addSeries(darcy_kr0_series);
 
-        for (auto& p : settings_.darcy_kr0)
+        for (auto& p : settings_.primary.kr0)
           darcy_kr0_series->append(p.x(), p.y());
         darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         darcy_kr0_series->attachAxis(kr_axis_y_);
@@ -534,7 +595,7 @@ namespace xpm
         auto* darcy_kr1_series = new QLineSeries;
         chart->addSeries(darcy_kr1_series);
 
-        for (auto& p : settings_.darcy_kr1)
+        for (auto& p : settings_.primary.kr1)
           darcy_kr1_series->append(p.x(), p.y());
         darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
         darcy_kr1_series->attachAxis(kr_axis_y_);
@@ -559,19 +620,18 @@ namespace xpm
           pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn_.node_.span(attrib::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
-            settings_.darcy_pc.empty() ? 0 : settings_.darcy_pc.front().y()))))*1.01
+            settings_.primary.pc.empty() ? 0 : settings_.primary.pc.front().y()))))*1.01
         );
       }
 
       invasion_task_.init();
-      invasion_task_.generate_graph();
 
       consumer_future_ = std::async(std::launch::async, [this] {
         auto start = std::chrono::system_clock::now();
         double theta = 0*std::numbers::pi/180;
 
         using namespace std::ranges::views;
-        auto query = settings_.darcy_pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
+        auto query = settings_.primary.pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
         std::vector<dpl::vector2d> pc_inv{query.begin(), query.end()};
         pc_inv.resize(std::ranges::unique(pc_inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_inv.begin());
 
@@ -645,16 +705,28 @@ namespace xpm
                 ? fmt::format("done {}s", duration_cast<seconds>(system_clock::now() - start).count())
                 : fmt::format("{:.1f} %", 100.*invasion_task_.progress_idx()/(*pni_.connected_count())));
 
-              line_series_->clear();
-              kr0_series_->clear();
-              kr1_series_->clear();
+              primary_.pc->clear();
+              primary_.kr0->clear();
+              primary_.kr1->clear();
 
-              for (auto p : invasion_task_.pc_curve())
-                line_series_->append(p.x(), p.y());
+              secondary_.pc->clear();
+              secondary_.kr0->clear();
+              secondary_.kr1->clear();
 
-              for (auto [sw, kro, krg] : invasion_task_.kr_curves()) {
-                kr0_series_->append(sw, kro);
-                kr1_series_->append(sw, krg);                
+              for (auto p : invasion_task_.primary().pc)
+                primary_.pc->append(p.x(), p.y());
+
+              for (auto p : invasion_task_.secondary().pc)
+                secondary_.pc->append(p.x(), p.y());
+
+              for (auto [sw, kro, krg] : invasion_task_.primary().kr) {
+                primary_.kr0->append(sw, kro);
+                primary_.kr1->append(sw, krg);                
+              }
+
+              for (auto [sw, kro, krg] : invasion_task_.secondary().kr) {
+                secondary_.kr0->append(sw, kro);
+                secondary_.kr1->append(sw, krg);                
               }
 
               dpl::sfor<6>([&](auto face_idx) {

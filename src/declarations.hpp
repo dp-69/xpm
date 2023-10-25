@@ -529,9 +529,15 @@ namespace xpm
 
     double darcy_perm = std::numeric_limits<double>::quiet_NaN(); /* mD */
     double darcy_poro = std::numeric_limits<double>::quiet_NaN(); /* fraction */
-    std::vector<dpl::vector2d> darcy_pc; /* [Sw, Pc] */
-    std::vector<dpl::vector2d> darcy_kr0;
-    std::vector<dpl::vector2d> darcy_kr1;
+
+
+    struct input_curves
+    {
+      std::vector<dpl::vector2d> pc; /* [Sw, Pc] */
+      std::vector<dpl::vector2d> kr0;
+      std::vector<dpl::vector2d> kr1;
+    } primary,
+      secondary;
     
 
     struct
@@ -552,12 +558,21 @@ namespace xpm
     void load(const nlohmann::json& j) {
       image.load(j["image"]);
 
-      if (auto micro = j.find("microporosity"); micro != j.end()) {
-        darcy_perm = (*micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
-        darcy_poro = (*micro)["porosity"];
-        darcy_pc = (*micro)["capillary_pressure"];
-        darcy_kr0 = (*micro)["relative_permeability"][0];
-        darcy_kr1 = (*micro)["relative_permeability"][1];
+      if (auto j_micro = j.find("microporosity"); j_micro != j.end()) {
+        darcy_perm = (*j_micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
+        darcy_poro = (*j_micro)["porosity"];
+
+        if (auto j_pr = j_micro->find("primary"); j_pr != j_micro->end()) {
+          primary.pc = (*j_pr)["capillary_pressure"];
+          primary.kr0 = (*j_pr)["relative_permeability"][0];
+          primary.kr1 = (*j_pr)["relative_permeability"][1];  
+        }
+
+        if (auto j_sec = j_micro->find("secondary"); j_sec != j_micro->end()) {
+          secondary.pc = (*j_sec)["capillary_pressure"];
+          secondary.kr0 = (*j_sec)["relative_permeability"][0];
+          secondary.kr1 = (*j_sec)["relative_permeability"][1];  
+        }
       }
 
       solver.load(j["solver"]);

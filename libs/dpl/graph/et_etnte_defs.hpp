@@ -300,7 +300,7 @@ namespace dpl::graph
 //   };
 
 
-  template <typename Graph, typename Props>
+  template <typename Graph, typename Traits>
   class euler_tour_visitor : public boost::default_dfs_visitor
   {
     using et_ptr = et_traits::node_ptr;
@@ -308,7 +308,7 @@ namespace dpl::graph
     using vertex_t = typename boost::graph_traits<Graph>::vertex_descriptor;
     using edge_t = typename boost::graph_traits<Graph>::edge_descriptor;
 
-    Props props_;
+    Traits traits_;
 
     et_ptr et_hdr_;
 
@@ -319,10 +319,10 @@ namespace dpl::graph
     
   public:
     euler_tour_visitor(
-      Props props,
+      Traits props,
       helper::smart_pool<et_traits::node>* et_pool,
       et_ptr* tree_edge_stack
-    ) : props_{props},
+    ) : traits_{props},
         et_pool_(et_pool),
         tree_edge_stack_empty_(tree_edge_stack),
         tree_edge_stack_top_(tree_edge_stack)
@@ -334,10 +334,10 @@ namespace dpl::graph
       et_algo::init_header(et_hdr_);      
     }
 
-    void discover_vertex(vertex_t v, const Graph& g) {     
+    void discover_vertex(vertex_t v, const Graph&) {     
       et_ptr entry = et_pool_->acquire();        
-      Props::set_vertex(entry, v);
-      props_.set_entry(v, entry);
+      Traits::set_vertex(entry, v);
+      traits_.set_entry(v, entry);
       et_algo::push_back(et_hdr_, entry);            
     }
 
@@ -345,17 +345,17 @@ namespace dpl::graph
       if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
         et_ptr entry = et_pool_->acquire();
         et_ptr top = *tree_edge_stack_top_--;
-        edge_t top_de_opposite = opposite(Props::get_directed_edge(top), g);
-        Props::set_directed_edge(entry, top_de_opposite);        
-        props_.set_tree_edge_entry(top_de_opposite, entry);
+        edge_t top_de_opposite = opposite(Traits::get_directed_edge(top), g);
+        Traits::set_directed_edge(entry, top_de_opposite);        
+        traits_.set_tree_edge_entry(top_de_opposite, entry);
         et_algo::push_back(et_hdr_, entry);        
       }
     }    
 
     void tree_edge(edge_t e, const Graph&) {
       et_ptr entry = et_pool_->acquire();
-      Props::set_directed_edge(entry, e);
-      props_.set_tree_edge_entry(e, entry);
+      Traits::set_directed_edge(entry, e);
+      traits_.set_tree_edge_entry(e, entry);
       et_algo::push_back(et_hdr_, entry);      
       *++tree_edge_stack_top_ = entry;
     }
