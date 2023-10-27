@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 
 #include "declarations.hpp"
 
@@ -50,7 +51,7 @@ namespace xpm
     }
 
 
-    // template<typename T>
+    // template <typename T>
     // static T parse_text(char* &ptr);
     //
     // template<>
@@ -810,7 +811,7 @@ namespace xpm
     }
 
 
-    template<typename Filter = default_maps::true_t>
+    template <typename Filter = default_maps::true_t>
     std::tuple<idx1d_t, rows_mapping> generate_mapping(const dpl::vector3i& blocks, Filter filter = {}) const {
       auto block_size = pn_->physical_size/blocks;
 
@@ -988,7 +989,7 @@ namespace xpm
       return {gen.acquire(), std::move(de_to_throat), std::move(throat_to_de)};
     }
 
-    template<typename Filter = default_maps::true_t>
+    template <typename Filter = default_maps::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
       idx1d_t nrows, const dpl::strong_vector<net_t, idx1d_t>& forward, auto term, Filter filter = {}) const {
 
@@ -1097,7 +1098,7 @@ namespace xpm
       return {builder.nvalues(), builder.acquire()};
     }
 
-    template<typename Filter = default_maps::true_t>
+    template <typename Filter = default_maps::true_t>
     std::pair<double, double> flow_rates(
       const dpl::strong_vector<net_t, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
       auto inlet_flow = 0.0;

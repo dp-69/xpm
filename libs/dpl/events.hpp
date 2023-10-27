@@ -38,7 +38,7 @@ namespace dpl
 
   
   
-  template<typename ... Args>
+  template <typename ... Args>
   class callback
   {
     
@@ -70,7 +70,7 @@ namespace dpl
   
   
 
-  template<typename Functor, typename ... Args>
+  template <typename Functor, typename ... Args>
   class callback_generic final : public callback<Args...>
   {
     Functor func_;
@@ -88,7 +88,7 @@ namespace dpl
 
   
   
-  template<typename ... Args>
+  template <typename ... Args>
   class event
   {
     using _callback = callback<Args...>;
@@ -105,17 +105,17 @@ namespace dpl
     std::multiset<std::unique_ptr<callback<Args...>>, callback_comparer> registered_;
 
   public:
-    template<typename Callback>
+    template <typename Callback>
     void add(std::unique_ptr<Callback> c) {
       registered_.insert(std::move(c));
     }
     
-    template<typename Functor>
+    template <typename Functor>
     void add(Functor func, int priority = 0) {
       this->add(std::make_unique<callback_generic<Functor, Args...>>(func, priority));
     }
 
-    template<typename T>
+    template <typename T>
     event& operator+=(T&& t){
       this->add(std::forward<T>(t));
       return *this;

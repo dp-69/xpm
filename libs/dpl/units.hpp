@@ -55,11 +55,11 @@ namespace dpl::units
 
   struct _unit_tag {};
   
-  template<typename Unit, typename Quantity>
+  template <typename Unit, typename Quantity>
   struct _unit_base : _unit_tag
   {
   private:
-    template<typename U>
+    template <typename U>
     constexpr double parse(U u) {
       if constexpr (std::is_arithmetic_v<U>)
         return u;
@@ -90,12 +90,12 @@ namespace dpl::units
     const double& operator*() const { return value; }
     double& operator*() { return value; }
     
-    template<typename U = double>
+    template <typename U = double>
     constexpr _unit_base(U u = 1.0) {
       value = parse(u);
     }
     
-    template<typename U, std::enable_if_t<std::is_arithmetic_v<U> || std::is_base_of_v<U, _unit_tag>, int> = 0>
+    template <typename U, std::enable_if_t<std::is_arithmetic_v<U> || std::is_base_of_v<U, _unit_tag>, int> = 0>
     auto& operator=(U u) {
       value = parse(u);
       return static_cast<unit&>(*this); // NOLINT (misc-unconventional-assign-operator)
@@ -121,12 +121,12 @@ namespace dpl::units
     }
   };
 
-  template<typename Unit, typename Quantity>
+  template <typename Unit, typename Quantity>
   constexpr auto operator*(double l, const _unit_base<Unit, Quantity>& r) {
     return Unit{l*r.value};
   }
   
-  template<typename Unit, typename Quantity>
+  template <typename Unit, typename Quantity>
   constexpr auto operator/(double l, const _unit_base<Unit, Quantity>& r) {
     return Unit{l/r.value};
   }
@@ -151,7 +151,7 @@ namespace dpl::units
   #define DPL_UNIT(unit, quantity) \
     struct unit : _unit_base<unit, quantity> { using _unit_base<unit, quantity>::operator=; }; 
 
-  template<typename UnitSI, int Dim = 1>
+  template <typename UnitSI, int Dim = 1>
   struct _quantity_base
   {
     using SI = UnitSI;
@@ -245,7 +245,7 @@ namespace dpl::units
     return r*pow(1.0*l.num/l.den, U::quantity::dim);
   }
 
-  template<typename Stream, typename U, std::enable_if_t<std::is_base_of_v<_unit_tag, U>, int> = 0>
+  template <typename Stream, typename U, std::enable_if_t<std::is_base_of_v<_unit_tag, U>, int> = 0>
   auto& operator<<(Stream& s, const U& r) {
     s << r.value;
     return s;

@@ -6,7 +6,7 @@ namespace dpl::graph
 {
   class dc_graph
   {
-    template<typename ValueType>
+    template <typename ValueType>
     class iterator
     {
       ValueType value_;
@@ -192,7 +192,7 @@ namespace dpl::graph
     }
   };
 
-  template<typename Proj = std::identity>
+  template <typename Proj = std::identity>
   class graph_generator : public graph_generator_base
   {
     Proj proj_;

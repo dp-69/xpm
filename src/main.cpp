@@ -6,14 +6,6 @@
 
 int main(int argc, char* argv[])
 {
-  // using eq_tr = xpm::hydraulic_properties::equilateral_triangle;
-  // auto diff =
-  //   eq_tr::r_cap_piston_with_films_valvatne(10*std::numbers::pi/180, 10) -
-  //   eq_tr::r_cap_piston_with_films_valvatne_short(10*std::numbers::pi/180, 10);
-  //
-  // int p = 3;
-
-
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
     dpl::hypre::mpi::process();

@@ -1,20 +1,21 @@
 #pragma once
 
+#include <fstream>
+#include <numbers>
+
 #include <dpl/static_vector.hpp>
+#include <dpl/hypre/mpi_module.hpp>
 
 #include <HYPRE_utilities.h>
 
-#include <boost/pending/disjoint_sets.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
-
-#include <numbers>
-#include <iostream>
-#include <fstream>
-#include <qmath.h>
+#include <boost/math/tools/roots.hpp>
+#include <boost/pending/disjoint_sets.hpp>
 
 #include <fmt/format.h>
 
-#include <boost/math/tools/roots.hpp>
+
+
 
 template <>
 struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
@@ -40,6 +41,43 @@ struct fmt::formatter<dpl::strong_integer<T, Tag>> : formatter<T>
 
 namespace xpm
 {
+  class pressure_cache
+  {
+    static inline std::unique_ptr<std::unordered_map<std::size_t, double>> cache_ = nullptr;
+
+    static auto path() {
+      return std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("cache") / "solve.json";
+    }
+
+  public:
+    static void load() {
+      cache_ = std::make_unique<std::unordered_map<std::size_t, double>>();
+
+      try {
+        for (const auto& j : nlohmann::json::parse(std::ifstream{path()})) {
+          (*cache_)[std::stoull(j["hash"].get<std::string>(), nullptr, 16)] = j["value"].get<double>();
+        }
+      }
+      catch (...) {}
+    }
+
+    static void save() {
+      nlohmann::json arr;
+
+      for (auto [hash, value] : *cache_) {
+        nlohmann::json j;
+        j["hash"] = fmt::format("{:x}", hash);
+        j["value"] = value;
+        arr.push_back(j);
+      }
+
+      std::ofstream{path()} << arr.dump(2);
+    }
+
+    static auto& cache() {
+      return *cache_;
+    }
+  };
 
   class phase_config
   {
@@ -530,12 +568,20 @@ namespace xpm
     double darcy_perm = std::numeric_limits<double>::quiet_NaN(); /* mD */
     double darcy_poro = std::numeric_limits<double>::quiet_NaN(); /* fraction */
 
-
     struct input_curves
     {
       std::vector<dpl::vector2d> pc; /* [Sw, Pc] */
-      std::vector<dpl::vector2d> kr0;
-      std::vector<dpl::vector2d> kr1;
+      std::array<std::vector<dpl::vector2d>, 2> kr;
+
+      auto calc_pc_inv() const {
+        using namespace std::ranges;
+        auto inv = pc;
+        reverse(inv);
+        for_each(inv, [](dpl::vector2d& p) { std::swap(p.x(), p.y()); });
+        inv.resize(unique(inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - inv.begin());
+        return inv;
+      }
+
     } primary,
       secondary;
     
@@ -564,14 +610,14 @@ namespace xpm
 
         if (auto j_pr = j_micro->find("primary"); j_pr != j_micro->end()) {
           primary.pc = (*j_pr)["capillary_pressure"];
-          primary.kr0 = (*j_pr)["relative_permeability"][0];
-          primary.kr1 = (*j_pr)["relative_permeability"][1];  
+          primary.kr[0] = (*j_pr)["relative_permeability"][0];
+          primary.kr[1] = (*j_pr)["relative_permeability"][1];  
         }
 
         if (auto j_sec = j_micro->find("secondary"); j_sec != j_micro->end()) {
           secondary.pc = (*j_sec)["capillary_pressure"];
-          secondary.kr0 = (*j_sec)["relative_permeability"][0];
-          secondary.kr1 = (*j_sec)["relative_permeability"][1];  
+          secondary.kr[0] = (*j_sec)["relative_permeability"][0];
+          secondary.kr[1] = (*j_sec)["relative_permeability"][1];  
         }
       }
 

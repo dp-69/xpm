@@ -16,7 +16,6 @@
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
   
-// #include <QWidget>
 #include <QMainWindow>
 #include <QSplitter>
 #include <QChartView>
@@ -579,29 +578,29 @@ namespace xpm
         darcy_pc_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
       }
 
-      {
-        auto* chart = kr_chart_view_->chart();
-
-        auto* darcy_kr0_series = new QLineSeries;
-        chart->addSeries(darcy_kr0_series);
-
-        for (auto& p : settings_.primary.kr0)
-          darcy_kr0_series->append(p.x(), p.y());
-        darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-        darcy_kr0_series->attachAxis(kr_axis_y_);
-        chart->legend()->markers(darcy_kr0_series)[0]->setVisible(false);
-        darcy_kr0_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
-
-        auto* darcy_kr1_series = new QLineSeries;
-        chart->addSeries(darcy_kr1_series);
-
-        for (auto& p : settings_.primary.kr1)
-          darcy_kr1_series->append(p.x(), p.y());
-        darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-        darcy_kr1_series->attachAxis(kr_axis_y_);
-        chart->legend()->markers(darcy_kr1_series)[0]->setVisible(false);
-        darcy_kr1_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
-      }
+      // {
+      //   auto* chart = kr_chart_view_->chart();
+      //
+      //   auto* darcy_kr0_series = new QLineSeries;
+      //   chart->addSeries(darcy_kr0_series);
+      //
+      //   for (auto& p : settings_.primary.kr[0])
+      //     darcy_kr0_series->append(p.x(), p.y());
+      //   darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
+      //   darcy_kr0_series->attachAxis(kr_axis_y_);
+      //   chart->legend()->markers(darcy_kr0_series)[0]->setVisible(false);
+      //   darcy_kr0_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
+      //
+      //   auto* darcy_kr1_series = new QLineSeries;
+      //   chart->addSeries(darcy_kr1_series);
+      //
+      //   for (auto& p : settings_.primary.kr[1])
+      //     darcy_kr1_series->append(p.x(), p.y());
+      //   darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
+      //   darcy_kr1_series->attachAxis(kr_axis_y_);
+      //   chart->legend()->markers(darcy_kr1_series)[0]->setVisible(false);
+      //   darcy_kr1_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
+      // }
 
 
       using eq_tr = hydraulic_properties::equilateral_triangle;
@@ -630,20 +629,10 @@ namespace xpm
         auto start = std::chrono::system_clock::now();
         double theta = 0*std::numbers::pi/180;
 
-        using namespace std::ranges::views;
-        auto query = settings_.primary.pc | reverse | transform([](const dpl::vector2d& p) { return dpl::vector2d{p.y(), p.x()}; });
-        std::vector<dpl::vector2d> pc_inv{query.begin(), query.end()};
-        pc_inv.resize(std::ranges::unique(pc_inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - pc_inv.begin());
-
-        using pc_sw_span = std::span<const dpl::vector2d>;
-
-
-
+        auto pc_inv = settings_.primary.calc_pc_inv();
 
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &invasion_task_,
-          absolute_rate_,
-          theta,
-          pc_sw_span{pc_inv});
+          absolute_rate_, theta, pc_inv);
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
@@ -654,7 +643,7 @@ namespace xpm
           last_progress_idx = invasion_task_.progress_idx();
 
           auto& state = invasion_task_.state();
-          auto darcy_saturation = 1.0 - (pc_inv.empty() ? 0.0 : solve(pc_sw_span{pc_inv}, 1/state.r_cap_global, dpl::extrapolant::flat));
+          auto darcy_saturation = 1.0 - (pc_inv.empty() ? 0.0 : solve(pc_inv, 1/state.r_cap_global, dpl::extrapolant::flat));
           
           auto map_satur = [](double x) { return x/2. + 0.25; };
 

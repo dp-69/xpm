@@ -51,7 +51,7 @@
     },
     {
       "inherits": "lin-default",
-      "name": "lin-rel-cfg",
+      "name": "lin-rel",
       "description": "Linux host, release build, ninja generator.",
       "environment": { "BUILD_TYPE" : "Release" }
     }
@@ -80,8 +80,8 @@
     },
     {     
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
-      "configurePreset": "lin-rel-cfg",
-      "name": "lin-rel-build",
+      "configurePreset": "lin-rel",
+      "name": "lin-rel",
       "targets": ["xpm", "pnextract"]
     }
   ]

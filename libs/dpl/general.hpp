@@ -295,7 +295,7 @@ namespace dpl
   
   
   
-  template<typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(const T& a, const T& b, double t) {
     if constexpr (std::is_same_v<Extrapolant, extrapolant::linear_t> && std::is_same_v<Base, lerp_base::linear>)
       return a + (b - a)*t;
@@ -310,26 +310,26 @@ namespace dpl
       static_assert(always_false<T>, "wrong extrapolant or base");
   }
 
-  template<typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(T* ptr, double t) {
     return dpl::lerp<Base, Extrapolant>(ptr[0], ptr[1], t);
   }
 
-  template<typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(bool log10, const T& a, const T& b, double t) {
     return log10
       ? dpl::lerp<lerp_base::log10, Extrapolant>(a, b, t)
       : dpl::lerp<lerp_base::linear, Extrapolant>(a, b, t);
   }
 
-  template<typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(bool log10, T* ptr, double t) {
     return dpl::lerp<Extrapolant>(log10, ptr[0], ptr[1], t);
   }
   
 
 
-  template<char ThousandsSep = ',', typename T>
+  template <char ThousandsSep = ',', typename T>
   std::string ft_format(const T& value, int precision = 0) {
     struct separate_thousands : std::numpunct<char> {
       char_type do_thousands_sep() const override { return ThousandsSep; }  // separate with commas
@@ -354,7 +354,7 @@ namespace dpl
   // template <typename Action>
   // void apply(const Action&) {}
 
-  // template<typename Action, typename Item, typename... Rest>
+  // template <typename Action, typename Item, typename... Rest>
   // void apply(const Action& a, Item&& item, Rest&&... args) {
   //   a(std::forward<Item>(item));
   //   dpl::apply(a, std::forward<Rest>(args)...);
@@ -362,7 +362,7 @@ namespace dpl
   
   // inline void AddItem(QBoxLayout* ) { }
   //
-  // template<typename... Rest>
+  // template <typename... Rest>
   // void AddItem(QBoxLayout* l, QWidget& widget, Rest&&... args) {
   //   l->addWidget(&widget);
   //   QLayoutBuilder::AddItem(l, std::forward<Rest>(args)...);

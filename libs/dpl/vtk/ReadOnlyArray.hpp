@@ -29,7 +29,7 @@
 
 namespace dpl::vtk
 {
-  template<typename Functor>
+  template <typename Functor>
   class ReadOnlyArray : public vtkGenericDataArray<ReadOnlyArray<Functor>, std::invoke_result_t<Functor, vtkIdType>>
   {
     using ValueType = std::invoke_result_t<Functor, vtkIdType>;
@@ -45,7 +45,7 @@ namespace dpl::vtk
     vtkObjectBase* NewInstanceInternal() const override { return vtkAOSDataArrayTemplate<ValueType>::New(); }
 
   public:
-    template<typename... Args>
+    template <typename... Args>
     void ConstructFunctor(Args&&... args) {
       func_ = std::make_unique<Functor>(std::forward<Args>(args)...);
     }
@@ -66,7 +66,7 @@ namespace dpl::vtk
     }
   };
 
-  template<typename Func>
+  template <typename Func>
   auto CreateReadOnlyArray(Func f) {
     auto result = vtkSmartPointer<ReadOnlyArray<Func>>::New();
     result->ConstructFunctor(f);

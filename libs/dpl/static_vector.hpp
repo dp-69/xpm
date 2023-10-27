@@ -304,7 +304,7 @@ namespace dpl
 
 
 
-  template<typename Derived, int n>
+  template <typename Derived, int n>
   constexpr auto operator/(double l, const _vector_oper<Derived, double, n>& r) {
     vector_n<double, n> v;
     sfor<n>([&](auto i) { v[i] = l/r[i]; });
@@ -506,12 +506,12 @@ namespace dpl
   using vector3d_map = vector_n_map<double, 3>;
 
 
-  template<typename T>
+  template <typename T>
   auto solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, const auto arg) {
     return p0.y() + (p1 - p0).slope()*(arg - p0.x());
   }
 
-  template<typename T>
+  template <typename T>
   auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::linear_t = extrapolant::linear) {
     if (arg <= curve.front().x())
       return solve(curve[0], curve[1], arg);
@@ -523,7 +523,7 @@ namespace dpl
     return solve(*(iter - 1), *iter, arg);
   }
 
-  template<typename T>
+  template <typename T>
   auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::flat_t) {
     if (arg <= curve.front().x())
       return curve.front().y();
@@ -533,6 +533,11 @@ namespace dpl
 
     auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x(); });
     return solve(*(iter - 1), *iter, arg);
+  }
+
+  template <typename T>
+  auto solve(const std::vector<vector_n<T, 2>>& curve, const auto arg, auto extrapolant) {
+    return solve(std::span<const vector_n<T, 2>>{curve}, arg, extrapolant);
   }
 }
 
@@ -604,7 +609,7 @@ namespace dpl
     static constexpr auto e1 = e0.next();
     static constexpr auto e2 = e1.next();
 
-    template<typename Tuple>
+    template <typename Tuple>
     static constexpr auto tie(Tuple& t) {
       return std::tie(t[e0], t[e1], t[e2]);
     }

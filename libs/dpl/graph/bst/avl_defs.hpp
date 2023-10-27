@@ -149,7 +149,7 @@ namespace dpl::graph
   };
 
 
-  template<typename Node>
+  template <typename Node>
   class avl_traits 
   {
     using mask = mask_bit_balance;
@@ -205,7 +205,7 @@ namespace dpl::graph
   };
 
 
-  template<typename Node>
+  template <typename Node>
   struct aug_avl_traits : avl_traits<Node>
   {
     using subsize = std::size_t;
@@ -221,7 +221,7 @@ namespace dpl::graph
 
 
   namespace internal {
-    template<typename NodeTraits>
+    template <typename NodeTraits>
     class bst_inorder_iterator
     {
       using node_ptr = typename NodeTraits::node_ptr;
@@ -259,7 +259,7 @@ namespace dpl::graph
   }
 
 
-  template<typename NodeTraits>
+  template <typename NodeTraits>
   auto range(typename NodeTraits::node_ptr hdr) {
     return std::ranges::subrange<internal::bst_inorder_iterator<NodeTraits>>{
       NodeTraits::get_left(hdr), hdr

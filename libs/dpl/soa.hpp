@@ -34,7 +34,7 @@
 
 namespace dpl
 {
-  // template<typename T, typename = void>
+  // template <typename T, typename = void>
   // struct static_item_desc {
   //   using key_type = T;
   //   using value_type = std::vector<typename T::type>;

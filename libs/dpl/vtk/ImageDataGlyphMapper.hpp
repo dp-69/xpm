@@ -27,7 +27,7 @@
 
 namespace dpl::vtk
 {
-  template<typename idx1d_t>
+  template <typename idx1d_t>
   class GlyphMapperFace
   {
   protected:
@@ -193,7 +193,7 @@ namespace dpl::vtk
   };
 
 
-  template<typename idx1d_t>
+  template <typename idx1d_t>
   class ImageDataGlyphMapper
   {
   public:

@@ -27,7 +27,7 @@
 
 namespace dpl::graph
 {
-  template<typename NodeTraits>
+  template <typename NodeTraits>
   struct default_path_buffer // TODO: maybe move to the function iself, check performance
   {
     using node_ptr = typename NodeTraits::node_ptr;
@@ -129,7 +129,7 @@ namespace dpl::graph
       return nt::get_left(*(l_subpath + 1)) == *l_subpath;        
     }    
 
-    template<typename UnaryLessThanNodeComparator>
+    template <typename UnaryLessThanNodeComparator>
     static node_ptr upper_bound(node_ptr header, UnaryLessThanNodeComparator comp) {
       node_ptr x = nt::get_parent(header);
       node_ptr y = header;
@@ -145,7 +145,7 @@ namespace dpl::graph
       return y;         
     }
 
-    template<typename UnaryMoreThanNodeComparator>
+    template <typename UnaryMoreThanNodeComparator>
     static node_ptr lower_bound(node_ptr header, UnaryMoreThanNodeComparator comp) {
       node_ptr x = nt::get_parent(header);
       node_ptr y = header;

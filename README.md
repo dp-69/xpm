@@ -1,5 +1,8 @@
-Extensive Pore Modelling (xpm)
-===
+# Extensive Pore Modelling (xpm)
+
+xpm is a software for predicting flow properties of the multi-scale pore space.
+
+xpm uses [pnextract](https://github.com/ImperialCollegeLondon/pnextract) to acquire a network model from an image.
 
 <!-- 
 ## Downloads
@@ -12,13 +15,11 @@ The latest release can be found at
 
 To run xpm, unpack a zip archive and run the executable `xpm.exe`. -->
 
-
 ## Build instructions
 
+### Windows
 
-#### Windows
-
-All commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute.
+Commands are issued from a **x64 Native Tools Command Prompt for VS 2022** command prompt (which is a part of Microsoft's Visual Studio toolset). It is assumed that Step 1 is conducted in `C:\` drive. Note that Step 1 may take at least an hour to execute.
 
 - Installing MPI
 
@@ -37,7 +38,6 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 ```cmd
 > git clone https://github.com/dp-69/xpm
 > cd xpm
-> git checkout dyn-conn-no-etnte-indices
 > cmake --preset=win-rel
 > cmake --build --preset=win-rel
 ```
@@ -48,7 +48,7 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 > xpm.exe
 ```
 
-#### Ubuntu
+### Ubuntu
 
 The following instructions assume that vcpkg's repository will be cloned into the user's home folder (`cd ~`), and that all commands are issued from a terminal. Note that Step 1 may take at least an hour to execute.
 
@@ -82,9 +82,8 @@ openmpi-bin
 ```cmd
 > git clone https://github.com/dp-69/xpm
 > cd xpm
-> git checkout dyn-conn-no-etnte-indices
-> cmake --preset=lin-rel-cfg
-> cmake --build --preset=lin-rel-build
+> cmake --preset=lin-rel
+> cmake --build --preset=lin-rel
 ```
 
 - Step 3 - Executing xpm

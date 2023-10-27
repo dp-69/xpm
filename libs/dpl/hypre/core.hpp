@@ -54,7 +54,7 @@ namespace dpl::hypre
     }
   };
 
-  template<typename Proj = std::identity>
+  template <typename Proj = std::identity>
   class ls_known_storage_builder
   {
     Proj proj_;
