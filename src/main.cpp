@@ -33,6 +33,8 @@
 
 int main(int argc, char* argv[])
 {
+  // std::cout << fmt::format("sw-{:04.2f}.raw", 0.5);
+
   // auto k = occurrences("one/two/three", '/');
   // auto qq = partition("one/two/three");
   // static constexpr auto k2 = occurrences("one/two/three", '/');

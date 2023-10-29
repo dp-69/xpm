@@ -609,7 +609,7 @@ namespace xpm
       parse::image_dict phases;
 
       void load(const nlohmann::json& j) {
-        path = static_cast<std::string>(j["path"]);
+        path = std::string{j["path"]};
         size = j["size"];
         resolution = j["resolution"];
         phases.load(j["phase"]);
@@ -709,7 +709,7 @@ namespace xpm
         for (i = 0; i < dst_size.x(); ++i, ++idx1d)
           dst[*idx1d] = src[*src_mapper(src_origin + ijk)];
 
-    std::ofstream os(dst_p);
+    std::ofstream os(dst_p, std::ios_base::binary);
     os.write(reinterpret_cast<char*>(dst.data()), dst_total_size);
   }
 }

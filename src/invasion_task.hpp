@@ -47,7 +47,7 @@ namespace xpm {
       return l == r_cap_mobile_ ? r_cap_global : l;  // NOLINT(clang-diagnostic-float-equal)
     }
 
-    void write(
+    void write_occupancy_image(
       const std::filesystem::path& path,
       const pore_network_image& pni,
       std::span<const dpl::vector2d> pc_inv
@@ -61,7 +61,7 @@ namespace xpm {
       using type = std::uint16_t;
       static constexpr auto max = std::numeric_limits<type>::max();
 
-      type darcy_value = 0;//max;//pc_inv.empty() ? 0 : (1 - solve(pc_inv, 1/r_cap_global, dpl::extrapolant::flat))*max;
+      type darcy_value = pc_inv.empty() ? 0 : (1 - solve(pc_inv, 1/r_cap_global, dpl::extrapolant::flat))*max;
 
       using namespace presets;
       using namespace attrib;
@@ -87,26 +87,24 @@ namespace xpm {
                     // if (output[*idx1d] < 0 || output[*idx1d] > 1)
                     //   std::cout << fmt::format("MACRO_IDX={}, NET={}, VAL={}\n", macro, pni.net(macro), output[*idx1d]);
                   }
-                  else
-                    output[*idx1d] = 0;
+                  // else
+                  //   output[*idx1d] = 0;
 
-                  // std::cout << fmt::format("MACRO_IDX={}, NET={}\n", macro, pni.net(macro));
                   
                   
                 }
-                else
-                  output[*idx1d] = 0;
+                // else
+                //   output[*idx1d] = 0;
               }
-              else {
-                output[*idx1d] = 0;
-              }
+              // else
+              //   output[*idx1d] = 0;
             }
             else if (img.phase[idx1d] == microporous)
               output[*idx1d] = darcy_value;
-            else
-              output[*idx1d] = 0;
+            // else
+            //   output[*idx1d] = 0;
 
-      std::ofstream(path)
+      std::ofstream{path, std::ios_base::binary}
         .write(reinterpret_cast<char*>(output.data()), sizeof(type)**img.size());
     }
   };
@@ -205,21 +203,23 @@ namespace xpm {
       std::vector<dpl::vector2d> pc;
       std::vector<dpl::vector3d> kr;
 
-      bool add_pc_point(const dpl::vector2d& p) {
-        if (pc.size() > 1
-          && std::abs(pc[pc.size() - 1].y() - p.y()) < 1e-6
-          && std::abs(pc[pc.size() - 2].y() - p.y()) < 1e-6) {
-          pc[pc.size() - 1].x() = p.x();
-
-          std::cout << "SHOULD NOT\n\n"; // TODO: remove
-          return false;
-        }
+      /*bool*/void add_pc(const dpl::vector2d& p) {
+        // if (pc.size() > 1
+        //   && std::abs(pc[pc.size() - 1].y() - p.y()) < 1e-6
+        //   && std::abs(pc[pc.size() - 2].y() - p.y()) < 1e-6) {
+        //   pc[pc.size() - 1].x() = p.x();
+        //
+        //   std::cout << "SHOULD NOT\n\n"; // TODO: remove
+        //   return false;
+        // }
 
         pc.push_back(p);
-        return true;
+        // return true;
       }
     } primary_,
       secondary_;
+
+    std::filesystem::path image_dir_;
 
     idx1d_t progress_idx_ = 0;
 
@@ -262,6 +262,12 @@ namespace xpm {
     }
 
     void init() {
+      image_dir_ = std::filesystem::path(dpl::hypre::mpi::mpi_exec)
+        .replace_filename("image")/settings_->image.path.stem();
+
+      remove_all(image_dir_);
+      create_directories(image_dir_);
+
       state_.resize(pni_->connected_count(), pn_->throat_count());
 
       primary_.pc.reserve(500);
@@ -523,7 +529,7 @@ namespace xpm {
         auto max_pc = primary_.pc.back().y();
 
         state_.r_cap_global = 1/max_pc;
-        secondary_.add_pc_point(eval_pc_point());
+        secondary_.add_pc(eval_pc_point());
         
         {
           auto steps = 10;
@@ -533,7 +539,7 @@ namespace xpm {
           for (auto i = 0; i < steps; ++i) {
             state_.r_cap_global *= step;
             last_pc_point_ = eval_pc_point();
-            secondary_.add_pc_point(last_pc_point_);
+            secondary_.add_pc(last_pc_point_);
           }
         }
 
@@ -570,7 +576,7 @@ namespace xpm {
         if (auto pc_point = eval_pc_point();
           std::abs(last_pc_point_.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
           last_pc_point_ = pc_point;
-          secondary_.add_pc_point(pc_point);
+          secondary_.add_pc(pc_point);
         }
 
         auto [elem, local_idx, r_cap] = queue.front();
@@ -692,7 +698,7 @@ namespace xpm {
       }
 
 
-      secondary_.add_pc_point(eval_pc_point());
+      secondary_.add_pc(eval_pc_point());
       rel_calc_report(eval_inv_volume()/total_pore_volume_);
       ++progress_idx_;
     }
@@ -765,19 +771,21 @@ namespace xpm {
 
       int file_idx = 0;
 
+
+
+      auto write_occupancy_image = [&](double sw) {
+        state_.write_occupancy_image(
+          image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, pc_inv);
+      };
+
       auto progress_percolation = [&](auto idx, double r_cap) {
         if (r_cap < state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
             std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ settings_->macro_sw_pc ||
             std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
             last_pc_point_ = pc_point;
-            primary_.add_pc_point(pc_point);
-
-            if (file_idx < 5)
-              state_.write(
-                fmt::format("MY_EXPORT_IMG_{}.raw", ++file_idx),
-                *pni_,
-                pc_inv);
+            primary_.add_pc(pc_point);
+            write_occupancy_image(pc_point.x());
           }
 
           if (auto sw = 1 - eval_inv_volume()/total_pore_volume_; last_kr_sw - sw > /*0.025*/ settings_->macro_sw_kr) {
@@ -879,7 +887,8 @@ namespace xpm {
         auto end_pc = 1/state_.r_cap_global;
         auto max_darcy_pc = pc_inv.back().x();
 
-        primary_.add_pc_point(eval_pc_point());
+        primary_.add_pc(eval_pc_point());
+        write_occupancy_image(primary_.pc.back().x());
 
         { /* Capillary pressure */
           auto steps = 10;
@@ -888,7 +897,10 @@ namespace xpm {
 
           for (auto i = 0; i < steps; ++i) {
             state_.r_cap_global /= step;
-            primary_.add_pc_point(eval_pc_point());
+            primary_.add_pc(eval_pc_point());
+
+            if (i%2 != 0)
+              write_occupancy_image(primary_.pc.back().x());
           }
         }
 
