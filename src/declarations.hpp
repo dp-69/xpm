@@ -454,10 +454,10 @@ namespace xpm
       static inline constexpr auto not_valid = std::numeric_limits<value_type>::max();
 
     public:
-      velem_t() : strong_integer(not_valid) {}
-      constexpr explicit velem_t(const value_type v) : strong_integer(v) {}
+      velem_t() : strong_integer{not_valid} {}
+      constexpr explicit velem_t(const value_type v) : strong_integer{v} {}
 
-      constexpr operator macro_t() const {
+      explicit constexpr operator macro_t() const {
         return macro_t{value};
       }
 
@@ -545,6 +545,57 @@ namespace xpm
     };
   }
 
+  template <typename>
+  struct wrapper {};
+
+  template <>
+  struct wrapper<nlohmann::json>
+  {
+    const nlohmann::json* j = nullptr;
+
+    wrapper() = default;
+    wrapper(const nlohmann::json* j) : j(j) {}
+    wrapper(const nlohmann::json& j) : j(&j) {}
+
+    wrapper operator()(const auto& key, const auto&... rest) const {
+      if (auto jj = (*this)(key); jj)
+        return jj(rest...);
+      return {};
+    }
+
+    auto operator()(const auto& key) const {
+      auto found = j->find(key);
+      return found == j->end() ? wrapper{} : wrapper{&*found};
+    }
+
+    auto& operator*() const {
+      return *j;
+    }
+
+    auto operator->() const {
+      return j;
+    }
+
+    explicit operator bool() const {
+      return j != nullptr;
+    }
+
+    auto set(auto& value, const auto&... keys) {
+      if (auto jj = (*this)(keys...); jj)
+        value = *jj;
+    }
+  };
+
+  // void operator<<(auto& value, const wrapper<nlohmann::json>& arg) {
+  //   if (arg)
+  //     value = *arg;
+  // }
+
+  // void operator<<(auto& value, const wrapper<nlohmann::json>& arg) {
+  //   if (arg)
+  //     value = *arg;
+  // }
+
   struct startup_settings
   {
     bool use_cache = true;
@@ -601,27 +652,34 @@ namespace xpm
       }
     } solver;
 
-    void load(const nlohmann::json& j) {
-      image.load(j["image"]);
+    double macro_sw_pc = 0.05;
+    double macro_sw_kr = 0.075;
+    
 
-      if (auto j_micro = j.find("microporosity"); j_micro != j.end()) {
+    void load(wrapper<nlohmann::json> j) {
+      image.load(*j("image"));
+
+      if (auto j_micro = j("microporosity"); j_micro) {
         darcy_perm = (*j_micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
         darcy_poro = (*j_micro)["porosity"];
 
-        if (auto j_pr = j_micro->find("primary"); j_pr != j_micro->end()) {
-          primary.pc = (*j_pr)["capillary_pressure"];
-          primary.kr[0] = (*j_pr)["relative_permeability"][0];
-          primary.kr[1] = (*j_pr)["relative_permeability"][1];  
+        if (auto j_primary = j_micro("primary"); j_primary) {
+          primary.pc = (*j_primary)["capillary_pressure"];
+          primary.kr[0] = (*j_primary)["relative_permeability"][0];
+          primary.kr[1] = (*j_primary)["relative_permeability"][1];  
         }
 
-        if (auto j_sec = j_micro->find("secondary"); j_sec != j_micro->end()) {
-          secondary.pc = (*j_sec)["capillary_pressure"];
-          secondary.kr[0] = (*j_sec)["relative_permeability"][0];
-          secondary.kr[1] = (*j_sec)["relative_permeability"][1];  
+        if (auto j_secondary = j_micro("secondary"); j_secondary) {
+          secondary.pc = (*j_secondary)["capillary_pressure"];
+          secondary.kr[0] = (*j_secondary)["relative_permeability"][0];
+          secondary.kr[1] = (*j_secondary)["relative_permeability"][1];  
         }
       }
 
-      solver.load(j["solver"]);
+      j.set(macro_sw_pc, "report", "capillary_pressure", "macro_sw");
+      j.set(macro_sw_kr, "report", "relative_permeability", "macro_sw");
+
+      solver.load(*j("solver"));
       loaded = true;
     }
   };

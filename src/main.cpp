@@ -4,8 +4,81 @@
 #include <QWidget>
 
 
+// constexpr auto occurrences(std::string_view sv, const char sep) {
+//   auto sep_count = 0;
+//   auto pos = sv.find(sep);
+//   while (pos != std::string_view::npos) {
+//     ++sep_count;
+//     pos = sv.find(sep, pos + 1);
+//   }
+//   return sep_count;
+// }
+
+// constexpr auto partition(std::string_view sv) {
+//   constexpr auto sep = '/';
+//   auto pos = sv.find(sep);
+
+  // constexpr auto sep = '/';
+  // static constexpr auto count = occurrences(sv, sep);
+  // std::array<std::string_view, count> arr;
+  // auto i = 0;
+  // for (auto pos = sv.find(sep); pos != std::string_view::npos;) {
+  //   arr[i++] = sv.substr(0, pos);
+  //   sv.remove_prefix(pos + 1);
+  // }
+  // arr[i] = sv;
+  // return arr;
+// }
+
+
 int main(int argc, char* argv[])
 {
+  // auto k = occurrences("one/two/three", '/');
+  // auto qq = partition("one/two/three");
+  // static constexpr auto k2 = occurrences("one/two/three", '/');
+
+//   using json = nlohmann::json;
+//   
+//   json ex1 = json::parse(R"(
+//     {
+//       "pi": 3.141,
+//       "happy": 
+// {
+//       "lul": 6.99,
+//       "foo": true
+//     }
+//
+//     }
+//   )");
+//   
+//   std::unique_ptr<json> k;
+//   
+//   
+//   xpm::wrapper<json> my{&ex1};
+//
+//   double wewre;
+//
+//   my.assign(wewre, "happy", "lulw");
+
+  // auto lul = my("happy", "lul", qqq);
+  
+  // int p = 3;
+  // wewre << lul;
+  
+  // if (lul) {
+  //   double foo = *lul;
+  //   int ww = 3;
+  // }
+  //
+  // if (auto lul2 = my["piww"]; lul2) {
+  //   int qwe = 4;
+  // }
+  //
+  // int p = 3;
+
+
+
+
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
     dpl::hypre::mpi::process();

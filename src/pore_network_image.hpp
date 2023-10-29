@@ -754,7 +754,7 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (img_->phase[idx1d] == microporous) {
                 if (img_->velem[idx1d]) // macro-darcy
-                  ds.union_set(*total(img_->velem[idx1d]), *total(idx1d));
+                  ds.union_set(*total(macro_t{img_->velem[idx1d]}), *total(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -930,7 +930,7 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
-                  gen.reserve(img_->velem[idx1d], idx1d);
+                  gen.reserve(macro_t{img_->velem[idx1d]}, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -975,7 +975,7 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
-                  gen.set(img_->velem[idx1d], idx1d);
+                  gen.set(macro_t{img_->velem[idx1d]}, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -1011,8 +1011,8 @@ namespace xpm
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
-                if (auto velem = img_->velem[idx1d]; velem && filter(velem)) // macro-darcy
-                  builder.reserve(velem, idx1d);
+                if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{velem})) // macro-darcy
+                  builder.reserve(macro_t{velem}, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -1067,8 +1067,8 @@ namespace xpm
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
-                if (auto velem = img_->velem[idx1d]; velem && filter(velem)) { // macro-darcy
-                  macro_t adj_macro_idx = velem;
+                if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{velem})) { // macro-darcy
+                  macro_t adj_macro_idx{velem};
 
                   auto li = cell_size.x()/2;
                   auto gi = term(idx1d);

@@ -37,6 +37,14 @@
     "decomposition": [4, 3, 2], /* the product is a number of MPI processes */
     "tolerance": 1e-9,
     "max_iterations": 19
+  },
+  "report" : {
+    "capillary_pressure": { 
+      "macro_sw" : 0.025
+    },
+    "relative_permeability": {
+      "macro_sw" : 0.07
+    }
   }
 }
 

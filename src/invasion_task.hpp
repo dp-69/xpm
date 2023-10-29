@@ -46,6 +46,69 @@ namespace xpm {
       auto l = local(i);
       return l == r_cap_mobile_ ? r_cap_global : l;  // NOLINT(clang-diagnostic-float-equal)
     }
+
+    void write(
+      const std::filesystem::path& path,
+      const pore_network_image& pni,
+      std::span<const dpl::vector2d> pc_inv
+      // ,      const startup_settings& settings
+      ) const {
+      constexpr auto theta = 0;
+
+      const auto& img = pni.img();
+      const auto& dim = img.dim();
+      const auto& pn = pni.pn();
+      using type = std::uint16_t;
+      static constexpr auto max = std::numeric_limits<type>::max();
+
+      type darcy_value = 0;//max;//pc_inv.empty() ? 0 : (1 - solve(pc_inv, 1/r_cap_global, dpl::extrapolant::flat))*max;
+
+      using namespace presets;
+      using namespace attrib;
+      using eq_tr = hydraulic_properties::equilateral_triangle;
+
+      std::vector<type> output(*img.size());
+
+      idx3d_t ijk;
+      auto& [i, j, k] = ijk;
+      voxel_t idx1d{0};
+
+      for (k = 0; k < dim.z(); ++k)
+        for (j = 0; j < dim.y(); ++j)
+          for (i = 0; i < dim.x(); ++i, ++idx1d)
+            if (img.phase[idx1d] == pore) {
+              if (auto velem = img.velem[idx1d]; velem) {
+                macro_t macro{velem};
+
+                if (pni.connected(macro)) {
+                  if (auto net = pni.net(macro); config(net).phase() == phase_config::phase1()) {
+                    auto area = eq_tr::area(r_ins(pn, macro));
+                    output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/area)*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
+                    // if (output[*idx1d] < 0 || output[*idx1d] > 1)
+                    //   std::cout << fmt::format("MACRO_IDX={}, NET={}, VAL={}\n", macro, pni.net(macro), output[*idx1d]);
+                  }
+                  else
+                    output[*idx1d] = 0;
+
+                  // std::cout << fmt::format("MACRO_IDX={}, NET={}\n", macro, pni.net(macro));
+                  
+                  
+                }
+                else
+                  output[*idx1d] = 0;
+              }
+              else {
+                output[*idx1d] = 0;
+              }
+            }
+            else if (img.phase[idx1d] == microporous)
+              output[*idx1d] = darcy_value;
+            else
+              output[*idx1d] = 0;
+
+      std::ofstream(path)
+        .write(reinterpret_cast<char*>(output.data()), sizeof(type)**img.size());
+    }
   };
 
   class invasion_task {
@@ -700,15 +763,24 @@ namespace xpm {
           calc_relative(settings_->primary, pc_inv, theta, std::true_type{})/absolute_rate); // TODO: calculate when breakthrough
       };
 
+      int file_idx = 0;
+
       auto progress_percolation = [&](auto idx, double r_cap) {
         if (r_cap < state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
-            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ 0.05  || std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
+            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ settings_->macro_sw_pc ||
+            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
             last_pc_point_ = pc_point;
             primary_.add_pc_point(pc_point);
+
+            if (file_idx < 5)
+              state_.write(
+                fmt::format("MY_EXPORT_IMG_{}.raw", ++file_idx),
+                *pni_,
+                pc_inv);
           }
 
-          if (auto sw = 1 - eval_inv_volume()/total_pore_volume_; last_kr_sw - sw > /*0.025*/ 0.075) {
+          if (auto sw = 1 - eval_inv_volume()/total_pore_volume_; last_kr_sw - sw > /*0.025*/ settings_->macro_sw_kr) {
             last_kr_sw = sw;
             rel_calc_report(sw);
           }
