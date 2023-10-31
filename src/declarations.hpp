@@ -616,6 +616,8 @@ namespace xpm
       }
     } image;
 
+
+    double theta = 0;
     double darcy_perm = std::numeric_limits<double>::quiet_NaN(); /* mD */
     double darcy_poro = std::numeric_limits<double>::quiet_NaN(); /* fraction */
 
@@ -677,7 +679,9 @@ namespace xpm
       }
 
       j.set(macro_sw_pc, "report", "capillary_pressure", "macro_sw");
-      j.set(macro_sw_kr, "report", "relative_permeability", "macro_sw");
+
+      if (auto j_theta = j("macro", "contact_angle"); j_theta)
+        theta = j_theta->get<double>()/180*std::numbers::pi;
 
       solver.load(*j("solver"));
       loaded = true;

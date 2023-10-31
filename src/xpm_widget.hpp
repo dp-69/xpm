@@ -627,16 +627,16 @@ namespace xpm
 
       consumer_future_ = std::async(std::launch::async, [this] {
         auto start = std::chrono::system_clock::now();
-        double theta = 0*std::numbers::pi/180;
+        // double theta = 0*std::numbers::pi/180;
 
         auto pc_inv = settings_.primary.calc_pc_inv();
 
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &invasion_task_,
-          absolute_rate_, theta, pc_inv);
+          absolute_rate_, settings_.theta, pc_inv);
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
-        auto update = [this, theta, start, &pc_inv, &last_progress_idx] {
+        auto update = [this, start, &pc_inv, &last_progress_idx] {
           if (last_progress_idx == invasion_task_.progress_idx())
             return;
 
@@ -666,7 +666,7 @@ namespace xpm
           for (macro_t i{0}; i < pn_.node_count(); ++i)
             if (pni_.connected(i) && state.config(pni_.net(i)).phase() == phase_config::phase1())
               macro_colors->SetTypedComponent(*i, 0,
-                map_satur(1.0 - eq_tr::area_corners(theta, state.r_cap(pni_.net(i)))/eq_tr::area(r_ins(pn_, i))));
+                map_satur(1.0 - eq_tr::area_corners(settings_.theta, state.r_cap(pni_.net(i)))/eq_tr::area(r_ins(pn_, i))));
             else
               macro_colors->SetTypedComponent(*i, 0, 0.0);
           
@@ -677,7 +677,7 @@ namespace xpm
               if (auto [l, r] = adj(pn_, i); pn_.inner_node(r)) {
                 if (pni_.connected(l) && state.config(i).phase() == phase_config::phase1())
                   throat_colors->SetTypedComponent(t_inner_idx, 0,
-                    map_satur(1.0 - eq_tr::area_corners(theta, state.r_cap(i))/eq_tr::area(r_ins(pn_, i))));
+                    map_satur(1.0 - eq_tr::area_corners(settings_.theta, state.r_cap(i))/eq_tr::area(r_ins(pn_, i))));
                 else
                   throat_colors->SetTypedComponent(t_inner_idx, 0, 0.0);
           
