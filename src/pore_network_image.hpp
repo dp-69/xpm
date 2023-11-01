@@ -368,13 +368,13 @@ namespace xpm
 
     
 
-    double macro_macro_coef(std::size_t i, macro_t l, macro_t r, auto cond) const {
+    double macro_macro_coef(std::size_t i, macro_t l, macro_t r, auto cond_term) const {
       using namespace attrib;
       
       return -1.0/(
-        throat_[length0][i]/cond(l)
-      + throat_[length][i]/cond(i)
-      + (inner_node(r) ? throat_[length1][i]/cond(r) : 0.0));
+        throat_[length0][i]/cond_term(l)
+      + throat_[length][i]/cond_term(i)
+      + (inner_node(r) ? throat_[length1][i]/cond_term(r) : 0.0));
     }
 
     double macro_macro_coef(std::size_t i, macro_t l, macro_t r) const;
@@ -1124,11 +1124,11 @@ namespace xpm
         auto [l, r] = attrib::adj(pn_, i);
 
         if (r == pn_->inlet()) { // macro-inlet
-          if (connected(l) && filter(l))
+          if (connected(l) && filter(l) && filter(i))
             inlet_flow += pn_->macro_macro_coef(i, l, r, term)*(pressure[net(l)] - 1);
         }
         else if (r == pn_->outlet()) { // macro-outlet
-          if (connected(l) && filter(l))
+          if (connected(l) && filter(l) && filter(i))
             outlet_flow += pn_->macro_macro_coef(i, l, r, term)*(0 - pressure[net(l)]);
         }
       }

@@ -627,7 +627,6 @@ namespace xpm
 
       consumer_future_ = std::async(std::launch::async, [this] {
         auto start = std::chrono::system_clock::now();
-        // double theta = 0*std::numbers::pi/180;
 
         auto pc_inv = settings_.primary.calc_pc_inv();
 

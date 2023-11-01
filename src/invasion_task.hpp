@@ -50,10 +50,8 @@ namespace xpm {
     void write_occupancy_image(
       const std::filesystem::path& path,
       const pore_network_image& pni,
-      std::span<const dpl::vector2d> pc_inv
-      // ,      const startup_settings& settings
-      ) const {
-      constexpr auto theta = 0;
+      const double theta,
+      const std::span<const dpl::vector2d> pc_inv) const {
 
       const auto& img = pni.img();
       const auto& dim = img.dim();
@@ -77,32 +75,13 @@ namespace xpm {
         for (j = 0; j < dim.y(); ++j)
           for (i = 0; i < dim.x(); ++i, ++idx1d)
             if (img.phase[idx1d] == pore) {
-              if (auto velem = img.velem[idx1d]; velem) {
-                macro_t macro{velem};
-
-                if (pni.connected(macro)) {
-                  if (auto net = pni.net(macro); config(net).phase() == phase_config::phase1()) {
-                    auto area = eq_tr::area(r_ins(pn, macro));
-                    output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/area)*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
-                    // if (output[*idx1d] < 0 || output[*idx1d] > 1)
-                    //   std::cout << fmt::format("MACRO_IDX={}, NET={}, VAL={}\n", macro, pni.net(macro), output[*idx1d]);
-                  }
-                  // else
-                  //   output[*idx1d] = 0;
-
-                  
-                  
-                }
-                // else
-                //   output[*idx1d] = 0;
-              }
-              // else
-              //   output[*idx1d] = 0;
+              if (auto velem = img.velem[idx1d]; velem)
+                if (macro_t macro{velem}; pni.connected(macro))
+                  if (auto net = pni.net(macro); config(net).phase() == phase_config::phase1())
+                    output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/eq_tr::area(r_ins(pn, macro)))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
             }
             else if (img.phase[idx1d] == microporous)
               output[*idx1d] = darcy_value;
-            // else
-            //   output[*idx1d] = 0;
 
       std::ofstream{path, std::ios_base::binary}
         .write(reinterpret_cast<char*>(output.data()), sizeof(type)**img.size());
@@ -346,7 +325,7 @@ namespace xpm {
         for (HYPRE_BigInt i = 0; i < nrows; ++i)
           pressure[mapping.backward[i]] = decomposed_pressure[i];
 
-        auto inlet = pni_->flow_rates(pressure, term, filter).first;
+        auto inlet = pni_->flow_rates(pressure, term, filter).second;
 
         pressure_cache::cache()[hash] = inlet;
         pressure_cache::save();
@@ -361,15 +340,10 @@ namespace xpm {
     void launch_secondary(double absolute_rate, double theta) {
       using eq_tr = hydraulic_properties::equilateral_triangle;
       using namespace attrib;
-      
-      auto pc_inv = settings_->secondary.calc_pc_inv();
 
       auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*settings_->darcy_poro;
-
-      auto darcy_r_cap = std::numeric_limits<double>::quiet_NaN();
-      if (!pc_inv.empty())
-        darcy_r_cap = 1/settings_->secondary.pc.back().y();
-
+      auto pc_inv = settings_->secondary.calc_pc_inv();
+      auto darcy_r_cap = pc_inv.empty() ? std::numeric_limits<double>::quiet_NaN() : 1/settings_->secondary.pc.back().y();
 
       dpl::strong_vector<net_t, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
@@ -407,7 +381,7 @@ namespace xpm {
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
-              if (pni_->connected(idx1d)/* && filter(idx1d)*/) { // TODO
+              if (pni_->connected(idx1d)) {
                 ++darcy_count;
                 queue.insert(idx1d, darcy_r_cap);
               }
@@ -515,15 +489,18 @@ namespace xpm {
 
 
         
-        auto def = calc_relative(settings_->secondary, pc_inv, theta, std::false_type{});//rel_calc(std::false_type{});
-        auto inv = phase1_connected() ? calc_relative(settings_->secondary, pc_inv, theta, std::true_type{})/*rel_calc(std::true_type{})*/ : 0;
+        auto def = calc_relative(settings_->secondary, pc_inv, theta, std::false_type{});
+        auto inv = phase1_connected() ? calc_relative(settings_->secondary, pc_inv, theta, std::true_type{}) : 0;
       
         secondary_.kr.emplace_back(sw, def/absolute_rate, inv/absolute_rate);
       };
 
 
 
-
+      auto write_occupancy_image = [&](double sw) {
+        state_.write_occupancy_image(
+          image_dir_/fmt::format("secondary-{:.4f}.raw", sw), *pni_, theta, pc_inv);
+      };
 
       if (!pc_inv.empty()) {
         auto max_pc = primary_.pc.back().y();
@@ -540,6 +517,8 @@ namespace xpm {
             state_.r_cap_global *= step;
             last_pc_point_ = eval_pc_point();
             secondary_.add_pc(last_pc_point_);
+            if (i%2 != 0)
+              write_occupancy_image(last_pc_point_.x());
           }
         }
 
@@ -553,11 +532,33 @@ namespace xpm {
             auto sw = eval_inv_volume()/total_pore_volume_;
             last_kr_sw = sw;
             rel_calc_report(sw);
-            // rel_calc_report(1 - eval_inv_volume()/total_pore_volume_);
             ++progress_idx_;
           }
         }
       }
+
+      
+
+      auto progress_percolation = [&](auto idx, double r_cap) {
+        if (r_cap > state_.r_cap_global) {
+          if (auto pc_point = eval_pc_point();
+            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ settings_->macro_sw_pc ||
+            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
+            last_pc_point_ = pc_point;
+            secondary_.add_pc(pc_point);
+            write_occupancy_image(pc_point.x());
+          }
+
+          if (auto sw = eval_inv_volume()/total_pore_volume_; sw - last_kr_sw > /*0.025*/ settings_->macro_sw_kr) {
+            last_kr_sw = sw;
+            rel_calc_report(sw);
+          }
+
+          state_.r_cap_global = r_cap;
+        }
+
+        state_.config(idx) = phase_config{phase_config::phase0()};
+      };
 
 
       auto inv_idx_ = 0;
@@ -567,40 +568,25 @@ namespace xpm {
         //   std::this_thread::sleep_for(std::chrono::milliseconds{1});
 
 
-
-        if (auto sw = eval_inv_volume()/total_pore_volume_; (sw - last_kr_sw) > 0.075) {
-          last_kr_sw = sw;
-          rel_calc_report(sw);
-        }
-
-        if (auto pc_point = eval_pc_point();
-          std::abs(last_pc_point_.x() - pc_point.x()) > 0.05 || std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
-          last_pc_point_ = pc_point;
-          secondary_.add_pc(pc_point);
-        }
-
-        auto [elem, local_idx, r_cap] = queue.front();
-
-        
+        auto [elem, local, r_cap] = queue.front();
 
         queue.pop();
 
         if (elem == displ_elem::macro) {
-          macro_t macro_idx(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-          auto net_idx = pni_->net(macro_idx);
+          macro_t macro(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          auto net = pni_->net(macro);
 
-          if (state_.config(net_idx).phase() == phase_config::phase0())
+          if (state_.config(net).phase() == phase_config::phase0())
             continue;
 
-          if (traits.get_entry(vertex_t(*net_idx))) {
-            state_.r_cap_global = std::max(r_cap, state_.r_cap_global);
-            state_.config(net_idx) = phase_config{phase_config::phase0()};
-            
-            area_corner_mult -= volume(pn_, macro_idx)/eq_tr::area(r_ins(pn_, macro_idx));
-            inv_volume_coef0 += volume(pn_, macro_idx);
+          if (traits.get_entry(vertex_t(*net))) {
+            progress_percolation(net, r_cap);
+
+            area_corner_mult -= volume(pn_, macro)/eq_tr::area(r_ins(pn_, macro));
+            inv_volume_coef0 += volume(pn_, macro);
 
             {
-              vertex_t v(*net_idx);
+              vertex_t v(*net);
 
               for (edge_t vu : g_.edges(v))
                 if (!traits.is_null_entry(vu) && !traits.is_tree_edge(vu))
@@ -627,10 +613,10 @@ namespace xpm {
           }
         }
         else if (elem == displ_elem::throat) {
-          if (state_.config(local_idx).phase() == phase_config::phase0())
+          if (state_.config(local).phase() == phase_config::phase0())
             continue;
 
-          auto [l, r] = adj(pn_, local_idx);
+          auto [l, r] = adj(pn_, local);
 
           auto l_net = pni_->net(l);
 
@@ -652,13 +638,12 @@ namespace xpm {
                 explored[r_net] = true;
               }
 
-            state_.config(local_idx) = phase_config{phase_config::phase0()};
-            state_.r_cap_global = std::max(r_cap, state_.r_cap_global);
-            
-            area_corner_mult -= volume(pn_, local_idx)/eq_tr::area(r_ins(pn_, local_idx));
-            inv_volume_coef0 += volume(pn_, local_idx);
+            progress_percolation(local, r_cap);
 
-            if (edge_t de = throat_idx_to_de_[local_idx]; !traits.is_null_entry(de))
+            area_corner_mult -= volume(pn_, local)/eq_tr::area(r_ins(pn_, local));
+            inv_volume_coef0 += volume(pn_, local);
+
+            if (edge_t de = throat_idx_to_de_[local]; !traits.is_null_entry(de))
               if (traits.is_tree_edge(de)) {
                 if (!context_.tree_edge_split_and_reconnect(de)) {
                   et_ptr hdr = et_algo::get_header(traits.get_entry(target(de, g_)));
@@ -673,12 +658,11 @@ namespace xpm {
           }
         }
         else { // voxel
-          auto net = pni_->net(voxel_t(local_idx));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          auto net = pni_->net(voxel_t(local));  // NOLINT(cppcoreguidelines-narrowing-conversions)
           
           // if (traits.get_entry(vertex_t(*net_idx))) 
           {
-            state_.r_cap_global = std::max(r_cap, state_.r_cap_global);
-            state_.config(net) = phase_config{phase_config::phase0()};
+            progress_percolation(net, r_cap);
 
             vertex_t v(*net);
               
@@ -692,7 +676,6 @@ namespace xpm {
                   freeze_cluster(hdr);
             
             traits.set_entry(v, nullptr);
-
           }
         }
       }
@@ -775,7 +758,7 @@ namespace xpm {
 
       auto write_occupancy_image = [&](double sw) {
         state_.write_occupancy_image(
-          image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, pc_inv);
+          image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, theta, pc_inv);
       };
 
       auto progress_percolation = [&](auto idx, double r_cap) {
@@ -811,20 +794,20 @@ namespace xpm {
 
         
 
-        auto [elem, local_idx, r_cap] = queue.front();
+        auto [elem, local, r_cap] = queue.front();
 
         queue.pop();
 
         if (elem == displ_elem::macro) {
-          auto macro_idx = macro_t(local_idx);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-          auto net_idx = pni_->net(macro_idx);
+          auto macro = macro_t(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          auto net = pni_->net(macro);
 
-          progress_percolation(net_idx, r_cap);
+          progress_percolation(net, r_cap);
 
-          inv_volume_coefs[0] += volume(pn_, macro_idx);
-          inv_volume_coefs[2] -= volume(pn_, macro_idx)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, macro_idx));
+          inv_volume_coefs[0] += volume(pn_, macro);
+          inv_volume_coefs[2] -= volume(pn_, macro)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, macro));
           
-          for (edge_t vu : g_.edges(vertex_t(*net_idx)))
+          for (edge_t vu : g_.edges(vertex_t(*net)))
             if (net_t u_net_idx{*target(vu, g_)}; u_net_idx == outlet_idx || pni_->is_macro(u_net_idx)) { // macro-macro
               if (auto t_idx = de_to_throat_idx_[vu]; !explored_throat[t_idx]) {
                 queue.insert(t_idx, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, t_idx)));
@@ -840,34 +823,34 @@ namespace xpm {
             }
         }
         else if (elem == displ_elem::voxel) {
-          auto net_idx = pni_->net(voxel_t(local_idx));
+          auto net = pni_->net(voxel_t(local));
 
           darcy_invaded_ = true;
           ++inv_darcy_count;
 
-          progress_percolation(net_idx, r_cap); // TODO: phase_config::phase1_bulk_films(); of a voxel
+          progress_percolation(net, r_cap); // TODO: phase_config::phase1_bulk_films(); of a voxel
 
-          for (auto vu : g_.edges(vertex_t(*net_idx))) {
-            if (net_t u_net_idx{*target(vu, g_)}; u_net_idx != outlet_idx && !explored[u_net_idx]) {
-              if (pni_->is_macro(u_net_idx)) { // macro
-                auto v_macro_idx = pni_->macro(u_net_idx);
-                queue.insert(v_macro_idx, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, v_macro_idx)));
-                explored[u_net_idx] = true;
+          for (auto vu : g_.edges(vertex_t(*net))) {
+            if (net_t u_net{*target(vu, g_)}; u_net != outlet_idx && !explored[u_net]) {
+              if (pni_->is_macro(u_net)) { // macro
+                auto u_macro = pni_->macro(u_net);
+                queue.insert(u_macro, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, u_macro)));
+                explored[u_net] = true;
               }
               else { // darcy
-                queue.insert(pni_->voxel(u_net_idx), darcy_r_cap);
-                explored[u_net_idx] = true;
+                queue.insert(pni_->voxel(u_net), darcy_r_cap);
+                explored[u_net] = true;
               }
             }
           }
         }
         else { // throat
-          auto [l, r] = adj(pn_, local_idx);
+          auto [l, r] = adj(pn_, local);
 
-          progress_percolation(local_idx, r_cap);
+          progress_percolation(local, r_cap);
 
-          inv_volume_coefs[0] += volume(pn_, local_idx);
-          inv_volume_coefs[2] -= volume(pn_, local_idx)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, local_idx));
+          inv_volume_coefs[0] += volume(pn_, local);
+          inv_volume_coefs[2] -= volume(pn_, local)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, local));
 
           if (pn_->inner_node(r))
             if (auto r_net = pni_->net(r); !explored[r_net]) {
