@@ -2,8 +2,7 @@
 
 #include "pore_network_image.hpp"
 
-#include <dpl/graph/et_etnte_defs.hpp>
-#include <dpl/graph/dc_graph.hpp>
+
 #include <dpl/graph/dc_context.hpp>
 
 
@@ -216,11 +215,11 @@ namespace xpm
       dpl::graph::dc_graph g;
       // auto g = GenerateGraph();
 
-      dc_traits props{g};
+      // dc_traits props{g};
 
-      dc_context<dc_traits> context;
+      dc_context context;
 
-      context.init_with_dfs(g, props);
+      context.init_with_dfs(g/*, props*/);
 
 
       // auto etnte_hdr = dc_properties::get_etnte_header(et_algo::get_header(dc_properties::get_entry(g.get_vertex(0), g)));
@@ -237,18 +236,16 @@ namespace xpm
       // }
 
 
-      auto print_clusters = [&]() {
-        for (dc_graph::vertex_t i{0}; i < g.vertex_count(); ++i) {
-          auto hdr = et_algo::get_header(props.get_entry(i));
-
-          auto v_ref = dc_traits::get_vertex(
-            *std::ranges::find_if(
-              range<et_traits>(hdr),
-              dc_traits::is_loop_edge));
-
-          std::cout << fmt::format("vertex {} : root {}\n", i, v_ref);
-        }
-      };
+      // auto print_clusters = [&]() {
+      //   for (dc_graph::vertex_t i{0}; i < g.vertex_count(); ++i) {
+      //     auto hdr = et_algo::get_header(get_entry(i, g));
+      //
+      //     auto v_ref = dc_traits::get_vertex(
+      //       *std::ranges::find_if(range<et_traits>(hdr), is_loop_edge));
+      //
+      //     std::cout << fmt::format("vertex {} : root {}\n", i, v_ref);
+      //   }
+      // };
 
 
 
@@ -273,14 +270,14 @@ namespace xpm
       //   std::cout << '\n';
       // }
 
-      print_clusters();
+      // print_clusters();
 
       for (dc_graph::vertex_t i{0}; i < g.vertex_count(); ++i)
         context.adjacent_edges_remove(i, g);
 
       std::cout << '\n';
 
-      print_clusters();
+      // print_clusters();
     }
 
     inline void split_join_validity_check_ET_ONLY() {
@@ -326,7 +323,7 @@ namespace xpm
       t0 = system_clock::now();
 
       for (dpl::graph::dc_graph::vertex_t i{0}; i < total_size; i++) {
-        dpl::graph::dc_traits::set_vertex(&input[*i], i);
+        // dpl::graph::dc_traits::set_vertex(&input[*i], i);
         algo::push_back(header_a, &input[*i]);
       }
 

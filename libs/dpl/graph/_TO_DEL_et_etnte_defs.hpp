@@ -30,40 +30,7 @@
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/pool/object_pool.hpp>
 
-namespace dpl::graph::helper
-{
-  template <class T,
-    typename = std::enable_if_t<sizeof(T) >= sizeof(std::size_t)>>
-  class smart_pool
-  { 
-    static T* get_next(T* x) {       
-      return *reinterpret_cast<T**>(x);
-    }
 
-    static void set_next(T* x, T* next) {
-      *reinterpret_cast<T**>(x) = next;
-    }
-
-    boost::object_pool<T> pool_;
-    T* released_stack_top_ = nullptr;
-
-  public:
-    T* acquire() {
-      if (released_stack_top_) {
-        auto result = released_stack_top_;        
-        released_stack_top_ = get_next(released_stack_top_);       
-        return result;
-      }      
-
-      return pool_.malloc();
-    }
-
-    void release(T* x) {
-      set_next(x, released_stack_top_);
-      released_stack_top_ = x;
-    }
-  };
-}
 
 namespace dpl::graph
 {
@@ -300,66 +267,7 @@ namespace dpl::graph
 //   };
 
 
-  template <typename Graph, typename Traits>
-  class euler_tour_visitor : public boost::default_dfs_visitor
-  {
-    using et_ptr = et_traits::node_ptr;
-
-    using vertex_t = typename boost::graph_traits<Graph>::vertex_descriptor;
-    using edge_t = typename boost::graph_traits<Graph>::edge_descriptor;
-
-    Traits traits_;
-
-    et_ptr et_hdr_;
-
-    helper::smart_pool<et_traits::node>* et_pool_;
-
-    et_ptr* tree_edge_stack_empty_;
-    et_ptr* tree_edge_stack_top_;
-    
-  public:
-    euler_tour_visitor(
-      Traits props,
-      helper::smart_pool<et_traits::node>* et_pool,
-      et_ptr* tree_edge_stack
-    ) : traits_{props},
-        et_pool_(et_pool),
-        tree_edge_stack_empty_(tree_edge_stack),
-        tree_edge_stack_top_(tree_edge_stack)
-    {}
-
-
-    void start_vertex(vertex_t, const Graph&) {            
-      et_hdr_ = et_pool_->acquire();
-      et_algo::init_header(et_hdr_);      
-    }
-
-    void discover_vertex(vertex_t v, const Graph&) {     
-      et_ptr entry = et_pool_->acquire();        
-      Traits::set_vertex(entry, v);
-      traits_.set_entry(v, entry);
-      et_algo::push_back(et_hdr_, entry);            
-    }
-
-    void finish_vertex(vertex_t, const Graph& g) {
-      if (tree_edge_stack_top_ != tree_edge_stack_empty_) {
-        et_ptr entry = et_pool_->acquire();
-        et_ptr top = *tree_edge_stack_top_--;
-        edge_t top_de_opposite = opposite(Traits::get_directed_edge(top), g);
-        Traits::set_directed_edge(entry, top_de_opposite);        
-        traits_.set_tree_edge_entry(top_de_opposite, entry);
-        et_algo::push_back(et_hdr_, entry);        
-      }
-    }    
-
-    void tree_edge(edge_t e, const Graph&) {
-      et_ptr entry = et_pool_->acquire();
-      Traits::set_directed_edge(entry, e);
-      traits_.set_tree_edge_entry(e, entry);
-      et_algo::push_back(et_hdr_, entry);      
-      *++tree_edge_stack_top_ = entry;
-    }
-  }; 
+  
 }
 
 

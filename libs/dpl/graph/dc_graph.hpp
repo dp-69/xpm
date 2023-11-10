@@ -150,7 +150,7 @@ namespace dpl::graph
    * \brief Boost
    */
   inline dc_graph::vertex_t source(dc_graph::edge_t, const dc_graph&) {}
-  inline dc_graph::degree_size_type out_degree(dc_graph::vertex_t u, const dc_graph&) {}
+  inline dc_graph::degree_size_type out_degree(dc_graph::vertex_t, const dc_graph&) {}
 
   inline dc_graph::edge_t opposite(dc_graph::edge_t ab, const dc_graph& g) {
     return g.opposite_[*ab];

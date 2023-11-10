@@ -42,6 +42,19 @@
 
 namespace dpl
 {
+  class default_map
+  {
+    static inline auto true_ = [](auto) { return true; };
+    static inline auto unity_ = [](auto) { return 1; };
+
+  public:
+    using true_t = decltype(true_);
+    using unity_t = decltype(unity_);
+
+    static bool invert(std::true_type, bool v) { return !v; }
+    static bool invert(std::false_type, bool v) { return v; }
+  };
+
   template <std::integral T, typename Tag = void>
   struct strong_integer
   {

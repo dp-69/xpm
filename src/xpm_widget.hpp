@@ -115,7 +115,7 @@ namespace xpm
 
     std::array<double, 6> bounds_ = {0, 100, 0, 100, 0, 100};
 
-    startup_settings settings_;
+    runtime_settings settings_;
 
     invasion_task invasion_task_{pni_, settings_};
 
@@ -489,20 +489,32 @@ namespace xpm
     }
 
 
+    
 
-    auto ProcessImage(const std::filesystem::path& path) {
+    auto ExtractNetwork() {
       namespace fs = std::filesystem;
 
-      auto filename = path.filename();
+      auto filename = settings_.image.pnextract_filename();
 
-      if (fs::path copy_path = "pnextract"/filename; absolute(copy_path) != absolute(path))
-        copy(path, copy_path, fs::copy_options::update_existing);
+      if (auto copy_path = "pnextract"/filename; absolute(copy_path) != absolute(settings_.image.path)) {
+        if (settings_.image.grey)
+          transform(
+            settings_.image.path, settings_.image.size, 0,
+            copy_path, settings_.image.size, [this](std::uint8_t v) -> uint8_t {
+              return
+                v == 0 ? settings_.image.phases.pore
+              : v == 255 ? settings_.image.phases.solid
+              : settings_.image.phases.micro.get<std::uint8_t>();
+            });
+        else
+          copy(settings_.image.path, copy_path, fs::copy_options::update_existing);
+      }
 
       auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
       auto prev = fs::current_path();
       current_path(prev/"pnextract");
-      auto network_dir = path.stem();
+      auto network_dir = settings_.image.path.stem();
 
       if (std::ranges::all_of(files, [&](std::string_view file) { return exists(network_dir/file); }))
         std::cout << "using cached network\n\n";
@@ -741,7 +753,7 @@ namespace xpm
 
       std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
 
-      auto pnm_path = ProcessImage(settings_.image.path)/"";
+      auto pnm_path = ExtractNetwork()/"";
 
       auto begin_init_time = clock::now();
 
@@ -792,7 +804,7 @@ namespace xpm
       std::cout << '\n';
 
       {
-        img_.read_image(settings_.image.path, settings_.image.phases);
+        img_.read_image("pnextract"/settings_.image.pnextract_filename()/*settings_.image.path*/, settings_.image.phases);
         img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
 
         img_.read_icl_velems(pnm_path);

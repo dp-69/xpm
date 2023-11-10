@@ -30,9 +30,21 @@
   // return arr;
 // }
 
-
 int main(int argc, char* argv[])
 {
+  // void transofrm(
+  //   const std::filesystem::path& src_path, const dpl::vector3i& src_size, const dpl::vector3i& src_origin,
+  //   const std::filesystem::path& dst_path, const dpl::vector3i& dst_size)
+
+  // xpm::transform(
+  //   R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu\pnm_petronas\images\Esta256Grey.raw)", 256, 0,
+  //   R"(C:\dev\xpm\build\RelWithDebInfo\bin\pnextract\Esta256Grey_256x256x256_4p000um.raw)", 256);
+
+
+  // int p = 3;
+
+  // getchar();
+
   // std::cout << fmt::format("sw-{:04.2f}.raw", 0.5);
 
   // auto k = occurrences("one/two/three", '/');
@@ -87,51 +99,50 @@ int main(int argc, char* argv[])
     MPI_Finalize();
     return 0;
   }
-  else {
-    #ifdef _WIN32
-      MPI_Init(&argc, &argv);
-    #endif
+  
+  #ifdef _WIN32
+    MPI_Init(&argc, &argv);
+  #endif
 
-    dpl::hypre::mpi::mpi_exec = argv[0];
+  dpl::hypre::mpi::mpi_exec = argv[0];
 
-    auto format = xpm::QVTKWidgetRef::defaultFormat();
+  auto format = xpm::QVTKWidgetRef::defaultFormat();
 
-    #ifdef _WIN32
-      format.setProfile(QSurfaceFormat::CompatibilityProfile);
-    #else
-      format.setProfile(QSurfaceFormat::CoreProfile);
-    #endif
+  #ifdef _WIN32
+    format.setProfile(QSurfaceFormat::CompatibilityProfile);
+  #else
+    format.setProfile(QSurfaceFormat::CoreProfile);
+  #endif
 
 
-    #if (VTK_MAJOR_VERSION == 8)
-      QSurfaceFormat::setDefaultFormat(format);
-    #elif (VTK_MAJOR_VERSION == 9)
-    #endif
-      
+  #if (VTK_MAJOR_VERSION == 8)
+    QSurfaceFormat::setDefaultFormat(format);
+  #elif (VTK_MAJOR_VERSION == 9)
+  #endif
+    
 
-    // QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
-      
-    QApplication app(argc, argv);
-      
-      
-    // QWidget widget;
-    xpm::XPMWidget widget;
-      
-      
-    widget.Init();
-      
-    // Ui::MainWindow ui;
-    // ui.setupUi(&widget);
+  // QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
+    
+  QApplication app(argc, argv);
+    
+    
+  // QWidget widget;
+  xpm::XPMWidget widget;
+    
+    
+  widget.Init();
+    
+  // Ui::MainWindow ui;
+  // ui.setupUi(&widget);
 
-    widget.resize(1400, 1000);
-    widget.show();
+  widget.resize(1400, 1000);
+  widget.show();
 
-    /*auto result = */QApplication::exec();
+  /*auto result = */QApplication::exec();
 
-    #ifdef _WIN32
-      MPI_Finalize();
-    #endif
-  }
+  #ifdef _WIN32
+    MPI_Finalize();
+  #endif
 
   return 0;
 }

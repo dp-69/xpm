@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <numbers>
+#include <regex>
 
 #include <dpl/static_vector.hpp>
 #include <dpl/hypre/mpi_module.hpp>
@@ -164,18 +165,7 @@ namespace xpm
 
 
 
-  class default_maps
-  {
-    static inline auto true_ = [](auto) { return true; };
-    static inline auto unity_ = [](auto) { return 1; };
-
-  public:
-    using true_t = decltype(true_);
-    using unity_t = decltype(unity_);
-
-    static bool invert(std::true_type, bool v) { return !v; }
-    static bool invert(std::false_type, bool v) { return v; }
-  };
+  
 
   namespace hydraulic_properties
   {
@@ -535,12 +525,21 @@ namespace xpm
     {
       std::uint8_t pore;
       std::uint8_t solid;
-      std::uint8_t microporous;
+      nlohmann::json micro;
+      // std::uint8_t microporous;
 
       void load(const nlohmann::json& j) {
         pore = j["void"];
         solid = j["solid"];
-        microporous = j["microporous"];
+        micro = j["microporous"];
+        // microporous = j["microporous"];
+      }
+
+      bool is_micro(voxel_property::phase_t value) const {
+        if (micro.is_number())
+          return *value == micro;
+
+        return *value != pore && *value != solid;
       }
     };
   }
@@ -596,23 +595,47 @@ namespace xpm
   //     value = *arg;
   // }
 
-  struct startup_settings
+  struct runtime_settings
   {
+    using wrap = wrapper<nlohmann::json>;
+
     bool use_cache = true;
     bool save_cache = true;
     bool loaded = false;
+    bool occupancy_images = false;
+
+    double max_pc =
+      std::numeric_limits<double>::max();
+      // 0.9e7;
 
     struct {
       std::filesystem::path path;
       dpl::vector3i size;
       double resolution;
       parse::image_dict phases;
+      bool grey = false;
 
       void load(const nlohmann::json& j) {
         path = std::string{j["path"]};
         size = j["size"];
         resolution = j["resolution"];
         phases.load(j["phase"]);
+        wrap{j}.set(grey, "grey");
+      }
+
+      auto pnextract_filename() {
+        auto stem = path.stem();
+
+        if (std::regex_match(stem.string(), std::regex{R"(.+_(\d+)x(\d+)x(\d+)_(\d+)p(\d+)um$)"}))
+          return path.filename();
+
+        auto resol = fmt::format("{:.3f}", resolution/1e-6);
+        resol[resol.find('.')] = 'p';
+
+        return std::filesystem::path{
+          fmt::format("{}_{:d}x{:d}x{:d}_{}um{}",
+            stem, size.x(), size.y(), size.z(), resol, path.extension())
+        };
       }
     } image;
 
@@ -621,8 +644,7 @@ namespace xpm
     double darcy_perm = std::numeric_limits<double>::quiet_NaN(); /* mD */
     double darcy_poro = std::numeric_limits<double>::quiet_NaN(); /* fraction */
 
-    struct input_curves
-    {
+    struct input_curves {
       std::vector<dpl::vector2d> pc; /* [Sw, Pc] */
       std::array<std::vector<dpl::vector2d>, 2> kr;
 
@@ -634,13 +656,11 @@ namespace xpm
         inv.resize(unique(inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - inv.begin());
         return inv;
       }
-
     } primary,
       secondary;
     
 
-    struct
-    {
+    struct {
       std::optional<dpl::vector3i> decomposition;
       HYPRE_Real tolerance = 1.e-20;
       HYPRE_Int max_iterations = 20;
@@ -654,11 +674,13 @@ namespace xpm
       }
     } solver;
 
-    double macro_sw_pc = 0.05;
-    double macro_sw_kr = 0.075;
+    struct {
+      double macro_sw_pc = 0.05;
+      double macro_sw_kr = 0.075;
+    } report;
     
 
-    void load(wrapper<nlohmann::json> j) {
+    void load(wrap j) {
       image.load(*j("image"));
 
       if (auto j_micro = j("microporosity"); j_micro) {
@@ -678,7 +700,9 @@ namespace xpm
         }
       }
 
-      j.set(macro_sw_pc, "report", "capillary_pressure", "macro_sw");
+      j.set(report.macro_sw_pc, "report", "capillary_pressure", "macro_sw");
+      j.set(occupancy_images, "report", "occupancy_images");
+      j.set(max_pc, "max_pc");
 
       if (auto j_theta = j("macro", "contact_angle"); j_theta)
         theta = j_theta->get<double>()/180*std::numbers::pi;
@@ -688,19 +712,20 @@ namespace xpm
     }
   };
 
-  inline void crop(
-    const std::filesystem::path& src_p, const dpl::vector3i& src_size, const dpl::vector3i& src_origin,
-    const std::filesystem::path& dst_p, const dpl::vector3i& dst_size) {
+  template<typename Type = std::uint8_t, typename Proj = std::identity>
+  void transform(
+    const std::filesystem::path& src_path, const dpl::vector3i& src_size, const dpl::vector3i& src_origin,
+    const std::filesystem::path& dst_path, const dpl::vector3i& dst_size, Proj proj = {}) {
 
     auto src_total_size = src_size.prod();
     auto dst_total_size = dst_size.prod();
 
-    std::vector<unsigned char> src(src_total_size);
-    std::vector<unsigned char> dst(dst_total_size);
+    std::vector<Type> src(src_total_size);
+    std::vector<Type> dst(dst_total_size);
 
-    std::ifstream is(src_p);
+    std::ifstream is{src_path, std::ios_base::binary};
     
-    is.read(reinterpret_cast<char*>(src.data()), src_total_size);
+    is.read(reinterpret_cast<char*>(src.data()), src_total_size*sizeof(Type));
 
     auto src_mapper = idx_mapper(src_size);
 
@@ -711,9 +736,9 @@ namespace xpm
     for (k = 0; k < dst_size.z(); ++k)
       for (j = 0; j < dst_size.y(); ++j)
         for (i = 0; i < dst_size.x(); ++i, ++idx1d)
-          dst[*idx1d] = src[*src_mapper(src_origin + ijk)];
+          dst[*idx1d] = proj(src[*src_mapper(src_origin + ijk)]);
 
-    std::ofstream os(dst_p, std::ios_base::binary);
-    os.write(reinterpret_cast<char*>(dst.data()), dst_total_size);
+    std::ofstream{dst_path, std::ios_base::binary}
+      .write(reinterpret_cast<char*>(dst.data()), dst_total_size*sizeof(Type));
   }
 }

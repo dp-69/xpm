@@ -611,7 +611,7 @@ namespace xpm
           value = presets::solid;
           ++solid_voxels;
         }
-        else if (*value == input_config.microporous) { 
+        else /*if (input_config.is_micro(value))*/ { 
           value = presets::microporous;
           ++microporous_voxels;
         }
@@ -811,7 +811,7 @@ namespace xpm
     }
 
 
-    template <typename Filter = default_maps::true_t>
+    template <typename Filter = dpl::default_map::true_t>
     std::tuple<idx1d_t, rows_mapping> generate_mapping(const dpl::vector3i& blocks, Filter filter = {}) const {
       auto block_size = pn_->physical_size/blocks;
 
@@ -888,8 +888,90 @@ namespace xpm
     }
 
     
+    // template <typename Filter = dpl::default_map::true_t>
+    // dpl::graph::dc_graph generate_dc_graph_filtered(Filter filter = {}) const {
+    //   using namespace dpl::graph;
+    //   using namespace presets;
+    //
+    //   graph_generator gen(*connected_count_ + 1, vertex_proj_t{this});
+    //
+    //   for (std::size_t i{0} ; i < pn_->throat_count(); ++i) {
+    //     auto [l, r] = attrib::adj(pn_, i);
+    //     if (connected(l) && filter(i) && filter(l))
+    //       if (pn_->inner_node(r)) { // macro-macro
+    //         if (filter(r))
+    //           gen.reserve(l, r);
+    //       }
+    //       else if (pn_->outlet() == r) // macro-outlet
+    //         gen.reserve(l, connected_count_);
+    //   }
+    //
+    //   {
+    //     idx3d_t ijk;
+    //     auto& [i, j, k] = ijk;
+    //     voxel_t idx1d{0};
+    //
+    //     for (k = 0; k < img_->dim().z(); ++k)
+    //       for (j = 0; j < img_->dim().y(); ++j) {
+    //         if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d) && filter(adj_idx1d)) // darcy-outlet
+    //           gen.reserve(adj_idx1d, connected_count_);
+    //
+    //         for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+    //           if (connected(idx1d) && filter(idx1d)) {
+    //             if (img_->velem[idx1d]) // macro-darcy 
+    //               if (macro_t macro{img_->velem[idx1d]}; filter(macro))
+    //                 gen.reserve(macro, idx1d);
+    //
+    //             dpl::sfor<3>([&](auto d) {
+    //               if (ijk[d] < img_->dim()[d] - 1)
+    //                 if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous && filter(adj_idx1d)) // darcy-darcy
+    //                   gen.reserve(idx1d, adj_idx1d);
+    //             });
+    //           }
+    //       }
+    //   }
+    //
+    //   gen.allocate();
+    //
+    //   for (std::size_t i{0} ; i < pn_->throat_count(); ++i)
+    //     if (auto [l, r] = attrib::adj(pn_, i); connected(l) && filter(i) && filter(l))
+    //       if (pn_->inner_node(r)) { // macro-macro
+    //         if (filter(r))
+    //           gen.set(l, r);
+    //       }
+    //       else if (pn_->outlet() == r) { // macro-outlet
+    //         gen.set(l, connected_count_);
+    //       }
+    //
+    //   {
+    //     idx3d_t ijk;
+    //     auto& [i, j, k] = ijk;
+    //     voxel_t idx1d{0};
+    //
+    //     for (k = 0; k < img_->dim().z(); ++k)
+    //       for (j = 0; j < img_->dim().y(); ++j) {
+    //         if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d) && filter(adj_idx1d)) // darcy-outlet
+    //           gen.set(adj_idx1d, connected_count_);
+    //
+    //         for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+    //           if (connected(idx1d)) {
+    //             if (img_->velem[idx1d]) { // macro-darcy
+    //               if (macro_t macro{img_->velem[idx1d]}; filter(macro))
+    //                 gen.set(macro, idx1d);
+    //             }
+    //
+    //             dpl::sfor<3>([&](auto d) {
+    //               if (ijk[d] < img_->dim()[d] - 1)
+    //                 if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->phase[adj_idx1d] == microporous && filter(adj_idx1d)) // darcy-darcy
+    //                   gen.set(idx1d, adj_idx1d);
+    //             });
+    //           }
+    //       }
+    //   }
+    //
+    //   return gen.acquire();
+    // }
 
-    template <bool Outlet = false>
     std::tuple<
       dpl::graph::dc_graph,
       std::unordered_map<dpl::graph::dc_graph::edge_t, std::size_t>,
@@ -898,12 +980,7 @@ namespace xpm
       using namespace dpl::graph;
       using namespace presets;
 
-      net_t vertex_count = connected_count_; // last is outlet
-
-      if constexpr (Outlet)
-        ++vertex_count;
-
-      graph_generator gen(*vertex_count, vertex_proj_t{this});
+      graph_generator gen(*connected_count_ + 1, vertex_proj_t{this});
       std::unordered_map<dc_graph::edge_t, std::size_t> de_to_throat;
       auto throat_to_de = std::make_unique<dc_graph::edge_t[]>(pn_->throat_count());
 
@@ -911,10 +988,8 @@ namespace xpm
         if (connected(l))
           if (pn_->inner_node(r)) // macro-macro
             gen.reserve(l, r);
-          else if constexpr (Outlet) {
-            if (pn_->outlet() == r) // macro-outlet
-              gen.reserve(l, vertex_count - 1);
-          }
+          else if (pn_->outlet() == r) // macro-outlet
+            gen.reserve(l, connected_count_);
 
       {
         idx3d_t ijk;
@@ -923,9 +998,8 @@ namespace xpm
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
-            if constexpr (Outlet) 
-              if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
-                gen.reserve(adj_idx1d, vertex_count - 1);
+            if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+              gen.reserve(adj_idx1d, connected_count_);
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
@@ -943,7 +1017,6 @@ namespace xpm
 
       gen.allocate();
 
-
       for (std::size_t i{0} ; i < pn_->throat_count(); ++i)
         if (auto [l, r] = attrib::adj(pn_, i); connected(l))
           if (pn_->inner_node(r)) { // macro-macro 
@@ -952,13 +1025,11 @@ namespace xpm
             de_to_throat[rl] = i;
             throat_to_de[i] = lr;
           }
-          else if constexpr (Outlet) {
-            if (pn_->outlet() == r) { // macro-outlet
-              auto [lr, rl] = gen.set(l, vertex_count - 1);
-              de_to_throat[lr] = i;
-              de_to_throat[rl] = i;
-              throat_to_de[i] = lr;
-            }
+          else if (pn_->outlet() == r) { // macro-outlet
+            auto [lr, rl] = gen.set(l, connected_count_);
+            de_to_throat[lr] = i;
+            de_to_throat[rl] = i;
+            throat_to_de[i] = lr;
           }
 
       {
@@ -968,9 +1039,8 @@ namespace xpm
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
-            if constexpr (Outlet)
-              if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
-                gen.set(adj_idx1d, vertex_count - 1);
+            if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+              gen.set(adj_idx1d, connected_count_);
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
@@ -989,7 +1059,7 @@ namespace xpm
       return {gen.acquire(), std::move(de_to_throat), std::move(throat_to_de)};
     }
 
-    template <typename Filter = default_maps::true_t>
+    template <typename Filter = dpl::default_map::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
       idx1d_t nrows, const dpl::strong_vector<net_t, idx1d_t>& forward, auto term, Filter filter = {}) const {
 
@@ -1098,7 +1168,7 @@ namespace xpm
       return {builder.nvalues(), builder.acquire()};
     }
 
-    template <typename Filter = default_maps::true_t>
+    template <typename Filter = dpl::default_map::true_t>
     std::pair<double, double> flow_rates(
       const dpl::strong_vector<net_t, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
       auto inlet_flow = 0.0;
