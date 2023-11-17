@@ -6,6 +6,7 @@
 
 #include <dpl/soa.hpp>
 #include <dpl/graph/dc_graph.hpp>
+#include <dpl/hypre/core.hpp>
 #include <dpl/hypre/mpi_module.hpp>
 
 #include <boost/format.hpp>
@@ -214,7 +215,7 @@ namespace xpm
 
     
     
-    macro_t node_count() const {
+    auto node_count() const {
       return macro_t(node_.size());
     }
 
@@ -497,15 +498,14 @@ namespace xpm
     }
   };
 
+
+  template <typename Perm = dpl::default_map::nan_t>
   struct single_phase_conductance
   {
     const pore_network* pn;
-    double darcy_perm;
+    Perm darcy_perm;
 
-    explicit single_phase_conductance(const pore_network* const pn)
-      : pn(pn) {}
-
-    single_phase_conductance(const pore_network* const pn, const double darcy_perm)
+    explicit single_phase_conductance(const pore_network* const pn, Perm darcy_perm = {})
       : pn(pn), darcy_perm(darcy_perm) {}
 
     double operator()(std::size_t i) const {
@@ -518,8 +518,8 @@ namespace xpm
       return props::conductance_single(props::area(attrib::r_ins(pn, i)));
     }
 
-    double operator()(voxel_t) const {
-      return darcy_perm;
+    double operator()(voxel_t i) const {
+      return darcy_perm(i);
     }
   };
 
@@ -1206,7 +1206,7 @@ namespace xpm
       return {inlet_flow, outlet_flow};
     }
     
-    double total_pore_volume(double darcy_porosity) const {
+    double total_pore_volume(const auto porosity_map) const {
       auto vol = 0.0;
 
       using namespace attrib;
@@ -1219,11 +1219,11 @@ namespace xpm
         if (auto [l, r] = adj(pn_, i); connected(l))
           vol += volume(pn_, i);
         
-      auto unit_darcy_pore_volume = (pn_->physical_size/img_->dim()).prod()*darcy_porosity;
+      auto cell_volume = (pn_->physical_size/img_->dim()).prod();
 
       for (voxel_t i{0}; i < img_->size(); ++i)
         if (connected(i))
-          vol += unit_darcy_pore_volume;
+          vol += cell_volume*porosity_map(i);
 
       return vol;
     }

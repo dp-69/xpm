@@ -111,21 +111,15 @@ namespace dpl::graph
     using edge_t = dc_graph::edge_t;
 
     dc_graph* g_;
-    // dc_traits traits_; // TODO: INIT
-    // std::unique_ptr<std::list<edge_t>[]> nte_edges;
 
     static inline constexpr auto null_edge_ = std::numeric_limits<edge_t>::max();
 
   public:
-    // std::vector<std::size_t> saved_replacement_indices;
-    // std::size_t quick_replacement_idx = 0;
 
     helper::smart_pool<et_traits::node> et_pool_;
 
-    // template<typename Filter = default_map::true_t>
-    void init_with_dfs(dc_graph& g/*, dc_traits props*//*, Filter filter = {}*/) {
+    void init_with_dfs(dc_graph& g) {
       g_ = &g;
-      // traits_ = dc_traits{g};
 
       auto vertex_count = g.vertex_count();
 
@@ -133,21 +127,6 @@ namespace dpl::graph
 
       auto color_map = boost::make_function_property_map<dc_graph::vertex_t>(
         [&](dc_graph::vertex_t v) -> boost::two_bit_color_type& { return color_uptr[*v]; });
-
-      // for (dc_graph::vertex_t v{0}; v < g.vertex_count(); ++v) {
-      //   if (!filter(v)) {
-      //     color_map[v] = boost::two_bit_color_type::two_bit_black;
-      //     traits_.set_entry(v, nullptr);
-      //   }
-      // }
-
-      // for (dc_graph::edge_t de{0}; de < 2*g.edge_count(); ++de) {
-      //   if (!filter(de)) {
-      //     traits_.set_null_entry(de);
-      //   }
-      // }
-      
-      // g.edge_count()
 
       auto tree_edge_stack = std::vector<et_ptr>(vertex_count + 1);     
       euler_tour_visitor visitor{&et_pool_, tree_edge_stack.data()};

@@ -23,8 +23,6 @@
 
 #pragma once
 
-// #include "et_etnte_defs.hpp"
-
 #include "bst/aug_avltree_algorithms_ext.hpp"
 #include "bst/avl_defs.hpp"
 #include "dc_graph.hpp"

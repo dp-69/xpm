@@ -2,7 +2,7 @@
 #include "xpm_widget.hpp"
 
 #include <QWidget>
-
+#include <QApplication>
 
 // constexpr auto occurrences(std::string_view sv, const char sep) {
 //   auto sep_count = 0;
@@ -32,6 +32,15 @@
 
 int main(int argc, char* argv[])
 {
+  
+  // auto s = r.size();
+  // auto b = r.begin();
+  // auto e = r.end();
+  // auto f = r.front();
+  // auto k = r.back();
+  // auto t = r.empty();
+  // auto v = r[10];
+
   // void transofrm(
   //   const std::filesystem::path& src_path, const dpl::vector3i& src_size, const dpl::vector3i& src_origin,
   //   const std::filesystem::path& dst_path, const dpl::vector3i& dst_size)
@@ -80,8 +89,8 @@ int main(int argc, char* argv[])
   // wewre << lul;
   
   // if (lul) {
-  //   double foo = *lul;
-  //   int ww = 3;
+  // double foo = *lul;
+  // int ww = 3;
   // }
   //
   // if (auto lul2 = my["piww"]; lul2) {

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <dpl/qt/property_editor/ScalarConvert.hpp>
+#include "ScalarConvert.hpp"
 
 namespace dpl::qt::property_editor
 {

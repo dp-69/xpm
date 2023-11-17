@@ -47,7 +47,7 @@ namespace xpm
     static inline std::unique_ptr<std::unordered_map<std::size_t, double>> cache_ = nullptr;
 
     static auto path() {
-      return std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("cache") / "solve.json";
+      return std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("cache")/"solve.json";
     }
 
   public:
@@ -550,11 +550,11 @@ namespace xpm
   template <>
   struct wrapper<nlohmann::json>
   {
-    const nlohmann::json* j = nullptr;
+    const nlohmann::json* json = nullptr;
 
     wrapper() = default;
-    wrapper(const nlohmann::json* j) : j(j) {}
-    wrapper(const nlohmann::json& j) : j(&j) {}
+    wrapper(const nlohmann::json* j) : json(j) {}
+    wrapper(const nlohmann::json& j) : json(&j) {}
 
     wrapper operator()(const auto& key, const auto&... rest) const {
       if (auto jj = (*this)(key); jj)
@@ -563,21 +563,35 @@ namespace xpm
     }
 
     auto operator()(const auto& key) const {
-      auto found = j->find(key);
-      return found == j->end() ? wrapper{} : wrapper{&*found};
+      auto found = json->find(key);
+      return found == json->end() ? wrapper{} : wrapper{&*found};
     }
 
     auto& operator*() const {
-      return *j;
+      return *json;
     }
 
     auto operator->() const {
-      return j;
+      return json;
     }
 
     explicit operator bool() const {
-      return j != nullptr;
+      return json;
     }
+
+    // void operator>>(auto& value) {
+    //   if (json)
+    //     value = *json;
+    // }
+
+    // wrapper find(std::string_view path) {
+    //   auto pos = path.find('/');
+    //   while (pos != std::string_view::npos) {
+    //     path.remove_prefix(pos + 1);
+    //     return (*this)(std::string_view(path.data(), pos)).find(path);
+    //   }
+    //   return (*this)(path);
+    // }
 
     auto set(auto& value, const auto&... keys) {
       if (auto jj = (*this)(keys...); jj)
@@ -599,14 +613,12 @@ namespace xpm
   {
     using wrap = wrapper<nlohmann::json>;
 
-    bool use_cache = true;
-    bool save_cache = true;
+    bool use_cache = false;
+    bool save_cache = false;
     bool loaded = false;
     bool occupancy_images = false;
 
-    double max_pc =
-      std::numeric_limits<double>::max();
-      // 0.9e7;
+    double max_pc = std::numeric_limits<double>::max();
 
     struct {
       std::filesystem::path path;
@@ -641,8 +653,61 @@ namespace xpm
 
 
     double theta = 0;
-    double darcy_perm = std::numeric_limits<double>::quiet_NaN(); /* mD */
-    double darcy_poro = std::numeric_limits<double>::quiet_NaN(); /* fraction */
+
+    struct
+    {
+      double perm_single = std::numeric_limits<double>::quiet_NaN(); /* mD */
+      double poro_single = std::numeric_limits<double>::quiet_NaN(); /* fraction */
+      double A = std::numeric_limits<double>::quiet_NaN();
+      double n1 = 1;
+      double n2 = 1;
+
+      dpl::strong_vector<voxel_t, double> poro_arr;
+
+      auto poro(voxel_t i) const {
+        return poro_arr ? poro_arr[i] : poro_single;
+      }
+
+      auto perm(voxel_t i) const {
+        if (poro_arr) {
+          auto poro = poro_arr[i];
+          return A*std::pow(poro, n1)/std::pow(1 - poro, n2);
+        }
+
+        return perm_single;
+      }
+
+      void read_grey(const std::filesystem::path& path, const dpl::vector3i& size) {
+        voxel_t total_size{size.prod()};
+
+        poro_arr.resize(total_size);
+
+        std::vector<std::uint8_t> arr(*total_size);
+        {
+          std::ifstream is{path, std::ios_base::binary};
+          is.read(reinterpret_cast<char*>(arr.data()), *total_size*sizeof(std::uint8_t)); // NOLINT(cppcoreguidelines-narrowing-conversions)
+        }
+        
+        idx3d_t ijk;
+        auto& [i, j, k] = ijk;
+        voxel_t idx1d{0};
+        
+        for (k = 0; k < size.z(); ++k)
+          for (j = 0; j < size.y(); ++j)
+            for (i = 0; i < size.x(); ++i, ++idx1d)
+              poro_arr[idx1d] = (255 - arr[*idx1d])/255.;
+      }
+    } darcy;
+
+    
+
+    
+    
+
+
+
+
+
 
     struct input_curves {
       std::vector<dpl::vector2d> pc; /* [Sw, Pc] */
@@ -674,9 +739,10 @@ namespace xpm
       }
     } solver;
 
+
     struct {
-      double macro_sw_pc = 0.05;
-      double macro_sw_kr = 0.075;
+      double sw_pc = 0.05;
+      double sw_kr = 0.075;
     } report;
     
 
@@ -684,8 +750,12 @@ namespace xpm
       image.load(*j("image"));
 
       if (auto j_micro = j("microporosity"); j_micro) {
-        darcy_perm = (*j_micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
-        darcy_poro = (*j_micro)["porosity"];
+        darcy.perm_single = (*j_micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
+        darcy.poro_single = (*j_micro)["porosity"];
+        j_micro.set(darcy.n1, "kozeny_carman", "n1");
+        j_micro.set(darcy.n2, "kozeny_carman", "n2");
+        darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
+
 
         if (auto j_primary = j_micro("primary"); j_primary) {
           primary.pc = (*j_primary)["capillary_pressure"];
@@ -700,11 +770,12 @@ namespace xpm
         }
       }
 
-      j.set(report.macro_sw_pc, "report", "capillary_pressure", "macro_sw");
       j.set(occupancy_images, "report", "occupancy_images");
-      j.set(max_pc, "max_pc");
+      j.set(report.sw_pc, "report", "capillary_pressure_sw_step");
+      j.set(report.sw_kr, "report", "relative_permeability_sw_step");
+      j.set(max_pc, "max_capillary_pressure");
 
-      if (auto j_theta = j("macro", "contact_angle"); j_theta)
+      if (auto j_theta = j("macro_contact_angle"); j_theta)
         theta = j_theta->get<double>()/180*std::numbers::pi;
 
       solver.load(*j("solver"));

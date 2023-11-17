@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <dpl/hypre/ij_matrix.hpp>
+#include "ij_matrix.hpp"
 
 namespace dpl::hypre
 {
@@ -155,6 +155,13 @@ namespace dpl::hypre
 
     HYPRE_BoomerAMGSetTol(solver, tolerance);
     HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
+
+    // HYPRE_BoomerAMGSetRelaxType(solver, )
+    // HYPRE_BoomerAMGSetInterpType(solver, 6);
+    // HYPRE_BoomerAMGSetLevelNonGalerkinTol(solver, 0.0, 1);
+    // HYPRE_BoomerAMGSetLevelNonGalerkinTol(solver, 0.01, 2);
+    // HYPRE_BoomerAMGSetNonGalerkinTol(solver, 0.05);
+    
 
     // HYPRE_BoomerAMGSetMaxLevels(solver, 50);
     // HYPRE_BoomerAMGSetPMaxElmts(solver, 0);

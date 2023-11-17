@@ -135,7 +135,7 @@ namespace dpl::graph
   }
 
   inline std::pair<dc_graph::vertex_iterator, dc_graph::vertex_iterator> vertices(const dc_graph& g) {
-    return {dc_graph::vertex_t{0}, dc_graph::vertex_t(g.vertex_count())};
+    return {dc_graph::vertex_t{0}, dc_graph::vertex_t(g.vertex_count())};  // NOLINT(cppcoreguidelines-narrowing-conversions)
   }
 
   inline dc_graph::vertex_t target(dc_graph::edge_t ab, const dc_graph& g) {

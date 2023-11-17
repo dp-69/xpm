@@ -23,8 +23,7 @@
 
 #pragma once
 
-#include <dpl/hypre/ij_vector.hpp>
-#include <dpl/general.hpp>
+#include "ij_vector.hpp"
 
 #include <numeric>
 

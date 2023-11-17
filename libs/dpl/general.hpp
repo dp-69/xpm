@@ -46,10 +46,12 @@ namespace dpl
   {
     static inline auto true_ = [](auto) { return true; };
     static inline auto unity_ = [](auto) { return 1; };
+    static inline auto nan_ = [](auto) { return std::numeric_limits<double>::quiet_NaN(); };
 
   public:
     using true_t = decltype(true_);
     using unity_t = decltype(unity_);
+    using nan_t = decltype(nan_);
 
     static bool invert(std::true_type, bool v) { return !v; }
     static bool invert(std::false_type, bool v) { return v; }
@@ -83,7 +85,6 @@ namespace dpl
     auto& operator*() { return value; }
 
     constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
-    friend constexpr bool operator<(std::integral auto lhs, const strong_integer& rhs) { return lhs < *rhs; }
     constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
     constexpr bool operator==(std::integral auto rhs) const { return value == rhs; }
     constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
@@ -98,8 +99,12 @@ namespace dpl
     template <std::integral V>
     constexpr auto operator-(const strong_integer<V, Tag>& rhs) const { return strong_integer{value - *rhs}; }
 
-    friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
-    friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
+    constexpr bool operator==(const strong_integer& rhs) const { return value == *rhs; }
+    constexpr bool operator!=(const strong_integer& rhs) const { return value != *rhs; }
+
+    friend constexpr bool operator<(std::integral auto lhs, const strong_integer& rhs) { return lhs < *rhs; }
+    // friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
+    // friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
   };
 
 
@@ -157,6 +162,10 @@ namespace dpl
 
     auto data() const {
       return uptr_.get();
+    }
+
+    explicit operator bool() const {
+      return static_cast<bool>(uptr_);
     }
   };
 

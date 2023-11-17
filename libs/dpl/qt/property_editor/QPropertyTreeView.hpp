@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <dpl/qt/property_editor/PropertyEntities.hpp>
+#include "PropertyEntities.hpp"
 
 #include <QTreeView>
 #include <QHeaderView>

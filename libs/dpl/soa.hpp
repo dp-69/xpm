@@ -22,7 +22,7 @@
  */
 
 #pragma once
-#include <dpl/static_map.hpp>
+#include "static_map.hpp"
 
 #include <memory>
 #include <vector>

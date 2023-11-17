@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <dpl/general.hpp>
+#include "general.hpp"
 
 #include <ostream>
 #include <span>

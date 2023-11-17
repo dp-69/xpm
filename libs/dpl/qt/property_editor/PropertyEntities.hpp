@@ -24,8 +24,8 @@
 #pragma once
 
 #include <dpl/static_vector.hpp>
-#include <dpl/qt/property_editor/Editors.hpp>
-#include <dpl/qt/property_editor/ScalarConvert.hpp>
+#include "Editors.hpp"
+#include "ScalarConvert.hpp"
 
 
 #include <utility>

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <dpl/hypre/core.hpp>
+#include "core.hpp"
 
 #include <vector>
 

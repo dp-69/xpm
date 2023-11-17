@@ -1,8 +1,8 @@
 #pragma once
 
 
-#include "functions.h"
 #include "displ_queue.hpp"
+#include "functions.h"
 #include "invasion_task.hpp"
 
 
@@ -15,15 +15,17 @@
 #include <dpl/vtk/ImageDataGlyphMapper.hpp>
 #include <dpl/vtk/TidyAxes.hpp>
 #include <dpl/vtk/Utils.hpp>
-  
-#include <QMainWindow>
-#include <QSplitter>
+
+#include <QApplication>
 #include <QChartView>
-#include <QLineSeries>
-#include <QValueAxis>
-#include <QLogValueAxis>
 #include <QClipboard>
 #include <QLegendMarker>
+#include <QLineSeries>
+#include <QLogValueAxis>
+#include <QMainWindow>
+#include <QMenu>
+#include <QTreeView>
+#include <QValueAxis>
 
 #if (VTK_MAJOR_VERSION == 8)
   #include <QVTKOpenGLWidget.h>
@@ -57,8 +59,8 @@
 #include <vtkUnstructuredGrid.h>
 #include <vtkVersionMacros.h>
 
-#include <boost/pending/disjoint_sets.hpp>
 #include <boost/graph/adjacency_list.hpp>
+#include <boost/pending/disjoint_sets.hpp>
 
 #include <algorithm>
 #include <future>
@@ -497,15 +499,18 @@ namespace xpm
       auto filename = settings_.image.pnextract_filename();
 
       if (auto copy_path = "pnextract"/filename; absolute(copy_path) != absolute(settings_.image.path)) {
-        if (settings_.image.grey)
+        if (settings_.image.grey) {
           transform(
             settings_.image.path, settings_.image.size, 0,
-            copy_path, settings_.image.size, [this](std::uint8_t v) -> uint8_t {
+            copy_path, settings_.image.size, [this](std::uint8_t v) {
               return
-                v == 0 ? settings_.image.phases.pore
-              : v == 255 ? settings_.image.phases.solid
-              : settings_.image.phases.micro.get<std::uint8_t>();
+                v == 0 ? settings_.image.phases.pore :
+                v == 255 ? settings_.image.phases.solid :
+                settings_.image.phases.micro.get<std::uint8_t>();
             });
+
+          settings_.darcy.read_grey(settings_.image.path, settings_.image.size);
+        }
         else
           copy(settings_.image.path, copy_path, fs::copy_options::update_existing);
       }
@@ -543,6 +548,8 @@ namespace xpm
 
   public:
     void Init() {
+      std::filesystem::create_directories("cache");
+
       std::locale::global(std::locale("en_US.UTF-8"));
 
       if (std::filesystem::exists("config.json"))
@@ -776,7 +783,7 @@ namespace xpm
       }
 
       auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
-        settings_.image.path.stem(), settings_.darcy_perm/presets::darcy_to_m2*1e3);
+        settings_.image.path.stem(), settings_.darcy.perm_single/presets::darcy_to_m2*1e3);
 
       InitLutNodeThroat(lut_node_throat_);
       InitLutPoreSolidMicro(lut_pore_solid_micro_);
@@ -859,7 +866,9 @@ namespace xpm
 
 
         idx1d_t nrows = *pni_.connected_count();
-        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_, settings_.darcy_perm});
+        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_,
+          [this](voxel_t i) { return settings_.darcy.perm(i); }
+        });
 
 
         std::cout << " done\n\n";
@@ -907,14 +916,16 @@ namespace xpm
 
       {
         
-        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, settings_.darcy_perm});
+        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, 
+          [this](voxel_t i) { return settings_.darcy.perm(i); }
+        });
           
         std::cout << fmt::format(
           "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
-          settings_.darcy_perm/darcy_to_m2*1000,
+          settings_.darcy.perm_single/darcy_to_m2*1000,
           inlet/pn_.physical_size.x()/darcy_to_m2*1000,
           outlet/pn_.physical_size.x()/darcy_to_m2*1000,
           residual, iters);
