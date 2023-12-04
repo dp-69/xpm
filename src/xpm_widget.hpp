@@ -1,7 +1,6 @@
 #pragma once
 
 
-#include "displ_queue.hpp"
 #include "functions.h"
 #include "invasion_task.hpp"
 
@@ -204,6 +203,8 @@ namespace xpm
     
 
     void InitGUI() {
+      // this->setWindowTitle(QString::fromStdString(fmt::format("xpm - {}", settings_.image.path.filename().string())));
+
       qvtk_widget_ = new QVTKWidgetRef;
 
       #if (VTK_MAJOR_VERSION == 8)
@@ -232,6 +233,9 @@ namespace xpm
               dpl::sfor<6>([this, v](auto i) {
                 static_cast<dpl::vtk::GlyphMapperFace<idx1d_t>&>(std::get<i>(img_glyph_mapper_.faces_))
                   .GetActor()->GetProperty()->SetEdgeVisibility(v);
+
+                // static_cast<dpl::vtk::GlyphMapperFace<idx1d_t>&>(std::get<i>(img_glyph_mapper_.faces_))
+                //   .GetActor()->GetProperty()->SetEdgeColor(0.8, 0.8, 0.8);
                 render_window_->Render();
               });
             }
@@ -597,31 +601,6 @@ namespace xpm
         darcy_pc_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
       }
 
-      // {
-      //   auto* chart = kr_chart_view_->chart();
-      //
-      //   auto* darcy_kr0_series = new QLineSeries;
-      //   chart->addSeries(darcy_kr0_series);
-      //
-      //   for (auto& p : settings_.primary.kr[0])
-      //     darcy_kr0_series->append(p.x(), p.y());
-      //   darcy_kr0_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-      //   darcy_kr0_series->attachAxis(kr_axis_y_);
-      //   chart->legend()->markers(darcy_kr0_series)[0]->setVisible(false);
-      //   darcy_kr0_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
-      //
-      //   auto* darcy_kr1_series = new QLineSeries;
-      //   chart->addSeries(darcy_kr1_series);
-      //
-      //   for (auto& p : settings_.primary.kr[1])
-      //     darcy_kr1_series->append(p.x(), p.y());
-      //   darcy_kr1_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-      //   darcy_kr1_series->attachAxis(kr_axis_y_);
-      //   chart->legend()->markers(darcy_kr1_series)[0]->setVisible(false);
-      //   darcy_kr1_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
-      // }
-
-
       using eq_tr = hydraulic_properties::equilateral_triangle;
 
       {
@@ -641,6 +620,9 @@ namespace xpm
             settings_.primary.pc.empty() ? 0 : settings_.primary.pc.front().y()))))*1.01
         );
       }
+
+      
+
 
       invasion_task_.init();
 
@@ -665,6 +647,8 @@ namespace xpm
           
           auto map_satur = [](double x) { return x/2. + 0.25; };
 
+          // return;
+
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
           
@@ -684,7 +668,7 @@ namespace xpm
           for (macro_t i{0}; i < pn_.node_count(); ++i)
             if (pni_.connected(i) && state.config(pni_.net(i)).phase() == phase_config::phase1())
               macro_colors->SetTypedComponent(*i, 0,
-                map_satur(1.0 - eq_tr::area_corners(settings_.theta, state.r_cap(pni_.net(i)))/eq_tr::area(r_ins(pn_, i))));
+                map_satur(1.0 - eq_tr::area_corners(settings_.theta, state.r_cap(pni_.net(i)))/eq_tr::area(r_ins(pn_, i))));  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-float-conversion)
             else
               macro_colors->SetTypedComponent(*i, 0, 0.0);
           
@@ -694,7 +678,7 @@ namespace xpm
             for (std::size_t i{0}; i < pn_.throat_count(); ++i) {
               if (auto [l, r] = adj(pn_, i); pn_.inner_node(r)) {
                 if (pni_.connected(l) && state.config(i).phase() == phase_config::phase1())
-                  throat_colors->SetTypedComponent(t_inner_idx, 0,
+                  throat_colors->SetTypedComponent(t_inner_idx, 0,  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-float-conversion)
                     map_satur(1.0 - eq_tr::area_corners(settings_.theta, state.r_cap(i))/eq_tr::area(r_ins(pn_, i))));
                 else
                   throat_colors->SetTypedComponent(t_inner_idx, 0, 0.0);
@@ -840,7 +824,7 @@ namespace xpm
       HYPRE_Int iters = 0;
 
 
-      if (settings_.use_cache && std::filesystem::exists(cache_path)) {
+      if (settings_.solver.cache.use && std::filesystem::exists(cache_path)) {
         std::cout << "using cached pressure\n\n";
 
         std::ifstream is(cache_path, std::ifstream::binary);
@@ -874,7 +858,7 @@ namespace xpm
         std::cout << " done\n\n";
 
         std::cout << 
-          fmt::format("save input matrix [{} MB]...", (
+          fmt::format("store input matrix [{} MB]...", (
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
@@ -906,7 +890,7 @@ namespace xpm
 
         std::cout << "pressure solved\n\n";
 
-        if (settings_.save_cache) {
+        if (settings_.solver.cache.save) {
           std::filesystem::create_directory("cache");
           std::ofstream cache_stream(cache_path, std::ofstream::binary);
           cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)**pni_.connected_count());

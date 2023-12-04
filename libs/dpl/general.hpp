@@ -60,9 +60,7 @@ namespace dpl
   template <std::integral T, typename Tag = void>
   struct strong_integer
   {
-    // using difference_type = std::make_signed_t<T>;
     using value_type = T;
-    // using tag = Tag;
 
     value_type value;
 
@@ -106,6 +104,8 @@ namespace dpl
     // friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
     // friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
   };
+
+  
 
 
   // template <typename>
@@ -391,6 +391,10 @@ namespace dpl
   // }
 }
 
+
+template <std::integral T, typename Tag>
+struct std::incrementable_traits<dpl::strong_integer<T, Tag>> : std::incrementable_traits<T> {};
+
 template <std::integral T, typename Tag>
 struct std::hash<dpl::strong_integer<T, Tag>>
 {
@@ -398,3 +402,17 @@ struct std::hash<dpl::strong_integer<T, Tag>>
     return std::hash<T>()(*k);
   }
 };
+
+// namespace std
+// {
+//   // template <integral T, typename Tag>
+//   // struct incrementable_traits<dpl::strong_integer<T, Tag>> : incrementable_traits<T> {};
+//
+//   // template <integral T, typename Tag>
+//   // struct hash<dpl::strong_integer<T, Tag>>
+//   // {
+//   //   size_t operator()(const dpl::strong_integer<T, Tag>& k) const {
+//   //     return hash<T>()(*k);
+//   //   }
+//   // };
+// }

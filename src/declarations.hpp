@@ -613,8 +613,6 @@ namespace xpm
   {
     using wrap = wrapper<nlohmann::json>;
 
-    bool use_cache = false;
-    bool save_cache = false;
     bool loaded = false;
     bool occupancy_images = false;
 
@@ -730,12 +728,17 @@ namespace xpm
       HYPRE_Real tolerance = 1.e-20;
       HYPRE_Int max_iterations = 20;
 
-      void load(const nlohmann::json& j) {
-        tolerance = j["tolerance"];
-        max_iterations = j["max_iterations"];
+      struct {
+        bool use = true;
+        bool save = true;
+      } cache;
 
-        if (auto d = j.find("decomposition"); d != j.end())
-          decomposition = *d;
+      void load(wrap j) {
+        tolerance = (*j)["tolerance"];
+        max_iterations = (*j)["max_iterations"];
+        j.set(decomposition, "decomposition");
+        j.set(cache.use, "cache", "use");
+        j.set(cache.save, "cache", "save");
       }
     } solver;
 

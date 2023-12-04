@@ -4,101 +4,15 @@
 #include <QWidget>
 #include <QApplication>
 
-// constexpr auto occurrences(std::string_view sv, const char sep) {
-//   auto sep_count = 0;
-//   auto pos = sv.find(sep);
-//   while (pos != std::string_view::npos) {
-//     ++sep_count;
-//     pos = sv.find(sep, pos + 1);
-//   }
-//   return sep_count;
-// }
-
-// constexpr auto partition(std::string_view sv) {
-//   constexpr auto sep = '/';
-//   auto pos = sv.find(sep);
-
-  // constexpr auto sep = '/';
-  // static constexpr auto count = occurrences(sv, sep);
-  // std::array<std::string_view, count> arr;
-  // auto i = 0;
-  // for (auto pos = sv.find(sep); pos != std::string_view::npos;) {
-  //   arr[i++] = sv.substr(0, pos);
-  //   sv.remove_prefix(pos + 1);
-  // }
-  // arr[i] = sv;
-  // return arr;
-// }
-
 int main(int argc, char* argv[])
 {
+
   
-  // auto s = r.size();
-  // auto b = r.begin();
-  // auto e = r.end();
-  // auto f = r.front();
-  // auto k = r.back();
-  // auto t = r.empty();
-  // auto v = r[10];
-
-  // void transofrm(
-  //   const std::filesystem::path& src_path, const dpl::vector3i& src_size, const dpl::vector3i& src_origin,
-  //   const std::filesystem::path& dst_path, const dpl::vector3i& dst_size)
-
-  // xpm::transform(
-  //   R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu\pnm_petronas\images\Esta256Grey.raw)", 256, 0,
-  //   R"(C:\dev\xpm\build\RelWithDebInfo\bin\pnextract\Esta256Grey_256x256x256_4p000um.raw)", 256);
-
-
-  // int p = 3;
-
-  // getchar();
-
-  // std::cout << fmt::format("sw-{:04.2f}.raw", 0.5);
-
-  // auto k = occurrences("one/two/three", '/');
-  // auto qq = partition("one/two/three");
-  // static constexpr auto k2 = occurrences("one/two/three", '/');
-
-//   using json = nlohmann::json;
-//   
-//   json ex1 = json::parse(R"(
-//     {
-//       "pi": 3.141,
-//       "happy": 
-// {
-//       "lul": 6.99,
-//       "foo": true
-//     }
-//
-//     }
-//   )");
-//   
-//   std::unique_ptr<json> k;
-//   
-//   
-//   xpm::wrapper<json> my{&ex1};
-//
-//   double wewre;
-//
-//   my.assign(wewre, "happy", "lulw");
-
-  // auto lul = my("happy", "lul", qqq);
-  
-  // int p = 3;
-  // wewre << lul;
-  
-  // if (lul) {
-  // double foo = *lul;
-  // int ww = 3;
+  // for (auto lul : std::ranges::iota_view(xpm::voxel_t{0}, 10)) {
+  //   std::cout << *lul;
   // }
-  //
-  // if (auto lul2 = my["piww"]; lul2) {
-  //   int qwe = 4;
-  // }
-  //
-  // int p = 3;
 
+  // int p = 3;
 
 
 
@@ -123,15 +37,11 @@ int main(int argc, char* argv[])
     format.setProfile(QSurfaceFormat::CoreProfile);
   #endif
 
-
   #if (VTK_MAJOR_VERSION == 8)
     QSurfaceFormat::setDefaultFormat(format);
   #elif (VTK_MAJOR_VERSION == 9)
   #endif
-    
 
-  // QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, false);
-    
   QApplication app(argc, argv);
     
     

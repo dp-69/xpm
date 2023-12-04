@@ -1,5 +1,6 @@
 #pragma once
 
+#include "displ_queue.hpp"
 #include "pore_network_image.hpp"
 
 namespace xpm {
@@ -314,9 +315,11 @@ namespace xpm {
 
       std::cout << fmt::format("ph{} | hash: {:x}", int{phase1}, hash);
 
+      
+
       auto found = pressure_cache::cache().find(hash);
 
-      if (found == pressure_cache::cache().end()) {
+      if (!settings_->solver.cache.use || found == pressure_cache::cache().end()) {
         dpl::strong_vector<net_t, double> pressure(pni_->connected_count());
         auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
 
@@ -330,7 +333,7 @@ namespace xpm {
           auto t2 = high_resolution_clock::now();
           std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values(nrows);
 
-          std::cout << fmt::format(" | save: {} s, solve: {} s\n",
+          std::cout << fmt::format(" | store: {} s, solve: {} s\n",
             duration_cast<seconds>(t1 - t0).count(), duration_cast<seconds>(t2 - t1).count());
         }
         
@@ -339,8 +342,10 @@ namespace xpm {
 
         auto inlet = pni_->flow_rates(pressure, term, filter).second;
 
-        pressure_cache::cache()[hash] = inlet;
-        pressure_cache::save();
+        if (settings_->solver.cache.save) {
+          pressure_cache::cache()[hash] = inlet;
+          pressure_cache::save();
+        }
 
         return inlet;
       }
@@ -590,13 +595,24 @@ namespace xpm {
       };
 
 
-      auto inv_idx_ = 0;
-
-      
+      auto local_prog_idx = 0;
 
       for (; !queue.empty(); ++progress_idx_) {
-        // if (++inv_idx_ < 5000)
-        //   std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        // {
+        //   using namespace std::this_thread;
+        //   using namespace std::chrono;
+        //
+        //   if (local_prog_idx < 1000) {
+        //     if (local_prog_idx%20 == 0)
+        //       sleep_for(milliseconds{40});
+        //   }
+        //   else if (local_prog_idx < 4000) {
+        //     if (local_prog_idx%40 == 0)
+        //       sleep_for(milliseconds{50});
+        //   }
+        //
+        //   ++local_prog_idx;
+        // }
 
 
         auto [elem, local, r_cap] = queue.front();
@@ -782,10 +798,6 @@ namespace xpm {
           calc_relative(settings_->primary, pc_to_sw, theta, std::true_type{})/absolute_rate); // TODO: calculate when breakthrough
       };
 
-      int file_idx = 0;
-
-
-
       auto write_occupancy_image = [&](double sw) {
         if (settings_->occupancy_images)
           state_.write_occupancy_image(
@@ -813,13 +825,23 @@ namespace xpm {
         state_.config(idx) = phase_config::phase1_bulk_films();
       };
 
-      for (progress_idx_ = 0; !queue.empty(); ++progress_idx_) {
-        // if (inv_idx_ < 35)
-        //   std::this_thread::sleep_for(std::chrono::milliseconds{150});
-        // else if (inv_idx_ < 100)
-        //   std::this_thread::sleep_for(std::chrono::milliseconds{50});
-        // else if (inv_idx_ < 1000)
-        //   std::this_thread::sleep_for(std::chrono::milliseconds{25});
+      
+
+
+      progress_idx_ = 0;
+      // getchar();
+      for (/*progress_idx_ = 0*/; !queue.empty(); ++progress_idx_) {
+        // {
+        //   using namespace std::this_thread;
+        //   using namespace std::chrono;
+        //
+        //   if (progress_idx_ < 35)
+        //     sleep_for(milliseconds{150});
+        //   else if (progress_idx_ < 100)
+        //     sleep_for(milliseconds{50});
+        //   else if (progress_idx_ < 300 /*1000*/)
+        //     sleep_for(milliseconds{25});
+        // }
 
         auto [elem, local, r_cap] = queue.front();
 
@@ -981,6 +1003,8 @@ namespace xpm {
 
       primary_.kr.emplace_back(0, 0, 1);
       ++progress_idx_;
+
+      // getchar();
 
       finished_ = true;
 
