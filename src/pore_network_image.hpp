@@ -590,10 +590,12 @@ namespace xpm
     }
 
     void read_image(const auto& image_path, parse::image_dict input_config) {
-      std::ifstream is(image_path);
-      is.seekg(0, std::ios_base::end);
+      using namespace std;
+
+      ifstream is(image_path);
+      is.seekg(0, ios::end);
       size_ = voxel_t(is.tellg());  // NOLINT(cppcoreguidelines-narrowing-conversions)
-      is.seekg(0, std::ios_base::beg);
+      is.seekg(0, ios::beg);
       phase.resize(voxel_t{size_});
       is.read(reinterpret_cast<char*>(phase.data()), *size_);
 
@@ -616,7 +618,7 @@ namespace xpm
           ++microporous_voxels;
         }
 
-      std::cout << fmt::format(
+      cout << fmt::format(
         "image voxels\n"
         "  total: {:L}\n"
         "  pore: {:L} | {:.1f}%\n"

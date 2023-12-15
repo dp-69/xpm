@@ -47,7 +47,7 @@ message("VTK_VERSION: " ${VTK_VERSION})
 
 
 add_executable(xpm # WIN32
-  "src/xpm_widget.hpp"  
+  "src/widget.hpp"  
   "src/main.cpp"
   "src/functions.cpp"
   

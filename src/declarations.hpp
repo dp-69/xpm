@@ -682,7 +682,7 @@ namespace xpm
 
         std::vector<std::uint8_t> arr(*total_size);
         {
-          std::ifstream is{path, std::ios_base::binary};
+          std::ifstream is{path, std::ios::binary};
           is.read(reinterpret_cast<char*>(arr.data()), *total_size*sizeof(std::uint8_t)); // NOLINT(cppcoreguidelines-narrowing-conversions)
         }
         
@@ -797,7 +797,9 @@ namespace xpm
     std::vector<Type> src(src_total_size);
     std::vector<Type> dst(dst_total_size);
 
-    std::ifstream is{src_path, std::ios_base::binary};
+    
+    
+    std::ifstream is{src_path, std::ios::binary};
     
     is.read(reinterpret_cast<char*>(src.data()), src_total_size*sizeof(Type));
 
@@ -812,7 +814,7 @@ namespace xpm
         for (i = 0; i < dst_size.x(); ++i, ++idx1d)
           dst[*idx1d] = proj(src[*src_mapper(src_origin + ijk)]);
 
-    std::ofstream{dst_path, std::ios_base::binary}
+    std::ofstream{dst_path, std::ios::binary}
       .write(reinterpret_cast<char*>(dst.data()), dst_total_size*sizeof(Type));
   }
 }

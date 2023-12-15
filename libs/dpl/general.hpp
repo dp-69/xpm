@@ -134,6 +134,10 @@ namespace dpl
 
   public:
     strong_vector() = default;
+    strong_vector(const strong_vector& other) = delete;
+    strong_vector(strong_vector&& other) noexcept = default;
+    strong_vector& operator=(const strong_vector& other) = delete;
+    strong_vector& operator=(strong_vector&& other) noexcept = default;
 
     explicit strong_vector(strong_integer<T, Tag> size)
       : uptr_{std::make_unique<ValueType[]>(*size)} {}
@@ -176,6 +180,10 @@ namespace dpl
 
   public:
     strong_vector() = default;
+    strong_vector(const strong_vector& other) = delete;
+    strong_vector(strong_vector&& other) noexcept = default;
+    strong_vector& operator=(const strong_vector& other) = delete;
+    strong_vector& operator=(strong_vector&& other) noexcept = default;
 
     explicit strong_vector(strong_integer<T, Tag> size)
       : vec_(*size) {}

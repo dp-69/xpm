@@ -3,6 +3,8 @@
 #include "displ_queue.hpp"
 #include "pore_network_image.hpp"
 
+#include <dpl/graph/dc_context.hpp>
+
 namespace xpm {
   
 
@@ -84,7 +86,7 @@ namespace xpm {
             else if (img.phase[idx1d] == microporous)
               output[*idx1d] = darcy_value;
 
-      std::ofstream{path, std::ios_base::binary}
+      std::ofstream{path, std::ios::binary}
         .write(reinterpret_cast<char*>(output.data()), sizeof(type)**img.size());
     }
   };
@@ -218,11 +220,11 @@ namespace xpm {
       return state_;
     }
 
-    auto& primary() {
+    auto& primary() const {
       return primary_;
     }
 
-    auto& secondary() {
+    auto& secondary() const {
       return secondary_;
     }
 
@@ -236,8 +238,10 @@ namespace xpm {
 
     void init() {
       if (settings_->occupancy_images) {
-        image_dir_ = std::filesystem::path(dpl::hypre::mpi::mpi_exec)
-          .replace_filename("image")/settings_->image.path.stem();
+        image_dir_ =
+          std::filesystem::path(dpl::hypre::mpi::mpi_exec)
+            .replace_filename("results")/settings_->image.path.stem()/"images";
+          // std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("image")/settings_->image.path.stem();
 
         remove_all(image_dir_);
         create_directories(image_dir_);
@@ -812,6 +816,8 @@ namespace xpm {
             last_pc_point_ = pc_point;
             primary_.add_pc(pc_point);
             write_occupancy_image(pc_point.x());
+
+            
           }
 
           if (auto sw = 1 - eval_inv_volume()/total_pore_volume_; last_kr_sw - sw > settings_->report.sw_kr) {

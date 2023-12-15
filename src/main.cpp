@@ -1,5 +1,4 @@
-#include "xpm_widget.hpp"
-#include "xpm_widget.hpp"
+#include "widget.hpp"
 
 #include <QWidget>
 #include <QApplication>
@@ -29,35 +28,78 @@ int main(int argc, char* argv[])
 
   dpl::hypre::mpi::mpi_exec = argv[0];
 
-  auto format = xpm::QVTKWidgetRef::defaultFormat();
 
-  #ifdef _WIN32
-    format.setProfile(QSurfaceFormat::CompatibilityProfile);
-  #else
-    format.setProfile(QSurfaceFormat::CoreProfile);
-  #endif
+  if (argc == 2 && !std::strcmp(argv[1], "-G")) {
+    using json = nlohmann::json;
 
-  #if (VTK_MAJOR_VERSION == 8)
-    QSurfaceFormat::setDefaultFormat(format);
-  #elif (VTK_MAJOR_VERSION == 9)
-  #endif
+    auto non_gui_exec = [](const json& jj) {
+      xpm::modeller modeller;
+  
+      modeller.init(jj);
 
-  QApplication app(argc, argv);
+      modeller.compute_pressure();
     
+      modeller.invasion_task().init();
     
-  // QWidget widget;
-  xpm::XPMWidget widget;
-    
-    
-  widget.Init();
-    
-  // Ui::MainWindow ui;
-  // ui.setupUi(&widget);
+      modeller.invasion_task().launch_primary(
+        modeller.absolute_rate(),
+        modeller.settings().theta,
+        modeller.settings().primary.calc_pc_inv());
 
-  widget.resize(1400, 1000);
-  widget.show();
+      auto dir =
+        std::filesystem::path(dpl::hypre::mpi::mpi_exec)
+          .replace_filename("results")/modeller.settings().image.path.stem();
 
-  /*auto result = */QApplication::exec();
+      create_directories(dir);
+
+      std::ofstream(dir/"pc_primary.txt") << modeller.pc_to_plain(std::true_type{});
+      std::ofstream(dir/"pc_secondary.txt") << modeller.pc_to_plain(std::false_type{});
+
+      std::ofstream(dir/"kr_primary.txt") << modeller.kr_to_plain(std::true_type{});
+      std::ofstream(dir/"kr_secondary.txt") << modeller.kr_to_plain(std::false_type{});
+
+      std::cout << '\n';
+      // add_copy("Copy (primary)", [this] { return modeller.pc_to_plain(std::true_type{}); });
+    };
+
+    if (auto root = json::parse(std::ifstream{"config.json"}, nullptr, true, true);
+      root.is_array())
+      std::ranges::for_each(root, non_gui_exec);
+    else
+      non_gui_exec(root);
+
+
+    // getchar();
+  }
+  else {
+    auto format = xpm::QVTKWidgetRef::defaultFormat();
+
+    #ifdef _WIN32
+      format.setProfile(QSurfaceFormat::CompatibilityProfile);
+    #else
+      format.setProfile(QSurfaceFormat::CoreProfile);
+    #endif
+
+    #if (VTK_MAJOR_VERSION == 8)
+      QSurfaceFormat::setDefaultFormat(format);
+    #elif (VTK_MAJOR_VERSION == 9)
+    #endif
+
+    QApplication app(argc, argv);
+      
+      
+    xpm::Widget widget;
+      
+    widget.Init();
+      
+    // Ui::MainWindow ui;
+    // ui.setupUi(&widget);
+
+    widget.resize(1400, 1000);
+    widget.show();
+
+    /*auto result = */QApplication::exec();
+  }
 
   #ifdef _WIN32
     MPI_Finalize();
