@@ -101,7 +101,7 @@ Julien Maes <sup>2</sup><br/>
 Hannah Menke <sup>2</sup><br/>
 Kamaljit Singh <sup>2</sup><br/>
 
-<sup>1</sup> Ivano-Frankivsk, Ukraine<br/>
+<sup>1</sup> Independant Consultant, Ivano-Frankivsk, Ukraine<br/>
 <sup>2</sup> Heriot-Watt University, Edinburgh, UK
 
 *Tom Bultreys (Ghent University, Belgium) is thanked for their advisory in multi-scale pore-network modelling.*

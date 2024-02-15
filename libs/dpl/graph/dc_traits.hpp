@@ -82,7 +82,7 @@ namespace dpl::graph
   }
 
   inline dc_graph::vertex_t get_vertex(et_traits::const_node_ptr n, const dc_graph&) {
-    return dc_graph::vertex_t{mask_bit_balance::get_value<dc_graph::vertex_t::value_type>(n->tag)};
+    return dc_graph::vertex_t{mask_bit_balance::get_value<dc_graph::vertex_t::type>(n->tag)};
   }
 
   inline void set_vertex(et_traits::node_ptr n, dc_graph::vertex_t v, const dc_graph&) {
@@ -90,7 +90,7 @@ namespace dpl::graph
   }
 
   inline dc_graph::edge_t get_directed_edge(et_traits::const_node_ptr n, const dc_graph&) {
-    return dc_graph::edge_t{mask_bit_balance::get_value<dc_graph::edge_t::value_type>(n->tag)};
+    return dc_graph::edge_t{mask_bit_balance::get_value<dc_graph::edge_t::type>(n->tag)};
   }
 
   inline void set_directed_edge(et_traits::node_ptr n, dc_graph::edge_t de, const dc_graph&) {

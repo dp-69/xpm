@@ -60,13 +60,14 @@ namespace dpl
   template <std::integral T, typename Tag = void>
   struct strong_integer
   {
-    using value_type = T;
+    using type = T;
+    // using difference_type = int;
 
-    value_type value;
+    type value;
 
     strong_integer() = default;
-    constexpr explicit strong_integer(value_type v) : value{v} {}
-    constexpr explicit operator value_type() const { return value; }
+    constexpr explicit strong_integer(type v) : value{v} {}
+    constexpr explicit operator type() const { return value; }
 
     constexpr auto& operator++() {
       ++value;
@@ -82,7 +83,7 @@ namespace dpl
     constexpr auto& operator*() const { return value; }
     auto& operator*() { return value; }
 
-    constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }
+    constexpr bool operator<(std::integral auto rhs) const { return value < rhs; }  // NOLINT(clang-diagnostic-sign-compare)
     constexpr bool operator>=(std::integral auto rhs) const { return value >= rhs; }
     constexpr bool operator==(std::integral auto rhs) const { return value == rhs; }
     constexpr bool operator<(const strong_integer& rhs) const { return value < *rhs; }
@@ -101,6 +102,7 @@ namespace dpl
     constexpr bool operator!=(const strong_integer& rhs) const { return value != *rhs; }
 
     friend constexpr bool operator<(std::integral auto lhs, const strong_integer& rhs) { return lhs < *rhs; }
+
     // friend constexpr bool operator==(const strong_integer& lhs, const strong_integer& rhs) { return *lhs == *rhs; }
     // friend constexpr bool operator!=(const strong_integer& lhs, const strong_integer& rhs) { return *lhs != *rhs; }
   };
@@ -124,13 +126,14 @@ namespace dpl
   // };
 
 
-  template <typename...>
+  template <typename...> // template <typename Index, typename Value>
   class strong_vector {};
 
-  template <typename T, typename Tag, typename ValueType>
-  class strong_vector<strong_integer<T, Tag>, ValueType>
+  template <typename T, typename Tag, typename Value>
+  class strong_vector<strong_integer<T, Tag>, Value>
   {
-    std::unique_ptr<ValueType[]> uptr_;
+  protected:
+    std::unique_ptr<Value[]> uptr_;
 
   public:
     strong_vector() = default;
@@ -139,19 +142,23 @@ namespace dpl
     strong_vector& operator=(const strong_vector& other) = delete;
     strong_vector& operator=(strong_vector&& other) noexcept = default;
 
-    explicit strong_vector(strong_integer<T, Tag> size)
-      : uptr_{std::make_unique<ValueType[]>(*size)} {}
+    template<std::size_t value>
+    explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
+      : uptr_{std::make_unique<Value[]>(value)} {}
 
-    explicit strong_vector(strong_integer<T, Tag> size, ValueType value)
+    explicit strong_vector(strong_integer<T, Tag> size)
+      : uptr_{std::make_unique<Value[]>(*size)} {}
+
+    explicit strong_vector(strong_integer<T, Tag> size, Value value)
       : strong_vector{size} {
       std::fill_n(uptr_.get(), *size, value);
     }
 
     void resize(strong_integer<T, Tag> size) {
-      uptr_ = std::make_unique<ValueType[]>(*size);
+      uptr_ = std::make_unique<Value[]>(*size);
     }
 
-    void resize(strong_integer<T, Tag> size, ValueType value) {
+    void resize(strong_integer<T, Tag> size, Value value) {
       resize(size);
       std::fill_n(uptr_.get(), *size, value);
     }
@@ -171,11 +178,84 @@ namespace dpl
     explicit operator bool() const {
       return static_cast<bool>(uptr_);
     }
+
+    auto span(strong_integer<T, Tag> size) const {
+      return std::span{data(), data() + *size};
+    }
   };
+
+  // template <typename T, typename Tag, typename ValueType>
+  // class strong_vector<strong_integer<T, Tag>, ValueType>
+  // {
+  //   // std::unique_ptr<ValueType[]> uptr_;
+  //   std::vector<ValueType> vec_;
+  //
+  //
+  // public:
+  //   strong_vector() = default;
+  //   strong_vector(const strong_vector& other) = delete;
+  //   strong_vector(strong_vector&& other) noexcept = default;
+  //   strong_vector& operator=(const strong_vector& other) = delete;
+  //   strong_vector& operator=(strong_vector&& other) noexcept = default;
+  //
+  //   template<std::size_t value>
+  //   explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
+  //     : vec_(value) {}
+  //     // : uptr_{std::make_unique<ValueType[]>(value)} {}
+  //
+  //   explicit strong_vector(strong_integer<T, Tag> size)
+  //     : vec_(*size) {}
+  //     // : uptr_{std::make_unique<ValueType[]>(*size)} {}
+  //
+  //   explicit strong_vector(strong_integer<T, Tag> size, ValueType value)
+  //     // : strong_vector{size}
+  //   {
+  //     vec_(*size, value);
+  //     // std::fill_n(uptr_.get(), *size, value);
+  //   }
+  //
+  //   void resize(strong_integer<T, Tag> size) {
+  //     vec_.resize(*size);
+  //     // uptr_ = std::make_unique<ValueType[]>(*size);
+  //   }
+  //
+  //   void resize(strong_integer<T, Tag> size, ValueType value) {
+  //     vec_.resize(*size, value);
+  //     // resize(size);
+  //     // std::fill_n(uptr_.get(), *size, value);
+  //   }
+  //
+  //   auto& operator[](strong_integer<T, Tag> i) {
+  //     return vec_[*i];
+  //     // return uptr_[*i];
+  //   }
+  //
+  //   auto& operator[](strong_integer<T, Tag> i) const {
+  //     return vec_[*i];
+  //     // return uptr_[*i];
+  //   }
+  //
+  //   auto data() const {
+  //     return vec_.data();
+  //   }
+  //
+  //   auto data() {
+  //     return vec_.data();
+  //   }
+  //
+  //   auto begin() const {
+  //     return vec_.begin();
+  //   }
+  //
+  //   auto end() const {
+  //     return vec_.end();
+  //   }
+  // };
 
   template <typename T, typename Tag>
   class strong_vector<strong_integer<T, Tag>, bool>
   {
+  protected:
     std::vector<bool> vec_;
 
   public:
@@ -185,16 +265,69 @@ namespace dpl
     strong_vector& operator=(const strong_vector& other) = delete;
     strong_vector& operator=(strong_vector&& other) noexcept = default;
 
+    template<std::size_t value>
+    explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
+      : vec_(value) {}
+
     explicit strong_vector(strong_integer<T, Tag> size)
       : vec_(*size) {}
 
-    auto operator[](strong_integer<T, Tag> index) {
-      return vec_[*index];
+    auto operator[](strong_integer<T, Tag> i) {
+      return vec_[*i];
     }
 
-    auto operator[](strong_integer<T, Tag> index) const {
-      return vec_[*index];
+    auto operator[](strong_integer<T, Tag> i) const {
+      return vec_[*i];
     }
+  };
+
+
+  template <typename Index, typename Value, std::size_t size = std::size_t{1} << 8*sizeof(Index)>
+  class strong_array {};
+
+  template <typename T, typename Tag, typename Value, std::size_t size>
+  class strong_array<strong_integer<T, Tag>, Value, size> : public strong_vector<strong_integer<T, Tag>, Value>
+  {
+  public:
+    constexpr strong_array()
+      : strong_vector<strong_integer<T, Tag>, Value>(std::integral_constant<size_t, size>{}) {}
+
+    constexpr strong_array(Value v)
+      : strong_array() {
+      std::fill_n(this->uptr_.get(), size, v);
+    }
+    
+    auto begin() const {
+      return this->data();
+    }
+    
+    auto end() const {
+      return this->data() + size;
+    }
+
+    // auto span() const {
+    //   return std::span{this->data(), this->data() + size};
+    // }
+  };
+
+  template <typename T, typename Tag, std::size_t size>
+  class strong_array<strong_integer<T, Tag>, bool, size> : public strong_vector<strong_integer<T, Tag>, bool>
+  {
+  public:
+    constexpr strong_array()
+      : strong_vector<strong_integer<T, Tag>, bool>(std::integral_constant<size_t, size>{}) {}
+    
+    auto begin() const {
+      return this->vec_.begin();
+    }
+    
+    auto end() const {
+      return this->vec_.end();
+    }
+
+    // auto indices() const {
+    //   return std::span<strong_integer<T, Tag>, size>{strong_integer<T, Tag>{0}, size};
+    // }
   };
 
 

@@ -5,6 +5,14 @@
 
 int main(int argc, char* argv[])
 {
+  // xpm::transform(
+  //   R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu\pnm_petronas\images\EstailladesPHASES-0-255_500x500x500_4p0um.raw)",
+  //   500, 200, 
+  //   R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu\pnm_petronas\images\EstailladesPHASESPROC-0-255_256x256x256_4p0um.raw)",
+  //   256,
+  //   [](std::uint8_t v) { return /*v < 50 ? 0 : */v; });
+  // getchar();
+
 
   
   // for (auto lul : std::ranges::iota_view(xpm::voxel_t{0}, 10)) {
@@ -14,96 +22,121 @@ int main(int argc, char* argv[])
   // int p = 3;
 
 
-
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
     dpl::hypre::mpi::process();
     MPI_Finalize();
     return 0;
   }
-  
+
   #ifdef _WIN32
     MPI_Init(&argc, &argv);
   #endif
 
   dpl::hypre::mpi::mpi_exec = argv[0];
 
+  try {
+    if (argc == 2 && !std::strcmp(argv[1], "-G")) {
+      using json = nlohmann::json;
 
-  if (argc == 2 && !std::strcmp(argv[1], "-G")) {
-    using json = nlohmann::json;
-
-    auto non_gui_exec = [](const json& jj) {
-      xpm::modeller modeller;
-  
-      modeller.init(jj);
-
-      modeller.compute_pressure();
+      auto non_gui_exec = [](const json& j) {
+        xpm::modeller modeller;
     
-      modeller.invasion_task().init();
-    
-      modeller.invasion_task().launch_primary(
-        modeller.absolute_rate(),
-        modeller.settings().theta,
-        modeller.settings().primary.calc_pc_inv());
+        modeller.init(j);
 
-      auto dir =
-        std::filesystem::path(dpl::hypre::mpi::mpi_exec)
-          .replace_filename("results")/modeller.settings().image.path.stem();
+        modeller.compute_pressure();
+      
+        if (false) {
+          modeller.invasion_task().init();
+      
+          modeller.invasion_task().launch_primary(
+            modeller.absolute_rate(),
+            modeller.settings().theta,
+            modeller.settings().primary.calc_pc_inv());
 
-      create_directories(dir);
+          auto dir =
+            std::filesystem::path(dpl::hypre::mpi::mpi_exec)
+              .replace_filename("results")/modeller.settings().image.path.stem();
 
-      std::ofstream(dir/"pc_primary.txt") << modeller.pc_to_plain(std::true_type{});
-      std::ofstream(dir/"pc_secondary.txt") << modeller.pc_to_plain(std::false_type{});
+          create_directories(dir);
 
-      std::ofstream(dir/"kr_primary.txt") << modeller.kr_to_plain(std::true_type{});
-      std::ofstream(dir/"kr_secondary.txt") << modeller.kr_to_plain(std::false_type{});
+          std::ofstream(dir/"pc_primary.txt") << modeller.pc_to_plain(std::true_type{});
+          std::ofstream(dir/"pc_secondary.txt") << modeller.pc_to_plain(std::false_type{});
 
-      std::cout << '\n';
-      // add_copy("Copy (primary)", [this] { return modeller.pc_to_plain(std::true_type{}); });
-    };
-
-    if (auto root = json::parse(std::ifstream{"config.json"}, nullptr, true, true);
-      root.is_array())
-      std::ranges::for_each(root, non_gui_exec);
-    else
-      non_gui_exec(root);
+          std::ofstream(dir/"kr_primary.txt") << modeller.kr_to_plain(std::true_type{});
+          std::ofstream(dir/"kr_secondary.txt") << modeller.kr_to_plain(std::false_type{});
+        }
 
 
-    // getchar();
+
+        std::cout << '\n';
+        // add_copy("Copy (primary)", [this] { return modeller.pc_to_plain(std::true_type{}); });
+      };
+
+      if (auto root = json::parse(std::ifstream{"config.json"}, nullptr, true, true);
+        root.is_array())
+        std::ranges::for_each(root, non_gui_exec);
+      else
+        non_gui_exec(root);
+
+
+      // getchar();
+    }
+    else {
+      auto format = xpm::QVTKWidgetRef::defaultFormat();
+
+      #ifdef _WIN32
+        format.setProfile(QSurfaceFormat::CompatibilityProfile);
+      #else
+        format.setProfile(QSurfaceFormat::CoreProfile);
+      #endif
+
+      #if (VTK_MAJOR_VERSION == 8)
+        QSurfaceFormat::setDefaultFormat(format);
+      #elif (VTK_MAJOR_VERSION == 9)
+      #endif
+
+      
+
+        QApplication app(argc, argv);
+          
+          
+        xpm::Widget widget;
+          
+        widget.Init();
+          
+        // Ui::MainWindow ui;
+        // ui.setupUi(&widget);
+
+        widget.resize(1400, 1000);
+        widget.show();
+
+        /*auto result = */QApplication::exec();
+      
+    }
   }
-  else {
-    auto format = xpm::QVTKWidgetRef::defaultFormat();
+  catch (const xpm::config_exception& e) {
+    fmt::print("\n(error) {}", e.what());
+    // std::getc(std::cin)
+    // auto qq = cin.getch();
+    
+    std::cout << std::flush;
+    getchar();
 
-    #ifdef _WIN32
-      format.setProfile(QSurfaceFormat::CompatibilityProfile);
-    #else
-      format.setProfile(QSurfaceFormat::CoreProfile);
-    #endif
+    // auto lul = _getch();
+    // cin.get();
 
-    #if (VTK_MAJOR_VERSION == 8)
-      QSurfaceFormat::setDefaultFormat(format);
-    #elif (VTK_MAJOR_VERSION == 9)
-    #endif
-
-    QApplication app(argc, argv);
-      
-      
-    xpm::Widget widget;
-      
-    widget.Init();
-      
-    // Ui::MainWindow ui;
-    // ui.setupUi(&widget);
-
-    widget.resize(1400, 1000);
-    widget.show();
-
-    /*auto result = */QApplication::exec();
+    // cin.get()
+    // int qq;
+    // std::cin >> qq;
+    // putchar(lul);
   }
 
   #ifdef _WIN32
     MPI_Finalize();
   #endif
+
+    
 
   return 0;
 }

@@ -92,19 +92,21 @@ namespace xpm
       auto filename = settings_.image.pnextract_filename();
 
       if (auto copy_path = "pnextract"/filename; absolute(copy_path) != absolute(settings_.image.path)) {
-        if (settings_.image.grey) {
-          transform(
-            settings_.image.path, settings_.image.size, 0,
-            copy_path, settings_.image.size, [this](std::uint8_t v) {
-              return
-                v == 0 ? settings_.image.phases.pore :
-                v == 255 ? settings_.image.phases.solid :
-                settings_.image.phases.micro.get<std::uint8_t>();
-            });
-
-          settings_.darcy.read_grey(settings_.image.path, settings_.image.size);
-        }
-        else
+        // if (settings_.image.grey) {
+        //   throw std::exception("not implemented (grey scale).");
+        //
+        //   // transform(
+        //   //   settings_.image.path, settings_.image.size, 0,
+        //   //   copy_path, settings_.image.size, [this](std::uint8_t v) {
+        //   //     return
+        //   //       v == 0 ? settings_.image.phases.pore :
+        //   //       v == 255 ? settings_.image.phases.solid :
+        //   //       settings_.image.phases.micro.get<std::uint8_t>();
+        //   //   });
+        //   //
+        //   // settings_.darcy.read_grey(settings_.image.path, settings_.image.size);
+        // }
+        // else
           copy(settings_.image.path, copy_path, fs::copy_options::update_existing);
       }
 
@@ -117,7 +119,7 @@ namespace xpm
       if (std::ranges::all_of(files, [&](std::string_view file) { return exists(network_dir/file); }))
         std::cout << "using cached network\n\n";
       else {
-        std::cout << "=========== pnextract's network extraction begin ===========\n";
+        std::cout << "=========== pnextract's network extraction begin ===========\n" << std::flush;
 
         std::system( // NOLINT(concurrency-mt-unsafe)
           fmt::format("{} {}", fs::current_path()/"pnextract", filename).c_str());
@@ -128,7 +130,7 @@ namespace xpm
 
         remove(fs::path{"_VElems.mhd"});
 
-        std::cout << "=========== pnextract's network extraction end ===========\n\n";
+        std::cout << "=========== pnextract's network extraction end ===========\n\n" << std::flush;
       }
 
       network_dir = absolute(network_dir);
@@ -152,17 +154,7 @@ namespace xpm
 
     void init() {
       auto j = nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true);
-      
-      init(
-        j.is_array() ? j[0] : j
-      /*nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true)*/);
-
-      // if (std::filesystem::exists("config.json"))
-      //   settings_.load(nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true));
-      //
-      // std::filesystem::create_directories("cache");
-      //
-      // std::locale::global(std::locale("en_US.UTF-8"));
+      init(j.is_array() ? j[0] : j);
     }
 
     auto compute_pressure() {
@@ -174,32 +166,28 @@ namespace xpm
 
       //------------------------------
 
-      dpl::vector3i processors{1};
+      dpl::vector3i procs{1};
 
       if (settings_.solver.decomposition)
-        processors = *settings_.solver.decomposition;
+        procs = *settings_.solver.decomposition;
       else {
         if (auto proc_count = std::thread::hardware_concurrency();
           proc_count == 12)
-          processors = {2, 2, 3};
+          procs = {2, 2, 3};
         else if (proc_count == 24)
-          processors = {4, 3, 2};
+          procs = {4, 3, 2};
         else if (proc_count == 32)
-          processors = {4, 4, 2};
+          procs = {4, 4, 2};
         else if (proc_count == 48)
-          processors = {4, 4, 3};
+          procs = {4, 4, 3};
       }
-
-      auto cache_path = fmt::format("cache/{}-pressure-{:.2f}mD.bin",
-        settings_.image.path.stem(), settings_.darcy.perm_single/presets::darcy_to_m2*1e3);
-
 
       pn_.read_from_text_file(pnm_path);
 
       #ifdef XPM_DEBUG_OUTPUT
         std::cout
           << fmt::format("network\n  nodes: {:L}\n  throats: {:L}\n", pn_.node_count(), pn_.throat_count())
-          << (pn_.eval_inlet_outlet_connectivity() ? "(connected)" : "(disconected)") << '\n';
+          << (pn_.eval_inlet_outlet_connectivity() ? "  (connected)" : "  (disconected)") << '\n';
       #endif
 
       #ifdef _WIN32
@@ -210,21 +198,54 @@ namespace xpm
 
       std::cout << '\n';
 
+      img_.dict = settings_.image.phases;
+
+      img_.read_image("pnextract"/settings_.image.pnextract_filename());
+      img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
+
       {
-        img_.read_image("pnextract"/settings_.image.pnextract_filename()/*settings_.image.path*/, settings_.image.phases);
-        img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
+        using namespace voxel_prop;
 
-        img_.read_icl_velems(pnm_path);
+        dpl::strong_array<phase_t, bool> occs;
+        dpl::strong_array<phase_t, idx1d_t> count(0);
+        for (auto p : img_.phase.span(img_.size())) {
+          occs[p] = true;
+          ++count[p];
+        }
 
-        // auto mapped_range =
-        //   std::span(img_.velem.data(), img_.size) 
-        // | std::views::transform([](voxel_property::velem_t x) { return *x; });
+        std::list<phase_t> missing;
+        for (std::size_t i = 0; i < 256; ++i)
+          if (phase_t p(i);  // NOLINT(clang-diagnostic-implicit-int-conversion)
+            settings_.image.phases.is_darcy(p) && occs[p] && settings_.darcy.poro_perm[p].is_nan()) {
+            missing.push_back(p);
+          }
 
-        // InitLutVelems(lut_velem_, *std::ranges::max_element(mapped_range)); // TODO max is not valid, should check value validity
+        // { "value": 118, "porosity": 0.15, "permeability": 1.061493 }
 
-        img_.eval_microporous();
+        if (!missing.empty()) {
+          std::cout << "unassigned porosity and permeability: [\n";
+
+          auto print = [](auto iter) {
+            fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
+          };
+
+          auto iter = missing.begin();
+          auto end = missing.end();
+
+          print(iter);
+          while (++iter != end) {
+            std::cout << ",\n";
+            print(iter);
+          }
+          std::cout << "\n]\n";
+
+          throw config_exception("missing microporosity values.");
+        }
       }
-      
+
+
+      img_.read_icl_velems(pnm_path);
+
       std::cout << "connectivity (isolated components)...";
 
       pni_.evaluate_isolated();
@@ -240,54 +261,59 @@ namespace xpm
       HYPRE_Int iters = 0;
 
 
-      if (settings_.solver.cache.use && std::filesystem::exists(cache_path)) {
-        std::cout << "using cached pressure\n\n";
+
+
+      std::cout << "matrix\n";
+      fmt::print("  decompose {} {} procs...", procs.prod(), procs);
+
+      auto [nrows, mapping] = pni_.generate_mapping(procs);
+
+      std::cout
+        << " done\n"
+        << "  input build...";
+      
+      auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_,
+        [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
+      });
+
+      std::cout << " done\n";
+
+      if (
+        auto cache_path = fmt::format("cache/{}-pressure-{:x}.bin", settings_.image.path.stem(), pressure_cache::hash(nvalues, input));
+
+        settings_.solver.cache.use && std::filesystem::exists(cache_path)) { // TODO
+        std::cout << "  using cache\n";
 
         std::ifstream is(cache_path, std::ifstream::binary);
         is.seekg(0, std::ios::end);
-        auto nrows = is.tellg()/sizeof(HYPRE_Complex);
+        // auto nrows = is.tellg()/sizeof(HYPRE_Complex);
         is.seekg(0, std::ios::beg);
         pressure.resize(net_t(nrows));
         is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));
       }
       else {
-        std::cout << "decomposition...";
-
-        auto [_, mapping] = pni_.generate_mapping(processors);
-
-        std::cout
-          << " done\n\n"
-          << "input matrix build...";
-
-        idx1d_t nrows = *pni_.connected_count();
-        auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_,
-          [this](voxel_t i) { return settings_.darcy.perm(i); }
-        });
-
-        std::cout << " done\n\n";
-
         std::cout << 
-          fmt::format("store input matrix [{} MB]...", (
+          fmt::format("  input store [{} MB]...", (
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
 
         dpl::hypre::mpi::save(input, nrows, nvalues, mapping.block_rows, settings_.solver.tolerance, settings_.solver.max_iterations);
 
         std::cout
-          << " done\n\n"
-          << "decomposition: (" << processors << fmt::format(") = {} procs\n\n", processors.prod())
-          << "hypre MPI solve...";
+          << " done\n"
+          // << "decomposition: (" << processors << fmt::format(") = {} procs\n\n", processors.prod())
+          << "  solve hypre MPI...";
 
         using clock = std::chrono::high_resolution_clock;
 
         auto start = clock::now();
         
         std::system(  // NOLINT(concurrency-mt-unsafe)
-          fmt::format("mpiexec -np {} \"{}\" -s", processors.prod(), dpl::hypre::mpi::mpi_exec).c_str()); 
+          fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), dpl::hypre::mpi::mpi_exec).c_str()); 
         
         auto stop = clock::now();
         
-        std::cout << " done " << duration_cast<std::chrono::seconds>(stop - start).count() << "s\n\n";
+        std::cout << " done " << duration_cast<std::chrono::seconds>(stop - start).count() << "s\n";
 
         {
           std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
@@ -299,30 +325,29 @@ namespace xpm
             pressure[mapping.backward[i]] = decomposed_pressure[i];
         }
 
-        std::cout << "pressure solved\n\n";
-
         if (settings_.solver.cache.save) {
           std::filesystem::create_directory("cache");
           std::ofstream cache_stream(cache_path, std::ofstream::binary);
-          cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)**pni_.connected_count());
-          std::cout << "pressure cached\n\n";
+          cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*nrows/**pni_.connected_count()*/);
+          std::cout << "  cached\n";
         }
       }
 
+      // std::cout << '\n';
+
       {
-        
         auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, 
-          [this](voxel_t i) { return settings_.darcy.perm(i); }
+          [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
         });
 
         using namespace presets;
 
         std::cout << fmt::format(
-          "microprs perm: {:.6f} mD\n"
+          // "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
-          settings_.darcy.perm_single/darcy_to_m2*1000,
+          // settings_.darcy.perm_single/darcy_to_m2*1000,
           inlet/pn_.physical_size.x()/darcy_to_m2*1000,
           outlet/pn_.physical_size.x()/darcy_to_m2*1000,
           residual, iters);
@@ -331,103 +356,6 @@ namespace xpm
       }
 
       return pressure;
-      
-
-      // auto assembly = vtkSmartPointer<vtkAssembly>::New();
-      //
-      // {
-      //   vtkSmartPointer<vtkActor> actor;
-      //
-      //   std::tie(actor, macro_colors) = CreateNodeActor(pn_, lut_pressure_, 
-      //     [&](macro_t i) {
-      //       return pni_.connected(i) ? /*0*/ pressure[pni_.net(i)] : std::numeric_limits<double>::quiet_NaN();
-      //     });
-      //
-      //   assembly->AddPart(actor);
-      //   
-      //   std::tie(actor, throat_colors) = CreateThroatActor(pn_, lut_pressure_, [&](std::size_t i) {
-      //     auto [l, r] = pn_.throat_[attrib::adj][i];
-      //
-      //     return pni_.connected(l)
-      //       ? /*0*/ (pressure[pni_.net(l)] + pressure[pni_.net(r)])/2
-      //       : std::numeric_limits<double>::quiet_NaN();
-      //   });
-      //
-      //   assembly->AddPart(actor);
-      // }
-      //
-      // renderer_->AddActor(assembly);
-      //
-      // // std::ranges::fill(pressure, 0);
-      //
-      // {
-      //   auto scale_factor = /*1.0*/pn_.physical_size.x()/img_.dim().x(); // needed for vtk 8.2 floating point arithmetics
-      //       
-      //   img_glyph_mapper_.Init(scale_factor);
-      //   {
-      //     std::vector<bool> filter(*img_.size());
-      //     for (voxel_t i{0}; i < img_.size(); ++i)
-      //       filter[*i] = img_.phase[i] == microporous;
-      //
-      //     cout << "3D faces...";
-      //
-      //     auto t0 = clock::now();
-      //
-      //     img_glyph_mapper_.Populate(img_.dim(), pn_.physical_size/img_.dim(),
-      //       [&](idx1d_t idx1d) { return filter[idx1d]; });
-      //
-      //     std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t0).count());
-      //         
-      //     dpl::sfor<6>([&](auto face_idx) {
-      //       dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-      //
-      //       idx1d_t i = 0;
-      //       for (auto idx1d : face.GetIndices())
-      //         face.GetColorArray()->SetTypedComponent(i++, 0, 
-      //           pni_.connected(voxel_t{idx1d})
-      //             ? /*0*/ pressure[pni_.net(voxel_t{idx1d})]
-      //             : std::numeric_limits<double>::quiet_NaN()
-      //         );
-      //
-      //       auto* glyphs = face.GetGlyphMapper();
-      //       auto* actor = face.GetActor();
-      //
-      //       // glyphs->SetLookupTable(lut_velem_);
-      //       glyphs->SetLookupTable(lut_pressure_);
-      //       // glyphs->SetLookupTable(lut_image_phase_);
-      //         
-      //       glyphs->SetColorModeToMapScalars();
-      //       glyphs->UseLookupTableScalarRangeOn();
-      //       // glyphs->SetScalarModeToUsePointData();
-      //       // glyphs->SetScalarModeToUseCellData();
-      //         
-      //       actor->SetMapper(glyphs);
-      //
-      //       actor->GetProperty()->SetEdgeVisibility(false);
-      //       actor->GetProperty()->SetEdgeColor(dpl::vector3d{0.25});
-      //           
-      //       actor->GetProperty()->SetAmbient(0.5);
-      //       actor->GetProperty()->SetDiffuse(0.4);
-      //       actor->GetProperty()->BackfaceCullingOn();
-      //         
-      //       renderer_->AddActor(actor);
-      //     });
-      //   }
-      // }
-      //
-      //
-      //
-      // tidy_axes_.SetScale(1.e-6/*startup.image.resolution*/);
-      // // // tidy_axes_.SetFormat(".2e");
-      //
-      // bounds_ = {
-      //   0., pn_.physical_size.x(),
-      //   0., pn_.physical_size.y(),
-      //   0., pn_.physical_size.z()};
-
-
     }
-
-
   };
 }

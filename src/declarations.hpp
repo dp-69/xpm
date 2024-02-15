@@ -8,6 +8,7 @@
 #include <dpl/hypre/mpi_module.hpp>
 
 #include <HYPRE_utilities.h>
+#include <iostream>
 
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/math/tools/roots.hpp>
@@ -36,12 +37,40 @@ struct fmt::formatter<dpl::strong_integer<T, Tag>> : formatter<T>
   }
 };
 
+
+// template <typename T, int n>
+//   class vector_n
+
+template <typename T>
+struct fmt::formatter<dpl::vector_n<T, 3>>
+{
+  template<typename ParseContext>
+  static constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(dpl::vector_n<T, 3> si, FormatContext& ctx) {
+    return fmt::format_to(ctx.out(), "({}, {}, {})", si.x(), si.y(), si.z());
+  }
+};
+
   
   
 
 
 namespace xpm
 {
+  class config_exception final : public std::runtime_error
+  {
+  public:
+    // explicit config_exception(const std::string& _Message)
+    //   : runtime_error(_Message) {}
+
+    explicit config_exception(const char* msg)
+      : runtime_error(msg) {}
+  };
+
   class pressure_cache
   {
     static inline std::unique_ptr<std::unordered_map<std::size_t, double>> cache_ = nullptr;
@@ -77,6 +106,14 @@ namespace xpm
 
     static auto& cache() {
       return *cache_;
+    }
+
+    static auto hash(std::size_t nvalues, const dpl::hypre::ls_known_storage& lks) {
+      return std::hash<std::string_view>{}(
+        std::string_view{
+          reinterpret_cast<char*>(lks.values.get()),
+          nvalues * sizeof(HYPRE_Complex)
+        });
     }
   };
 
@@ -419,33 +456,35 @@ namespace xpm
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
   struct voxel_tag {};
-  using voxel_t = dpl::strong_integer<idx1d_t, voxel_tag>;
+  using voxel_t = dpl::strong_integer<idx1d_t, voxel_tag>; /* index */
 
   struct macro_tag {};
-  using macro_t = dpl::strong_integer<idx1d_t, macro_tag>;
+  using macro_t = dpl::strong_integer<idx1d_t, macro_tag>; /* index */
 
   struct net_tag {};
-  using net_t = dpl::strong_integer<idx1d_t, net_tag>;
+  using net_t = dpl::strong_integer<idx1d_t, net_tag>; /* index */
 
-  namespace voxel_property
+  
+
+  namespace voxel_prop
   {
     struct phase_tag {};
     using phase_t = dpl::strong_integer<std::uint8_t, phase_tag>;
 
     /**
      * \brief
-     *   -1  : for a non-void voxel
-     *   >=0 : macro node of a void voxel
+     *   for a void voxel - a macro node it belongs
+     *   for a microporous voxel - an adjacent pore node
      */
     struct velem_tag {};
     struct velem_t : dpl::strong_integer<std::int32_t, velem_tag>
     {
     private:
-      static inline constexpr auto not_valid = std::numeric_limits<value_type>::max();
+      static inline constexpr auto not_valid = std::numeric_limits<type>::max();
 
     public:
       velem_t() : strong_integer{not_valid} {}
-      constexpr explicit velem_t(const value_type v) : strong_integer{v} {}
+      constexpr explicit velem_t(const type v) : strong_integer{v} {}
 
       explicit constexpr operator macro_t() const {
         return macro_t{value};
@@ -457,14 +496,28 @@ namespace xpm
     };
   }
 
-
-  namespace presets
+  namespace parse
   {
-    static inline constexpr auto pore = voxel_property::phase_t{0};
-    static inline constexpr auto solid = voxel_property::phase_t{1};
-    static inline constexpr auto microporous = voxel_property::phase_t{2};
+    struct image_dict
+    {
+      std::uint8_t pore;
+      std::uint8_t solid;
 
+      void load(const nlohmann::json& j) {
+        pore = j["void"];
+        solid = j["solid"];
+      }
+
+      bool is_void(const voxel_prop::phase_t p) const { return *p == pore; }
+      bool is_solid(const voxel_prop::phase_t p) const { return *p == solid; }
+      bool is_darcy(const voxel_prop::phase_t p) const { return !is_void(p) && !is_solid(p); }
+    };
+  }
+
+
+  namespace presets {
     static constexpr auto darcy_to_m2 = 9.869233e-13;
+    static constexpr auto mD_to_m2 = 9.869233e-16;
   }
 
   
@@ -519,30 +572,7 @@ namespace xpm
     return map_idx3_t<voxel_t>{dim};
   }
   
-  namespace parse
-  {
-    struct image_dict
-    {
-      std::uint8_t pore;
-      std::uint8_t solid;
-      nlohmann::json micro;
-      // std::uint8_t microporous;
-
-      void load(const nlohmann::json& j) {
-        pore = j["void"];
-        solid = j["solid"];
-        micro = j["microporous"];
-        // microporous = j["microporous"];
-      }
-
-      bool is_micro(voxel_property::phase_t value) const {
-        if (micro.is_number())
-          return *value == micro;
-
-        return *value != pore && *value != solid;
-      }
-    };
-  }
+  
 
   template <typename>
   struct wrapper {};
@@ -623,14 +653,14 @@ namespace xpm
       dpl::vector3i size;
       double resolution;
       parse::image_dict phases;
-      bool grey = false;
+      // bool grey = false;
 
       void load(const nlohmann::json& j) {
         path = std::string{j["path"]};
         size = j["size"];
         resolution = j["resolution"];
         phases.load(j["phase"]);
-        wrap{j}.set(grey, "grey");
+        // wrap{j}.set(grey, "grey");
       }
 
       auto pnextract_filename() {
@@ -652,49 +682,118 @@ namespace xpm
 
     double theta = 0;
 
+    struct poro_perm_t
+    {
+      double poro;
+      double perm;
+
+      static poro_perm_t nan() {
+        poro_perm_t pp;
+        pp.poro = std::numeric_limits<double>::quiet_NaN();
+        pp.perm = std::numeric_limits<double>::quiet_NaN();
+        return pp;
+        // return poro_perm_t{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+      }
+
+      bool is_nan() const {
+        return std::isnan(poro);
+      }
+    };
+
     struct
     {
-      double perm_single = std::numeric_limits<double>::quiet_NaN(); /* mD */
-      double poro_single = std::numeric_limits<double>::quiet_NaN(); /* fraction */
-      double A = std::numeric_limits<double>::quiet_NaN();
-      double n1 = 1;
-      double n2 = 1;
+      // double perm_single = std::numeric_limits<double>::quiet_NaN();
 
-      dpl::strong_vector<voxel_t, double> poro_arr;
+      // double A = std::numeric_limits<double>::quiet_NaN();
+      // double n1 = 1;
+      // double n2 = 1;
 
-      auto poro(voxel_t i) const {
-        return poro_arr ? poro_arr[i] : poro_single;
-      }
+      dpl::strong_array<voxel_prop::phase_t, poro_perm_t> poro_perm{poro_perm_t::nan()};
 
-      auto perm(voxel_t i) const {
-        if (poro_arr) {
-          auto poro = poro_arr[i];
-          return A*std::pow(poro, n1)/std::pow(1 - poro, n2);
+      void set_poro_perm(const nlohmann::json& list) {
+        using namespace voxel_prop;
+
+        for (const auto& j : list) {
+          poro_perm[phase_t{j["value"].get<phase_t::type>()}] =
+            {j["porosity"], j["permeability"].get<double>()*presets::mD_to_m2};
         }
 
-        return perm_single;
+
+        // poro_perm_t def = {list[0]["porosity"], list[0]["permeability"].get<double>()*presets::mD_to_m2};
+        //
+        // perm_single = def.perm;
+        //
+        // for (auto& x : poro_perm) {
+        //   fmt::print("{}, {}\n", x.is_nan(), x.poro);
+        //   x = def;
+        // }
+        //
+        // // for (int i : std::views::iota(0, 256))
+        // //   poro_perm[voxel_prop::phase_t(i)] = def;  // NOLINT(clang-diagnostic-implicit-int-conversion)
+        //
+        // for (int i = 0, size = list.size(); i < size; ++i) {
+        //   auto const& jj = list[i];
+        //   int from = jj["value"];
+        //   int to = i == size - 1 ? 256 : list[i + 1]["value"].get<uint8_t>();
+        //
+        //   fmt::print("== from: {}, to: {}\n", from, to);
+        //
+        //   for (int k = from; k < to; ++k) {
+        //     poro_perm[voxel_prop::phase_t(k)] =
+        //       {jj["porosity"], jj["permeability"].get<double>()*presets::mD_to_m2};  
+        //   }
+        // }
+
+        // for (int i : std::views::iota(0, 256)) {
+        //   fmt::print("val: {}, poro: {}\n", i, poro_perm[voxel_property::phase_t(i)].poro);
+        // }
+
+        // for (const auto& jj : j | std::views::drop(1)) {
+        //   uint8_t val = jj["value"];
+        //
+        //
+        //   poro_perm[voxel_property::phase_t(val)] =
+        //     {jj["porosity"], jj["permeability"].get<double>()*presets::mD_to_m2};
+        // }
       }
 
-      void read_grey(const std::filesystem::path& path, const dpl::vector3i& size) {
-        voxel_t total_size{size.prod()};
-
-        poro_arr.resize(total_size);
-
-        std::vector<std::uint8_t> arr(*total_size);
-        {
-          std::ifstream is{path, std::ios::binary};
-          is.read(reinterpret_cast<char*>(arr.data()), *total_size*sizeof(std::uint8_t)); // NOLINT(cppcoreguidelines-narrowing-conversions)
-        }
-        
-        idx3d_t ijk;
-        auto& [i, j, k] = ijk;
-        voxel_t idx1d{0};
-        
-        for (k = 0; k < size.z(); ++k)
-          for (j = 0; j < size.y(); ++j)
-            for (i = 0; i < size.x(); ++i, ++idx1d)
-              poro_arr[idx1d] = (255 - arr[*idx1d])/255.;
+      auto poro(voxel_prop::phase_t p) const {
+        return poro_perm[p].poro;
       }
+
+      auto perm(voxel_prop::phase_t p) const {
+        return poro_perm[p].perm;
+      }
+
+      // auto perm(voxel_t i) const {
+      //   // if (poro_arr) {
+      //   //   auto poro = poro_arr[i];
+      //   //   return A*std::pow(poro, n1)/std::pow(1 - poro, n2);
+      //   // }
+      //
+      //   return perm_single;
+      // }
+
+      // void read_grey(const std::filesystem::path& path, const dpl::vector3i& size) {
+      //   voxel_t total_size{size.prod()};
+      //
+      //   poro_arr.resize(total_size);
+      //
+      //   std::vector<std::uint8_t> arr(*total_size);
+      //   {
+      //     std::ifstream is{path, std::ios::binary};
+      //     is.read(reinterpret_cast<char*>(arr.data()), *total_size*sizeof(std::uint8_t)); // NOLINT(cppcoreguidelines-narrowing-conversions)
+      //   }
+      //   
+      //   idx3d_t ijk;
+      //   auto& [i, j, k] = ijk;
+      //   voxel_t idx1d{0};
+      //   
+      //   for (k = 0; k < size.z(); ++k)
+      //     for (j = 0; j < size.y(); ++j)
+      //       for (i = 0; i < size.x(); ++i, ++idx1d)
+      //         poro_arr[idx1d] = (255 - arr[*idx1d])/255.;
+      // }
     } darcy;
 
     
@@ -753,11 +852,15 @@ namespace xpm
       image.load(*j("image"));
 
       if (auto j_micro = j("microporosity"); j_micro) {
-        darcy.perm_single = (*j_micro)["permeability"].get<double>()*0.001*presets::darcy_to_m2;
-        darcy.poro_single = (*j_micro)["porosity"];
-        j_micro.set(darcy.n1, "kozeny_carman", "n1");
-        j_micro.set(darcy.n2, "kozeny_carman", "n2");
-        darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
+        // const auto& first_record = (*j_micro)["voxel"][0];
+        // darcy.perm_single = first_record["permeability"].get<double>()*0.001*presets::darcy_to_m2;
+        // darcy.poro_single = first_record["porosity"];
+
+        darcy.set_poro_perm((*j_micro)["voxel"]);
+
+        // j_micro.set(darcy.n1, "kozeny_carman", "n1");
+        // j_micro.set(darcy.n2, "kozeny_carman", "n2");
+        // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
 
 
         if (auto j_primary = j_micro("primary"); j_primary) {

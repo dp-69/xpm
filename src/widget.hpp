@@ -99,6 +99,7 @@ namespace xpm
     vtkNew<vtkLookupTable> lut_pore_solid_micro_;
     vtkNew<vtkLookupTable> lut_node_throat_;
 
+    vtkNew<vtkAssembly> macro_network_;
     vtkFloatArray* macro_colors;
     vtkFloatArray* throat_colors;
 
@@ -109,7 +110,11 @@ namespace xpm
 
 
 
-    modeller modeller_;
+    modeller model_;
+
+    auto& pni() { return model_.pni(); }
+    auto& pn() { return pni().pn(); }
+    auto& img() { return pni().img(); }
 
     // pore_network pn_;
     // image_data img_;
@@ -242,7 +247,19 @@ namespace xpm
 
         model->AddItem(
           dpl::qt::property_editor::ItemFunctor<bool>{
-            "Microporosity",
+            "Macro network",
+            [this] {
+              return static_cast<bool>(macro_network_->GetVisibility());
+            },
+            [this](bool v) {
+              macro_network_->SetVisibility(v);
+              render_window_->Render();
+            }
+          });
+
+        model->AddItem(
+          dpl::qt::property_editor::ItemFunctor<bool>{
+            "Darcy nodes",
             [this] {
               return static_cast<bool>(std::get<0>(img_glyph_mapper_.faces_).GetActor()->GetVisibility());
             },
@@ -257,6 +274,11 @@ namespace xpm
 
         status_property_item_ = model->AddItem(
           dpl::qt::property_editor::ItemFunctor<std::string>{"Status", [this] { return status_; }});
+
+
+        tree_view_->resizeColumnToContents(0);
+        // tree_view_->setColumnWidth(0, 120);
+
 
         auto* plot_tabs = new QTabWidget;
 
@@ -274,13 +296,13 @@ namespace xpm
               });
             };
 
-            add("Copy (primary)", [this] { return modeller_.pc_to_plain(std::true_type{}); });
-            add("Copy (secondary)", [this] { return modeller_.pc_to_plain(std::false_type{}); });
+            add("Copy (primary)", [this] { return model_.pc_to_plain(std::true_type{}); });
+            add("Copy (secondary)", [this] { return model_.pc_to_plain(std::false_type{}); });
 
             menu->addSeparator();
 
-            add("Copy JSON (primary)", [this] { return modeller_.pc_to_json(std::true_type{}); });
-            add("Copy JSON (secondary)", [this] { return modeller_.pc_to_json(std::false_type{}); });
+            add("Copy JSON (primary)", [this] { return model_.pc_to_json(std::true_type{}); });
+            add("Copy JSON (secondary)", [this] { return model_.pc_to_json(std::false_type{}); });
 
             pc_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
             connect(pc_chart_view_, &QTreeView::customContextMenuRequested,
@@ -348,13 +370,13 @@ namespace xpm
               "  {}\n"
               "]\n";
 
-            add("Copy (primary)", [this] { return modeller_.kr_to_plain(std::true_type{}); });
-            add("Copy (secondary)", [this] { return modeller_.kr_to_plain(std::false_type{}); });
+            add("Copy (primary)", [this] { return model_.kr_to_plain(std::true_type{}); });
+            add("Copy (secondary)", [this] { return model_.kr_to_plain(std::false_type{}); });
 
             menu->addSeparator();
 
-            add("Copy JSON (primary)", [this] { return fmt::format(json_format, modeller_.kr_to_json(std::true_type{}), modeller_.kr_to_json(std::true_type{})); });
-            add("Copy JSON (secondary)", [this] { return fmt::format(json_format, modeller_.kr_to_json(std::false_type{}), modeller_.kr_to_json(std::false_type{})); });
+            add("Copy JSON (primary)", [this] { return fmt::format(json_format, model_.kr_to_json(std::true_type{}), model_.kr_to_json(std::true_type{})); });
+            add("Copy JSON (secondary)", [this] { return fmt::format(json_format, model_.kr_to_json(std::false_type{}), model_.kr_to_json(std::false_type{})); });
            
             kr_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
             connect(kr_chart_view_, &QTreeView::customContextMenuRequested,
@@ -431,11 +453,11 @@ namespace xpm
 
   public:
     void Init() {
-      modeller_.init();
+      model_.init();
       
       InitGUI();
 
-      InitPressure(modeller_.compute_pressure());
+      InitPressure(model_.compute_pressure());
 
       renderer_->ResetCamera(bounds_.data());
       renderer_->GetActiveCamera()->Zoom(0.70);
@@ -461,16 +483,12 @@ namespace xpm
     }
 
     void LaunchInvasion() {
-      const auto& pni = modeller_.pni();
-      const auto& pn = pni.pn();
-      const auto& settings = modeller_.settings();
-
       {
         auto* chart = pc_chart_view_->chart();
         auto* darcy_pc_series = new QLineSeries;
         chart->addSeries(darcy_pc_series);
 
-        for (const auto& p : settings.primary.pc)
+        for (const auto& p : model_.settings().primary.pc)
           darcy_pc_series->append(p.x(), p.y());
         darcy_pc_series->setName("microporous");
         darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
@@ -486,16 +504,16 @@ namespace xpm
 
         auto min_r_cap_throat = numeric_limits<double>::max();
 
-        for (size_t i{0}; i < pn.throat_count(); ++i)
-          if (auto [l, r] = pn.throat_[attrib::adj][i]; pn.inner_node(r) && pni.connected(l))
-            min_r_cap_throat = min(min_r_cap_throat, pn.throat_[attrib::r_ins][i]);
+        for (size_t i{0}; i < model_.pni().pn().throat_count(); ++i)
+          if (auto [l, r] = model_.pni().pn().throat_[attrib::adj][i]; model_.pni().pn().inner_node(r) && model_.pni().connected(l))
+            min_r_cap_throat = min(min_r_cap_throat, model_.pni().pn().throat_[attrib::r_ins][i]);
 
         pc_axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
-          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn.node_.span(attrib::r_ins)))))),
+          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(model_.pni().pn().node_.span(attrib::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
-            settings.primary.pc.empty() ? 0 : settings.primary.pc.front().y()))))*1.01
+            model_.settings().primary.pc.empty() ? 0 : model_.settings().primary.pc.front().y()))))*1.01
         );
       }
 
@@ -505,74 +523,85 @@ namespace xpm
       
 
       consumer_future_ = std::async(std::launch::async, [&] {
-        modeller_.invasion_task().init();
+        model_.invasion_task().init();
 
         auto start = std::chrono::system_clock::now();
 
-        auto pc_inv = settings.primary.calc_pc_inv();
+        auto pc_inv = model_.settings().primary.calc_pc_inv();
 
-        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &modeller_.invasion_task(),
-          modeller_.absolute_rate(), settings.theta, pc_inv);
+        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &model_.invasion_task(),
+          model_.absolute_rate(), model_.settings().theta, pc_inv);
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
-        auto update = [this, start, &pc_inv, &last_progress_idx, &pn, &pni, &settings] {
-          if (last_progress_idx == modeller_.invasion_task().progress_idx())
+        auto update = [this, start, &pc_inv, &last_progress_idx] {
+          // return;
+
+          if (last_progress_idx == model_.invasion_task().progress_idx())
             return;
 
-          last_progress_idx = modeller_.invasion_task().progress_idx();
+          last_progress_idx = model_.invasion_task().progress_idx();
 
-          auto& state = modeller_.invasion_task().state();
+          auto& state = model_.invasion_task().state();
           auto darcy_saturation = 1.0 - (pc_inv.empty() ? 0.0 : solve(pc_inv, 1/state.r_cap_global, dpl::extrapolant::flat));
           
           auto map_satur = [](double x) { return x/2. + 0.25; };
 
-          dpl::sfor<6>([&](auto face_idx) {
-            dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+
+
+          // dpl::sfor<6>([&](auto face_idx) {
+          //   dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+          //
+          //   for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
+          //     if (auto v_idx = voxel_t{idx1d};
+          //       model_.pni().connected(v_idx) && state.config(model_.pni().net(v_idx)).phase() == phase_config::phase1())
+          //       face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
+          //     else
+          //       face.GetColorArray()->SetTypedComponent(i, 0, 0.0);
+          //
+          //     ++i;
+          //   }
+          // });
+          //
+          // using namespace attrib;
+          //
+          // for (macro_t i{0}; i < model_.pni().pn().node_count(); ++i)
+          //   if (model_.pni().connected(i) && state.config(model_.pni().net(i)).phase() == phase_config::phase1())
+          //     macro_colors->SetTypedComponent(*i, 0,
+          //       map_satur(1.0 - eq_tr::area_corners(model_.settings().theta, state.r_cap(model_.pni().net(i)))/eq_tr::area(r_ins(model_.pni().pn(), i))));  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-float-conversion)
+          //   else
+          //     macro_colors->SetTypedComponent(*i, 0, 0.0);
+          //
+          // {
+          //   vtkIdType t_inner_idx = 0;
+          //
+          //   for (std::size_t i{0}; i < model_.pni().pn().throat_count(); ++i) {
+          //     if (auto [l, r] = adj(model_.pni().pn(), i); model_.pni().pn().inner_node(r)) {
+          //       if (model_.pni().connected(l) && state.config(i).phase() == phase_config::phase1())
+          //         throat_colors->SetTypedComponent(t_inner_idx, 0,  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-float-conversion)
+          //           map_satur(1.0 - eq_tr::area_corners(model_.settings().theta, state.r_cap(i))/eq_tr::area(r_ins(model_.pni().pn(), i))));
+          //       else
+          //         throat_colors->SetTypedComponent(t_inner_idx, 0, 0.0);
+          //
+          //       ++t_inner_idx;
+          //     }
+          //   }
+          // }
+
+
+
+
+
+
           
-            for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
-              if (auto v_idx = voxel_t{idx1d};
-                pni.connected(v_idx) && state.config(pni.net(v_idx)).phase() == phase_config::phase1())
-                face.GetColorArray()->SetTypedComponent(i, 0, map_satur(darcy_saturation));
-              else
-                face.GetColorArray()->SetTypedComponent(i, 0, 0.0);
-
-              ++i;
-            }
-          });
-
-          using namespace attrib;
-
-          for (macro_t i{0}; i < pn.node_count(); ++i)
-            if (pni.connected(i) && state.config(pni.net(i)).phase() == phase_config::phase1())
-              macro_colors->SetTypedComponent(*i, 0,
-                map_satur(1.0 - eq_tr::area_corners(settings.theta, state.r_cap(pni.net(i)))/eq_tr::area(r_ins(pn, i))));  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-float-conversion)
-            else
-              macro_colors->SetTypedComponent(*i, 0, 0.0);
-          
-          {
-            vtkIdType t_inner_idx = 0;
-
-            for (std::size_t i{0}; i < pn.throat_count(); ++i) {
-              if (auto [l, r] = adj(pn, i); pn.inner_node(r)) {
-                if (pni.connected(l) && state.config(i).phase() == phase_config::phase1())
-                  throat_colors->SetTypedComponent(t_inner_idx, 0,  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-float-conversion)
-                    map_satur(1.0 - eq_tr::area_corners(settings.theta, state.r_cap(i))/eq_tr::area(r_ins(pn, i))));
-                else
-                  throat_colors->SetTypedComponent(t_inner_idx, 0, 0.0);
-          
-                ++t_inner_idx;
-              }
-            }
-          }
           
           QMetaObject::invokeMethod(this,
-            [this, start, &pni] {
+            [this, start] {
               using namespace std::chrono;
 
-              UpdateStatus(modeller_.invasion_task().finished()
+              UpdateStatus(model_.invasion_task().finished()
                 ? fmt::format("done {}s", duration_cast<seconds>(system_clock::now() - start).count())
-                : fmt::format("{:.1f} %", 100.*modeller_.invasion_task().progress_idx()/(*pni.connected_count())));
+                : fmt::format("{:.1f} %", 100.*model_.invasion_task().progress_idx()/(*model_.pni().connected_count())));
 
               primary_.pc->clear();
               primary_.kr0->clear();
@@ -582,18 +611,18 @@ namespace xpm
               secondary_.kr0->clear();
               secondary_.kr1->clear();
 
-              for (auto p : modeller_.invasion_task().primary().pc)
+              for (auto p : model_.invasion_task().primary().pc)
                 primary_.pc->append(p.x(), p.y());
 
-              for (auto p : modeller_.invasion_task().secondary().pc)
+              for (auto p : model_.invasion_task().secondary().pc)
                 secondary_.pc->append(p.x(), p.y());
 
-              for (auto [sw, kro, krg] : modeller_.invasion_task().primary().kr) {
+              for (auto [sw, kro, krg] : model_.invasion_task().primary().kr) {
                 primary_.kr0->append(sw, kro);
                 primary_.kr1->append(sw, krg);                
               }
 
-              for (auto [sw, kro, krg] : modeller_.invasion_task().secondary().kr) {
+              for (auto [sw, kro, krg] : model_.invasion_task().secondary().kr) {
                 secondary_.kr0->append(sw, kro);
                 secondary_.kr1->append(sw, krg);                
               }
@@ -617,45 +646,57 @@ namespace xpm
     }
 
     void InitPressure(dpl::strong_vector<net_t, double> pressure) {
-      const auto& pni = modeller_.pni();
-      const auto& pn = pni.pn();
-      const auto& img = pni.img();
-
-      auto assembly = vtkSmartPointer<vtkAssembly>::New();
+      // auto assembly = vtkSmartPointer<vtkAssembly>::New();
 
       {
         vtkSmartPointer<vtkActor> actor;
 
-        std::tie(actor, macro_colors) = CreateNodeActor(pn, lut_pressure_, 
+        std::tie(actor, macro_colors) = CreateNodeActor(pn(), lut_pressure_, 
           [&](macro_t i) {
-            return pni.connected(i) ? /*0*/ pressure[pni.net(i)] : std::numeric_limits<double>::quiet_NaN();
+            return pni().connected(i) ? /*0*/ pressure[pni().net(i)] : std::numeric_limits<double>::quiet_NaN();
           });
 
-        assembly->AddPart(actor);
+        macro_network_->AddPart(actor);
         
-        std::tie(actor, throat_colors) = CreateThroatActor(pn, lut_pressure_, [&](std::size_t i) {
-          auto [l, r] = pn.throat_[attrib::adj][i];
+        std::tie(actor, throat_colors) = CreateThroatActor(pn(), lut_pressure_, [&](std::size_t i) {
+          auto [l, r] = pn().throat_[attrib::adj][i];
 
-          return pni.connected(l)
-            ? /*0*/ (pressure[pni.net(l)] + pressure[pni.net(r)])/2
+          return pni().connected(l)
+            ? /*0*/ (pressure[pni().net(l)] + pressure[pni().net(r)])/2
             : std::numeric_limits<double>::quiet_NaN();
         });
 
-        assembly->AddPart(actor);
+        macro_network_->AddPart(actor);
       }
 
-      renderer_->AddActor(assembly);
+      renderer_->AddActor(macro_network_);
 
       // std::ranges::fill(pressure, 0);
 
       {
-        auto scale_factor = /*1.0*/pn.physical_size.x()/img.dim().x(); // needed for vtk 8.2 floating point arithmetics
+        auto scale_factor = /*1.0*/pn().physical_size.x()/img().dim().x(); // needed for vtk 8.2 floating point arithmetics
             
         img_glyph_mapper_.Init(scale_factor);
         {
-          std::vector<bool> filter(*img.size());
-          for (voxel_t i{0}; i < img.size(); ++i)
-            filter[*i] = img.phase[i] == presets::microporous;
+          dpl::strong_vector<voxel_t, bool> filter{img().size()};
+
+          {
+            idx3d_t ijk;
+            auto& [i, j, k] = ijk;
+            voxel_t idx1d{0};
+
+            for (k = 0; k < img().dim().z(); ++k)
+              for (j = 0; j < img().dim().y(); ++j)
+                for (i = 0; i < img().dim().x(); ++i, ++idx1d) {
+                  filter[idx1d] =
+                    // pni().connected(voxel_t{idx1d}) &&
+                    // !(i < img().dim().x()/2.*1.25 &&
+                    //   j > img().dim().y()/2./1.25 &&
+                    //   k > img().dim().z()/2./1.1) &&
+                    img().dict.is_darcy(img().phase[idx1d]);      
+                }
+          }
+
 
           cout << "3D faces...";
 
@@ -664,20 +705,61 @@ namespace xpm
 
           auto t0 = clock::now();
 
-          img_glyph_mapper_.Populate(img.dim(), pn.physical_size/img.dim(),
-            [&](idx1d_t idx1d) { return filter[idx1d]; });
+          img_glyph_mapper_.Populate(img().dim(), pn().physical_size/img().dim(),
+            [&](idx1d_t idx1d) { return filter[voxel_t{idx1d}]; });
 
 
           std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t0).count());
-              
+
+
+
+          // img().dict
+
+
+          // {
+
+            auto* ptr = model_.settings().darcy.poro_perm.data();
+
+          
+
+            using poro_perm_t = runtime_settings::poro_perm_t;
+            
+            using namespace std::ranges;
+
+            //
+            // int k = 0;
+            // for (auto pp : model_.settings().darcy.poro_perm) {
+            //   if (!model_.settings().darcy.poro_perm[voxel_prop::phase_t(k)].is_nan()) 
+            //     fmt::print("value: {}, poro: {}, perm: {}\n", k, pp.poro, pp.perm/presets::mD_to_m2);
+            //   ++k;
+            // }
+
+            auto [minPERM, maxPERM] = minmax(
+              subrange(ptr, ptr + 256) | views::filter([](poro_perm_t pp) { return !pp.is_nan(); }),
+              {}, [](poro_perm_t x) { return x.perm; });
+
+            // fmt::print("\n\nPERM MIN, MAX: ({} mD, {} mD)\n\n", minPERM.perm/presets::mD_to_m2, maxPERM.perm/presets::mD_to_m2);
+
+            
+          // }
+
+
+
           dpl::sfor<6>([&](auto face_idx) {
             dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
 
             idx1d_t i = 0;
             for (auto idx1d : face.GetIndices())
               face.GetColorArray()->SetTypedComponent(i++, 0, 
-                pni.connected(voxel_t{idx1d})
-                  ? /*0*/ pressure[pni.net(voxel_t{idx1d})]
+                pni().connected(voxel_t{idx1d})
+                  ?
+                    /*0*/
+                    pressure[pni().net(voxel_t{idx1d})]
+                    
+                    // (log10(model_.settings().darcy.perm(img().phase[voxel_t{idx1d}])) - log10(minPERM.perm))/(
+                    //   
+                    //   log10(maxPERM.perm) - log10(minPERM.perm))/1.25+0.1  /*/2+0.25*/
+
                   : std::numeric_limits<double>::quiet_NaN()
               );
 
@@ -711,9 +793,9 @@ namespace xpm
       // // tidy_axes_.SetFormat(".2e");
 
       bounds_ = {
-        0., pn.physical_size.x(),
-        0., pn.physical_size.y(),
-        0., pn.physical_size.z()};
+        0., pn().physical_size.x(),
+        0., pn().physical_size.y(),
+        0., pn().physical_size.z()};
     }
   };
 }

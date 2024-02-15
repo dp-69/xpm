@@ -77,13 +77,13 @@ namespace xpm {
       for (k = 0; k < dim.z(); ++k)
         for (j = 0; j < dim.y(); ++j)
           for (i = 0; i < dim.x(); ++i, ++idx1d)
-            if (img.phase[idx1d] == pore) {
+            if (img.dict.is_void(img.phase[idx1d])) {
               if (auto velem = img.velem[idx1d]; velem)
                 if (macro_t macro{velem}; pni.connected(macro))
                   if (auto net = pni.net(macro); config(net).phase() == phase_config::phase1())
                     output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/eq_tr::area(r_ins(pn, macro)))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
             }
-            else if (img.phase[idx1d] == microporous)
+            else if (img.dict.is_darcy(img.phase[idx1d]))
               output[*idx1d] = darcy_value;
 
       std::ofstream{path, std::ios::binary}
@@ -255,7 +255,7 @@ namespace xpm {
       secondary_.kr.reserve(500);
 
       total_pore_volume_ = pni_->total_pore_volume(
-        [this](voxel_t i) { return settings_->darcy.poro(i); });
+        [this](voxel_t i) { return settings_->darcy.poro(img_->phase[i]); });
 
 
       {
@@ -297,29 +297,22 @@ namespace xpm {
     }
 
     double calc_relative(const runtime_settings::input_curves& curve, std::span<const dpl::vector2d> pc_to_sw, double theta, auto phase1) {
-      // return 0;
-
       using dpl::extrapolant::flat;
 
       auto kr = pc_to_sw.empty() ? 0.0 : solve(curve.kr[phase1], solve(pc_to_sw, 1/state_.r_cap_global, flat), flat);
 
-      static constexpr auto kr_threshold = 1e-3;
+      // static constexpr auto kr_threshold = 1e-3;
+      // bool darcy_filter = kr > kr_threshold;
 
-      bool darcy_filter = kr > kr_threshold;
-
-      filter_phase<phase1> filter{pni_, &state_, darcy_filter};
-      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*settings_->darcy.perm(i); }, phase1};
+      filter_phase<phase1> filter{pni_, &state_, kr > 1e-3/*darcy_filter*/};
+      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*settings_->darcy.perm(img_->phase[i]); }, phase1};
 
       auto [nrows, mapping] = pni_->generate_mapping(*settings_->solver.decomposition, filter);
       auto [nvalues, input] = pni_->generate_pressure_input(nrows, mapping.forward, term, filter);
 
-      using namespace std::chrono;
+      auto hash = pressure_cache::hash(nvalues, input);
 
-      auto hash = std::hash<std::string_view>{}(std::string_view{reinterpret_cast<char*>(input.values.get()), nvalues*sizeof(HYPRE_Complex)});
-
-      std::cout << fmt::format("ph{} | hash: {:x}", int{phase1}, hash);
-
-      
+      fmt::print("ph{} | hash: {:x}", int{phase1}, hash);
 
       auto found = pressure_cache::cache().find(hash);
 
@@ -328,6 +321,8 @@ namespace xpm {
         auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
 
         {
+          using namespace std::chrono;
+
           // solve(input, {0, nrows - 1}, decomposed_pressure.get(), settings_->solver.tolerance, settings_->solver.max_iterations);
 
           auto t0 = high_resolution_clock::now();
@@ -414,14 +409,11 @@ namespace xpm {
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (pni_->connected(idx1d)) { // TODO: Early primary termination
-                inv_total_porosity += settings_->darcy.poro(idx1d);
+                inv_total_porosity += settings_->darcy.poro(img_->phase[idx1d]);
                 queue.insert(idx1d, darcy_r_cap);
               }
       }
 
-      
-
-      
 
       auto eval_inv_volume = [&] {
         auto macro = area_corner_mult*eq_tr::area_corners(theta, state_.r_cap_global) + inv_volume_coef0;
@@ -459,7 +451,8 @@ namespace xpm {
                 inv_volume_coef0 += area_corners*mult;  
               }
               else {
-                auto poro = settings_->darcy.poro(pni_->voxel(v_net));
+                auto voxel = pni_->voxel(v_net);
+                auto poro = settings_->darcy.poro(img_->phase[voxel]);
                 inv_total_porosity -= poro;
                 inv_volume_coef0 += solve(pc_to_sw, 1/state_.r_cap_global, dpl::extrapolant::flat)*cell_volume*poro;  
               }
@@ -739,7 +732,12 @@ namespace xpm {
     }
 
     void launch_primary(double absolute_rate, double theta, const std::vector<dpl::vector2d>& pc_to_sw) {
+      return;
+
       pressure_cache::load();
+
+      // using namespace std::chrono;
+      // auto t0 = high_resolution_clock::now();
 
       using eq_tr = hydraulic_properties::equilateral_triangle;
       using namespace attrib;
@@ -796,7 +794,8 @@ namespace xpm {
 
       auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume()/total_pore_volume_, 1/state_.r_cap_global}; };
 
-      auto rel_calc_report = [=, this, &pc_to_sw](double sw) {
+      auto rel_calc_report = [this, /*t0, */theta, absolute_rate, &pc_to_sw](double sw) {
+        // fmt::print("{}ms\n", duration_cast<milliseconds>(high_resolution_clock::now() - t0).count());
         primary_.kr.emplace_back(sw,
           calc_relative(settings_->primary, pc_to_sw, theta, std::false_type{})/absolute_rate,
           calc_relative(settings_->primary, pc_to_sw, theta, std::true_type{})/absolute_rate); // TODO: calculate when breakthrough
@@ -890,7 +889,7 @@ namespace xpm {
           auto net = pni_->net(voxel);
 
           darcy_invaded_ = true;
-          inv_total_porosity += settings_->darcy.poro(voxel);
+          inv_total_porosity += settings_->darcy.poro(img_->phase[voxel]);
 
           progress_percolation(net, r_cap); // TODO: phase_config::phase1_bulk_films(); of a voxel
 
