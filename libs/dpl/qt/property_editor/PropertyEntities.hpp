@@ -411,26 +411,25 @@ namespace dpl::qt::property_editor
   
 
   
-  
-
-
+  template<typename T, typename V>
+  concept Settable = requires(T x, V v) { x.Set(v); };
 
   template <typename Functor>
   class ComboBoxItem : public PropertyItem
   {
-    Functor functor_;
+    Functor fn_;
     using ComboItem = typename Functor::ComboItem;
     
   public:
     std::string Name() override {
-      return functor_.Name();
+      return fn_.Name();
     }
 
-    explicit ComboBoxItem(const Functor& inter) : functor_(inter) {}
+    explicit ComboBoxItem(const Functor& inter) : fn_(inter) {}
 
     QVariant GetDisplayValueQVariant(Qt::ItemDataRole role) override {
       if (role == Qt::DisplayRole)
-        return QString::fromStdString(Functor::Caption(functor_.Get()));
+        return QString::fromStdString(Functor::Caption(fn_.Get()));
 
       return {};
     }
@@ -445,24 +444,24 @@ namespace dpl::qt::property_editor
       auto* editor = new QComboBoxCustom(parent);
 
       if constexpr (std::is_same_v<ComboItem, int>)
-        for (int i = 0, count = functor_.Count(); i < count; ++i)
+        for (int i = 0, count = fn_.Count(); i < count; ++i)
           editor->addItem(QString::fromStdString(Functor::Caption(i)));
       else
-        for (auto* item : functor_.Items())
+        for (auto* item : fn_.Items())
           editor->addItem(QString::fromStdString(Functor::Caption(item)), ItemToQVariant<ComboItem>(item));
 
-      editor->setCurrentText(QString::fromStdString(Functor::Caption(functor_.Get())));
+      editor->setCurrentText(QString::fromStdString(Functor::Caption(fn_.Get())));
       return editor;            
     }
   
   
     void SetModelData(QWidget* widget, const QModelIndex& index) override {            
-      auto combo = static_cast<QComboBox*>(widget);
+      auto combo = static_cast<QComboBox*>(widget);  // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
 
-      if constexpr (std::is_same_v<ComboItem, int>)
-        functor_.Set(combo->currentIndex());
+      if constexpr (requires(int v) { fn_.Set(v); }) // if constexpr (std::is_same_v<ComboItem, int>)
+        fn_.Set(combo->currentIndex());
       else
-        functor_.Set(ItemFromQVariant<ComboItem>(combo->itemData(combo->currentIndex())));
+        fn_.Set(ItemFromQVariant<ComboItem>(combo->itemData(combo->currentIndex())));
     }
   };
 

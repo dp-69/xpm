@@ -45,7 +45,7 @@ namespace xpm
     };
   }
   
-  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& color_map) {
+  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& scalar_map) {
     vtkNew<vtkPolyData> polydata;
       
     vtkNew<vtkSphereSource> cylinder;
@@ -59,20 +59,18 @@ namespace xpm
     node_glyphs->SetInputData(polydata);
     node_glyphs->OrientOff();
 
-    vtkNew<vtkFloatArray> scale_array;
-    scale_array->SetName("scale");
-    scale_array->SetNumberOfComponents(1);
+    vtkNew<vtkFloatArray> scale_arr;
+    scale_arr->SetName("scale");
+    scale_arr->SetNumberOfComponents(1);
 
-    polydata->GetPointData()->AddArray(scale_array);
-    node_glyphs->SetScaleArray(scale_array->GetName());
+    polydata->GetPointData()->AddArray(scale_arr);
+    node_glyphs->SetScaleArray(scale_arr->GetName());
     node_glyphs->SetScaleModeToScaleByMagnitude();
 
-
-
-    vtkNew<vtkFloatArray> color_array;
-    color_array->SetName("color");
-    color_array->SetNumberOfComponents(1);
-    polydata->GetPointData()->SetScalars(color_array);
+    vtkNew<vtkFloatArray> scalar_arr;
+    scalar_arr->SetName("color");
+    scalar_arr->SetNumberOfComponents(1);
+    polydata->GetPointData()->SetScalars(scalar_arr);
 
     node_glyphs->SetLookupTable(lut);
     node_glyphs->SetColorModeToMapScalars();
@@ -83,8 +81,8 @@ namespace xpm
       
     for (macro_t i{0}; i < pnm.node_count(); ++i) {
       points->InsertNextPoint(attrib::pos(pnm, i));
-      scale_array->InsertNextTuple1(attrib::r_ins(pnm, i));
-      color_array->InsertNextTuple1(color_map(i));
+      scale_arr->InsertNextTuple1(attrib::r_ins(pnm, i));
+      scalar_arr->InsertNextTuple1(scalar_map(i));
     }
       
     polydata->SetPoints(points);
@@ -100,7 +98,7 @@ namespace xpm
       
     vtkNew<vtkNamedColors> colors;
     actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
-    return {actor, color_array};
+    return {actor, scalar_arr};
   }
 
   std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(const pore_network& pn, vtkLookupTable* lut, const auto& color_map) {
@@ -131,7 +129,6 @@ namespace xpm
     polydata->GetPointData()->AddArray(scale_array);
     throat_glyphs->SetScaleArray(scale_array->GetName());
     throat_glyphs->SetScaleModeToScaleByVectorComponents();
-      
 
     vtkNew<vtkFloatArray> color_array;
     color_array->SetName("color");
@@ -145,10 +142,8 @@ namespace xpm
 
     vtkNew<vtkPoints> points;
 
-    
-
     using namespace attrib;
-    for (std::size_t i = 0, count = pn.throat_count(); i < count; ++i)
+    for (throat_t i = 0; i < pn.throat_count(); ++i)
       if (auto [l, r] = adj(pn, i); pn.inner_node(r)) {
         auto& l_pos = pos(pn, l);
         auto lr_vec = pos(pn, r) - l_pos;
@@ -170,10 +165,10 @@ namespace xpm
     actor->GetProperty()->SetAmbient(0.15);
     actor->GetProperty()->SetDiffuse(0.9);
 
-      
-    vtkNew<vtkNamedColors> colors;
-    actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
     return {actor, color_array};        
+
+    // vtkNew<vtkNamedColors> colors;
+    // actor->GetProperty()->SetColor(colors->GetColor3d("Salmon").GetData());
   }
 
 

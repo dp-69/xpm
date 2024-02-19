@@ -16,10 +16,10 @@ namespace xpm
   {
     displ_elem elem;
     std::size_t local_idx; // local, i.e. macro_idx or voxel_idx
-    double radius_cap;
+    double r_cap;
 
     double pressure_cap() const {
-      return 1/radius_cap;
+      return 1/r_cap;
     }
   };
 

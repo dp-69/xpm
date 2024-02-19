@@ -461,9 +461,18 @@ namespace xpm
   struct macro_tag {};
   using macro_t = dpl::strong_integer<idx1d_t, macro_tag>; /* index */
 
+  using throat_t = std::size_t;
+
+  template<class T>
+  concept macro_voxel_t = std::is_same_v<T, macro_t> || std::is_same_v<T, voxel_t>;
+
+  template<class T>
+  concept macro_throat_t = std::is_same_v<T, macro_t> || std::is_same_v<T, throat_t>;
+
   struct net_tag {};
   using net_t = dpl::strong_integer<idx1d_t, net_tag>; /* index */
 
+  
   
 
   namespace voxel_prop
@@ -639,6 +648,24 @@ namespace xpm
   //     value = *arg;
   // }
 
+  struct poro_perm_t
+  {
+    double poro;
+    double perm;
+
+    static poro_perm_t nan() {
+      poro_perm_t pp;
+      pp.poro = std::numeric_limits<double>::quiet_NaN();
+      pp.perm = std::numeric_limits<double>::quiet_NaN();
+      return pp;
+      // return poro_perm_t{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+    }
+
+    bool is_nan() const {
+      return std::isnan(poro);
+    }
+  };
+
   struct runtime_settings
   {
     using wrap = wrapper<nlohmann::json>;
@@ -681,24 +708,6 @@ namespace xpm
 
 
     double theta = 0;
-
-    struct poro_perm_t
-    {
-      double poro;
-      double perm;
-
-      static poro_perm_t nan() {
-        poro_perm_t pp;
-        pp.poro = std::numeric_limits<double>::quiet_NaN();
-        pp.perm = std::numeric_limits<double>::quiet_NaN();
-        return pp;
-        // return poro_perm_t{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
-      }
-
-      bool is_nan() const {
-        return std::isnan(poro);
-      }
-    };
 
     struct
     {
@@ -843,6 +852,8 @@ namespace xpm
 
 
     struct {
+      bool invasion_percolation = true;
+      std::string display = "saturation";
       double sw_pc = 0.05;
       double sw_kr = 0.075;
     } report;
@@ -879,6 +890,8 @@ namespace xpm
       j.set(occupancy_images, "report", "occupancy_images");
       j.set(report.sw_pc, "report", "capillary_pressure_sw_step");
       j.set(report.sw_kr, "report", "relative_permeability_sw_step");
+      j.set(report.display, "report", "display");
+      j.set(report.invasion_percolation, "report", "invasion_percolation");
       j.set(max_pc, "max_capillary_pressure");
 
       if (auto j_theta = j("macro_contact_angle"); j_theta)

@@ -6,11 +6,12 @@
 int main(int argc, char* argv[])
 {
   // xpm::transform(
-  //   R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu\pnm_petronas\images\EstailladesPHASES-0-255_500x500x500_4p0um.raw)",
-  //   500, 200, 
-  //   R"(C:\Users\dmytr\OneDrive - Imperial College London\hwu\pnm_petronas\images\EstailladesPHASESPROC-0-255_256x256x256_4p0um.raw)",
-  //   256,
+  //   R"(C:\dev\.temp\images\176-F8-15-97_1000x500x500_29p0um.raw)",
+  //   {1000, 500, 500}, 0, 
+  //   R"(C:\dev\.temp\images\176-F8-15-97_500x250x250_29p0um.raw)",
+  //   {500, 250, 250},
   //   [](std::uint8_t v) { return /*v < 50 ? 0 : */v; });
+  //
   // getchar();
 
 
@@ -45,8 +46,8 @@ int main(int argc, char* argv[])
         modeller.init(j);
 
         modeller.compute_pressure();
-      
-        if (false) {
+
+        if (modeller.settings().report.invasion_percolation) {
           modeller.invasion_task().init();
       
           modeller.invasion_task().launch_primary(
@@ -66,8 +67,6 @@ int main(int argc, char* argv[])
           std::ofstream(dir/"kr_primary.txt") << modeller.kr_to_plain(std::true_type{});
           std::ofstream(dir/"kr_secondary.txt") << modeller.kr_to_plain(std::false_type{});
         }
-
-
 
         std::cout << '\n';
         // add_copy("Copy (primary)", [this] { return modeller.pc_to_plain(std::true_type{}); });
@@ -96,23 +95,19 @@ int main(int argc, char* argv[])
       #elif (VTK_MAJOR_VERSION == 9)
       #endif
 
-      
+      QApplication app(argc, argv);
+        
+      xpm::Widget widget;
+        
+      widget.Init();
+        
+      // Ui::MainWindow ui;
+      // ui.setupUi(&widget);
 
-        QApplication app(argc, argv);
-          
-          
-        xpm::Widget widget;
-          
-        widget.Init();
-          
-        // Ui::MainWindow ui;
-        // ui.setupUi(&widget);
+      widget.resize(1400, 1000);
+      widget.show();
 
-        widget.resize(1400, 1000);
-        widget.show();
-
-        /*auto result = */QApplication::exec();
-      
+      /*auto result = */QApplication::exec();
     }
   }
   catch (const xpm::config_exception& e) {
@@ -135,7 +130,6 @@ int main(int argc, char* argv[])
   #ifdef _WIN32
     MPI_Finalize();
   #endif
-
     
 
   return 0;

@@ -6,7 +6,6 @@
 #include <dpl/graph/dc_context.hpp>
 
 namespace xpm {
-  
 
   class phase_state
   {
@@ -32,21 +31,21 @@ namespace xpm {
     auto& config(net_t i) const { return config_[i]; }
     auto& config(net_t i) { return config_[i]; }
 
-    auto& config(std::size_t i) const { return config_t_[i]; }
-    auto& config(std::size_t i) { return config_t_[i]; }
+    auto& config(throat_t i) const { return config_t_[i]; }
+    auto& config(throat_t i) { return config_t_[i]; }
 
     auto& local(net_t i) const { return local_[i]; }
     auto& local(net_t i) { return local_[i]; }
 
-    auto& local(std::size_t i) const { return local_t_[i]; }
-    auto& local(std::size_t i) { return local_t_[i]; }
+    auto& local(throat_t i) const { return local_t_[i]; }
+    auto& local(throat_t i) { return local_t_[i]; }
 
-    bool mobile(const auto i) const {
-      return local(i) == r_cap_mobile_;  // NOLINT(clang-diagnostic-float-equal)
+    bool mobile(auto i) const {
+      return this->local(i) == r_cap_mobile_;  // NOLINT(clang-diagnostic-float-equal)
     }
 
-    auto r_cap(const auto i) const {
-      auto l = local(i);
+    auto r_cap(auto i) const {
+      auto l = this->local(i);
       return l == r_cap_mobile_ ? r_cap_global : l;  // NOLINT(clang-diagnostic-float-equal)
     }
 
@@ -199,7 +198,7 @@ namespace xpm {
     idx1d_t progress_idx_ = 0;
 
     bool darcy_invaded_ = false;
-    bool finished_ = false;
+    bool primary_finished_ = false;
 
     
 
@@ -232,8 +231,8 @@ namespace xpm {
       return progress_idx_;
     }
 
-    bool finished() const {
-      return finished_;
+    bool primary_finished() const {
+      return primary_finished_;
     }
 
     void init() {
@@ -537,11 +536,18 @@ namespace xpm {
 
         state_.r_cap_global = 1/max_pc;
         secondary_.add_pc(eval_pc_point());
-        
+
+        // fmt::print(
+        // "\n\nfirst queue: {}\ndarcy_pc: {}\n\n",
+        //   1/queue.front().r_cap,
+        //   1/darcy_r_cap);
+
         {
           auto steps = 10;
 
-          auto step = std::pow(10, (std::log10(max_pc) - std::log10(1/darcy_r_cap))/steps);
+          auto step = std::pow(10, (
+            std::log10(max_pc) -
+            std::log10(1/std::min(darcy_r_cap, queue.front().r_cap)))/steps);
 
           for (auto i = 0; i < steps; ++i) {
             state_.r_cap_global *= step;
@@ -558,7 +564,12 @@ namespace xpm {
           auto steps = 6;
 
           for (auto i = 1; i < steps; ++i) {
-            state_.r_cap_global = 1/solve(settings_->secondary.pc, 1.*i/steps, dpl::extrapolant::flat);
+            auto pc = 1/solve(settings_->secondary.pc, 1.*i/steps, dpl::extrapolant::flat);
+
+            if (pc <= 1/queue.front().r_cap)
+              break;
+
+            state_.r_cap_global = pc;
             auto sw = eval_inv_volume()/total_pore_volume_;
             last_kr_sw = sw;
             rel_calc_report(sw);
@@ -592,7 +603,7 @@ namespace xpm {
       };
 
 
-      auto local_prog_idx = 0;
+      // auto local_prog_idx = 0;
 
       for (; !queue.empty(); ++progress_idx_) {
         // {
@@ -732,7 +743,7 @@ namespace xpm {
     }
 
     void launch_primary(double absolute_rate, double theta, const std::vector<dpl::vector2d>& pc_to_sw) {
-      return;
+      // return;
 
       pressure_cache::load();
 
@@ -777,7 +788,7 @@ namespace xpm {
       dpl::vector3d inv_volume_coefs{0};
       auto inv_total_porosity = 0.0;
 
-      state_.r_cap_global = queue.front().radius_cap;
+      state_.r_cap_global = queue.front().r_cap;
 
       last_pc_point_ = {2, -1};
       double last_kr_sw = 1.0;
@@ -996,6 +1007,10 @@ namespace xpm {
 
           for (auto i = 0; i < steps; ++i) {
             auto next_r_cap = 1/solve(settings_->primary.pc, 1 - 1.*i/steps, dpl::extrapolant::flat);
+
+            if (1/next_r_cap <= end_pc)
+              continue;
+
             if (1/next_r_cap > settings_->max_pc)
               break;
 
@@ -1011,7 +1026,7 @@ namespace xpm {
 
       // getchar();
 
-      finished_ = true;
+      primary_finished_ = true;
 
       {
         std::cout << '\n';

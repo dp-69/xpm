@@ -219,8 +219,12 @@ namespace xpm
       return macro_t(node_.size());
     }
 
-    std::size_t throat_count() const {
+    throat_t throat_count() const {
       return throat_.size();
+    }
+
+    auto throats() const {
+      return std::views::iota(throat_t{0}, throat_count());
     }
 
     bool inner_node(macro_t i) const {

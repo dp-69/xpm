@@ -75,8 +75,11 @@ namespace xpm
       return kr_to_string(primary, "{:.6f}\t{:.6e}\t{:.6e}", "\n", "", "\n");
     }
 
-    auto kr_to_json(auto primary) const {
-      return kr_to_string(primary, "[{0:.6f}, {2:.6e}]", ", ", "[", "]");
+    auto kr_to_json(auto primary, auto phase1) const {
+      if constexpr (phase1)
+        return kr_to_string(primary, "[{0:.6f}, {2:.6e}]", ", ", "[", "]");
+      else
+        return kr_to_string(primary, "[{0:.6f}, {1:.6e}]", ", ", "[", "]");
     }
 
 
@@ -119,7 +122,7 @@ namespace xpm
       if (std::ranges::all_of(files, [&](std::string_view file) { return exists(network_dir/file); }))
         std::cout << "using cached network\n\n";
       else {
-        std::cout << "=========== pnextract's network extraction begin ===========\n" << std::flush;
+        std::cout << "=========== pnextract begin ===========\n" << std::flush;
 
         std::system( // NOLINT(concurrency-mt-unsafe)
           fmt::format("{} {}", fs::current_path()/"pnextract", filename).c_str());
@@ -130,7 +133,7 @@ namespace xpm
 
         remove(fs::path{"_VElems.mhd"});
 
-        std::cout << "=========== pnextract's network extraction end ===========\n\n" << std::flush;
+        std::cout << "=========== pnextract end ===========\n\n" << std::flush;
       }
 
       network_dir = absolute(network_dir);
@@ -153,7 +156,22 @@ namespace xpm
     }
 
     void init() {
-      auto j = nlohmann::json::parse(std::ifstream{"config.json"}, nullptr, true, true);
+      std::filesystem::path filename;
+
+      if (std::filesystem::exists("config.json"))
+        filename = "config.json";
+      else {
+        std::cout << "Configuration file: ";
+        std::cin >> filename;
+
+        if (!exists(filename) && !filename.has_extension())
+          filename.replace_extension("json");
+          // std::cout << ".json";
+
+        std::cout << '\n';
+      }
+
+      auto j = nlohmann::json::parse(std::ifstream{filename}, nullptr, true, true);
       init(j.is_array() ? j[0] : j);
     }
 
@@ -357,5 +375,51 @@ namespace xpm
 
       return pressure;
     }
+  };
+
+  struct saturation_map
+  {
+    pore_network_image* pni;
+    dpl::strong_vector<net_t, double>* data;
+
+    auto operator()(voxel_t voxel) const {
+
+      auto sw = 0.0;
+
+      // if (pni->connected(voxel))
+      //   if (auto net = pni->net(voxel); state.config(net).phase() == phase_config::phase1())
+      //     sw = 1.0 - solve(pc_inv, 1/state.r_cap(net), dpl::extrapolant::flat);
+      //
+      // face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
+
+      // return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    auto operator()(macro_t i) const {
+      // return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    auto operator()(throat_t i) const {
+      auto [l, r] = attrib::adj(pni->pn(), i);
+
+      return pni->connected(l)
+        ? ((*data)[pni->net(l)] + (*data)[pni->net(r)])/2
+        : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    // auto operator()(voxel_t i) const {
+    //   return pni->connected(i) ? (*pressure)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+    //
+    //   pni().connected(voxel_t{idx1d})
+    //         ?
+    //           /*0*/
+    //           pressure[pni().net(voxel_t{idx1d})]
+    //           
+    //           // (log10(model_.settings().darcy.perm(img().phase[voxel_t{idx1d}])) - log10(minPERM.perm))/(
+    //           //   
+    //           //   log10(maxPERM.perm) - log10(minPERM.perm))/1.25+0.1  /*/2+0.25*/
+    //
+    //         : std::numeric_limits<double>::quiet_NaN()
+    // }
   };
 }
