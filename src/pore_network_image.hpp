@@ -63,7 +63,11 @@ namespace xpm
     static void parse_text(char* &ptr, int& val) {
       val = strtol(ptr, &ptr, 10);
     }
-    
+
+    static void parse_text(char* &ptr, long& val) {
+      val = strtol(ptr, &ptr, 10);
+    }
+
     static void parse_text(char* &ptr, long long& val) {
       val = strtoll(ptr, &ptr, 10);
     }
@@ -564,7 +568,7 @@ namespace xpm
     void read_image(const auto& image_path) {
       using namespace std;
 
-      ifstream is(image_path);
+      ifstream is{image_path, std::ios::binary};
       is.seekg(0, ios::end);
       size_ = voxel_t(is.tellg());  // NOLINT(cppcoreguidelines-narrowing-conversions)
       is.seekg(0, ios::beg);

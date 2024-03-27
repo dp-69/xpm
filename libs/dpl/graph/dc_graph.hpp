@@ -38,9 +38,11 @@ namespace dpl::graph
     };
 
 
+    using vertex_idx_t = std::int64_t;
+
   public:
     struct vertex_tag {};
-    using vertex_t = strong_integer<std::int32_t, vertex_tag>;
+    using vertex_t = strong_integer<vertex_idx_t, vertex_tag>;
 
     struct edge_tag {};
     using edge_t = strong_integer<std::size_t, edge_tag>;

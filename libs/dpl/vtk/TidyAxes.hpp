@@ -308,8 +308,9 @@ namespace dpl::vtk
       
       if (
         this->Face(f0).gridlines_actor_->GetVisibility() &&
-        this->Face(f1).gridlines_actor_->GetVisibility())
-        axes_box_.colors_->InsertNextTuple(vector3d{255, 255, 255}); // color per vtk cell, e.g. line
+        this->Face(f1).gridlines_actor_->GetVisibility()) {
+        // axes_box_.colors_->InsertNextTuple(vector3d{255, 255, 255}); // color per vtk cell, e.g. line
+      }
       else {
         axes_box_.colors_->InsertNextTuple(vector3d{255, 255, 255});
 

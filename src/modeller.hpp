@@ -2,6 +2,7 @@
 
 #include "invasion_task.hpp"
 
+#include <list>
 
 namespace xpm
 {
@@ -18,7 +19,7 @@ namespace xpm
     auto pc_to_string(auto primary, fmt::format_string<const double&, const double&> f, auto sep, auto begin, auto end) const {
       using namespace std;
 
-      list<string> rows;
+      std::list<string> rows;
 
       using dst = conditional_t<primary,
         front_insert_iterator<decltype(rows)>,
@@ -143,7 +144,7 @@ namespace xpm
       return network_dir;
     }
 
-    auto& invasion_task() {
+    auto& get_invasion_task() {
       return invasion_task_;
     }
 
@@ -156,11 +157,11 @@ namespace xpm
     }
 
     void init() {
-      std::filesystem::path filename;
+      std::filesystem::path filename = "config.json";
+      // std::filesystem::path filename = "_other/config_JULIEN.json";
+      // std::filesystem::path filename = "_config.json";
 
-      if (std::filesystem::exists("config.json"))
-        filename = "config.json";
-      else {
+      if (!exists(filename)) {
         std::cout << "Configuration file: ";
         std::cin >> filename;
 
@@ -299,7 +300,8 @@ namespace xpm
       if (
         auto cache_path = fmt::format("cache/{}-pressure-{:x}.bin", settings_.image.path.stem(), pressure_cache::hash(nvalues, input));
 
-        settings_.solver.cache.use && std::filesystem::exists(cache_path)) { // TODO
+        settings_.solver.cache.use && std::filesystem::exists(cache_path))
+      { // TODO
         std::cout << "  using cache\n";
 
         std::ifstream is(cache_path, std::ifstream::binary);

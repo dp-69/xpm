@@ -100,7 +100,7 @@ namespace xpm
     vtkNew<vtkLookupTable> lut_pressure_;
     vtkNew<vtkLookupTable> lut_continuous_;
     // vtkNew<vtkLookupTable> lut_velem_;
-    vtkNew<vtkLookupTable> lut_pore_solid_micro_;
+    // vtkNew<vtkLookupTable> lut_pore_solid_micro_;
     vtkNew<vtkLookupTable> lut_node_throat_;
 
     vtkNew<vtkAssembly> macro_network_;
@@ -169,32 +169,32 @@ namespace xpm
       lut->SetAnnotation(vtkVariant(1), "Throat");
     }
 
-    static void InitLutPoreSolidMicro(vtkLookupTable* lut) {
-      lut->IndexedLookupOn();  
-      lut->SetNumberOfTableValues(3);
-      lut->SetTableValue(0, 0.784314, 0.467419, 0.657556);
-      lut->SetAnnotation(vtkVariant(0), "Pore");
-      lut->SetTableValue(1, 0.5, 0.5, 0.5);
-      lut->SetAnnotation(vtkVariant(1), "Solid");
-      lut->SetTableValue(2, 0.8, 0.8, 0.8);
-      lut->SetAnnotation(vtkVariant(2), "Microporous");
-    }
+    // static void InitLutPoreSolidMicro(vtkLookupTable* lut) {
+    //   lut->IndexedLookupOn();  
+    //   lut->SetNumberOfTableValues(3);
+    //   lut->SetTableValue(0, 0.784314, 0.467419, 0.657556);
+    //   lut->SetAnnotation(vtkVariant(0), "Pore");
+    //   lut->SetTableValue(1, 0.5, 0.5, 0.5);
+    //   lut->SetAnnotation(vtkVariant(1), "Solid");
+    //   lut->SetTableValue(2, 0.8, 0.8, 0.8);
+    //   lut->SetAnnotation(vtkVariant(2), "Microporous");
+    // }
 
-    static void InitLutVelems(vtkLookupTable* lut, std::int32_t max) {
-      auto count = max - (-2)/**min*/ + 1;
-
-      lut->SetNumberOfTableValues(count);
-      
-      for (int32_t i = 0; i < count; ++i) {
-        auto coef = static_cast<double>(i*45%count)/count;
-        auto color = QColor::fromHsl(coef*255, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-        lut->SetTableValue(i, color.redF(), color.greenF(), color.blueF());  // NOLINT(clang-diagnostic-double-promotion)
-      }
-
-      lut->SetTableValue(0, 0.7, 0.7, 0.7);     // -2 velem value
-      lut->SetTableValue(1, 0.7, 0.7, 0.7);     // -1 velem value
-      lut->SetTableRange(-2/**min*/, max);
-    }
+    // static void InitLutVelems(vtkLookupTable* lut, std::int32_t max) {
+    //   auto count = max - (-2)/**min*/ + 1;
+    //
+    //   lut->SetNumberOfTableValues(count);
+    //   
+    //   for (int32_t i = 0; i < count; ++i) {
+    //     auto coef = static_cast<double>(i*45%count)/count;
+    //     auto color = QColor::fromHsl(coef*255, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+    //     lut->SetTableValue(i, color.redF(), color.greenF(), color.blueF());  // NOLINT(clang-diagnostic-double-promotion)
+    //   }
+    //
+    //   lut->SetTableValue(0, 0.7, 0.7, 0.7);     // -2 velem value
+    //   lut->SetTableValue(1, 0.7, 0.7, 0.7);     // -1 velem value
+    //   lut->SetTableRange(-2/**min*/, max);
+    // }
 
 
     class DisplayItem// : BaseWidgetItem<DisplayPropertyItem, std::string>
@@ -250,7 +250,7 @@ namespace xpm
     void InitGUI() {
       {
         InitLutNodeThroat(lut_node_throat_);
-        InitLutPoreSolidMicro(lut_pore_solid_micro_);
+        // InitLutPoreSolidMicro(lut_pore_solid_micro_);
 
         dpl::vtk::PopulateLutRedWhiteBlue(lut_pressure_);
         dpl::vtk::PopulateLutRedWhiteBlue(lut_continuous_);
@@ -644,13 +644,13 @@ namespace xpm
       
 
       consumer_future_ = std::async(std::launch::async, [&] {
-        model_.invasion_task().init();
+        model_.get_invasion_task().init();
 
         auto start = std::chrono::system_clock::now();
 
         // auto pc_inv = model_.settings().primary.calc_pc_inv();
 
-        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &model_.invasion_task(),
+        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &model_.get_invasion_task(),
           model_.absolute_rate(),
           model_.settings().theta,
           model_.settings().primary.calc_pc_inv());
@@ -660,10 +660,10 @@ namespace xpm
         auto update = [this, start, &last_progress_idx] {
           // return;
 
-          if (last_progress_idx == model_.invasion_task().progress_idx())
+          if (last_progress_idx == model_.get_invasion_task().progress_idx())
             return;
 
-          last_progress_idx = model_.invasion_task().progress_idx();
+          last_progress_idx = model_.get_invasion_task().progress_idx();
 
           
           
@@ -672,13 +672,13 @@ namespace xpm
           
 
           if (model_.settings().report.display == "saturation") {
-            const auto& state = model_.invasion_task().state();
+            const auto& state = model_.get_invasion_task().state();
             const auto& pni = model_.pni();
             
             static constexpr auto map_satur = [](double x) -> float { return x/2 + 0.25; };  // NOLINT(clang-diagnostic-implicit-float-conversion)
 
             auto pc_inv = (
-              model_.invasion_task().primary_finished()
+              model_.get_invasion_task().primary_finished()
                 ? model_.settings().secondary
                 : model_.settings().primary).calc_pc_inv();
 
@@ -743,18 +743,18 @@ namespace xpm
               secondary_.kr0->clear();
               secondary_.kr1->clear();
 
-              for (auto p : model_.invasion_task().primary().pc)
+              for (auto p : model_.get_invasion_task().primary().pc)
                 primary_.pc->append(p.x(), p.y());
 
-              for (auto p : model_.invasion_task().secondary().pc)
+              for (auto p : model_.get_invasion_task().secondary().pc)
                 secondary_.pc->append(p.x(), p.y());
 
-              for (auto [sw, kro, krg] : model_.invasion_task().primary().kr) {
+              for (auto [sw, kro, krg] : model_.get_invasion_task().primary().kr) {
                 primary_.kr0->append(sw, kro);
                 primary_.kr1->append(sw, krg);                
               }
 
-              for (auto [sw, kro, krg] : model_.invasion_task().secondary().kr) {
+              for (auto [sw, kro, krg] : model_.get_invasion_task().secondary().kr) {
                 secondary_.kr0->append(sw, kro);
                 secondary_.kr1->append(sw, krg);                
               }
@@ -842,7 +842,7 @@ namespace xpm
       }
     
     
-      auto operator()(macro_throat_t auto i) const {
+      auto operator()(macro_throat_t auto) const {
         return std::numeric_limits<double>::quiet_NaN();
       }
     

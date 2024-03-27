@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include <HYPRE_utilities.h>
+
 #include "ij_matrix.hpp"
 
 namespace dpl::hypre
@@ -148,6 +150,7 @@ namespace dpl::hypre
     const ls_known_ref& in, const index_range& range, HYPRE_Complex* values,
     HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20
   ) {
+    HYPRE_Initialize();
 
     HYPRE_Solver solver;
     
@@ -155,6 +158,7 @@ namespace dpl::hypre
 
     HYPRE_BoomerAMGSetTol(solver, tolerance);
     HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
+
 
     // HYPRE_BoomerAMGSetRelaxType(solver, )
     // HYPRE_BoomerAMGSetInterpType(solver, 6);
@@ -182,8 +186,6 @@ namespace dpl::hypre
     ij_vector b{range, in.b};
     ij_vector x{range};
 
-
-
     // const auto t0 = std::chrono::system_clock::now();
 
     // int w_rank;
@@ -196,20 +198,17 @@ namespace dpl::hypre
 
     HYPRE_BoomerAMGSetup(solver, A, b, x);
 
-
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (w_rank == 0)
     //   std::cout << "\nPOS_1\n" << std::flush;
     // MPI_Barrier(MPI_COMM_WORLD);
-    
+
     HYPRE_BoomerAMGSolve(solver, A, b, x);
-    
 
     // MPI_Barrier(MPI_COMM_WORLD);
     // if (w_rank == 0)
     //   std::cout << "\nPOS_2\n" << std::flush;
     // MPI_Barrier(MPI_COMM_WORLD);
-
 
     // const auto t1 = std::chrono::system_clock::now();
     // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
@@ -224,6 +223,8 @@ namespace dpl::hypre
     HYPRE_BoomerAMGDestroy(solver);                  
   
     x.get_values(nrows, indices.get(), values);
+
+    HYPRE_Finalize();
 
     return {residual, iters};
   }

@@ -48,9 +48,9 @@ int main(int argc, char* argv[])
         modeller.compute_pressure();
 
         if (modeller.settings().report.invasion_percolation) {
-          modeller.invasion_task().init();
+          modeller.get_invasion_task().init();
       
-          modeller.invasion_task().launch_primary(
+          modeller.get_invasion_task().launch_primary(
             modeller.absolute_rate(),
             modeller.settings().theta,
             modeller.settings().primary.calc_pc_inv());

@@ -145,8 +145,20 @@ if(MPI_FOUND)
   target_link_libraries(xpm PRIVATE MPI::MPI_CXX)
 endif()
 
-find_package(HYPRE REQUIRED)
-target_link_libraries(xpm PRIVATE HYPRE::HYPRE)
+
+if(TRUE)
+  set(HYPRE_ENABLE_HYPRE_BLAS OFF)
+  set(HYPRE_ENABLE_HYPRE_LAPACK OFF)
+  set(HYPRE_ENABLE_MIXEDINT ON)
+  set(HYPRE_ENABLE_BIGINT OFF)
+  set(HYPRE_PRINT_ERRORS OFF)
+  add_subdirectory("libs/hypre/src")
+  target_link_libraries(xpm PRIVATE HYPRE)
+else()
+  find_package(HYPRE REQUIRED)
+  target_link_libraries(xpm PRIVATE HYPRE::HYPRE)
+endif()
+
 
 if(NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config.json)
   file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})

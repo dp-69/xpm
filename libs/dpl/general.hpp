@@ -29,9 +29,15 @@
 #include <future>
 #include <vector>
 
-#ifdef __cpp_lib_ranges
-  #include <ranges>
-#endif
+// #ifdef __cpp_lib_ranges
+//   #include <ranges>
+// #endif
+
+// #ifdef __cpp_lib_span
+// #endif
+
+#include <span>
+#include <concepts>
 
 #define def_attrib(name) \
   inline constexpr struct name##_t { \

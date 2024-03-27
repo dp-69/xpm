@@ -452,7 +452,7 @@ namespace xpm
   /**
    * \brief maximum node count
    */
-  using idx1d_t = int32_t;
+  using idx1d_t = int64_t;
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
   struct voxel_tag {};
@@ -554,7 +554,7 @@ namespace xpm
     map_idx3_t() = default;
 
     template <typename T>
-    explicit map_idx3_t(dpl::vector_n<T, 3> dim)
+    explicit map_idx3_t(const dpl::vector_n<T, 3>& dim)
       : x_(dim.x()), xy_(static_cast<R>(dim.x())*dim.y()) {}
 
     // template <typename V>
@@ -562,10 +562,15 @@ namespace xpm
     //   return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
     // }
 
-    template <typename T>
-    R operator()(T x, T y, T z) const {
+    // template <typename T>
+    R operator()(auto x, auto y, auto z) const {
       return static_cast<R>(x) + x_*y + xy_*z;
     }
+
+    // template <typename T>
+    // R operator()(T x, T y, T z) const {
+    //   return static_cast<R>(x) + x_*y + xy_*z;
+    // }
 
     template <typename T>
     R operator()(const dpl::vector_n<T, 3>& v) const {
@@ -577,7 +582,7 @@ namespace xpm
     auto operator()(std::integral_constant<int, 2>) const { return xy_; }
   };
 
-  inline auto idx_mapper(idx3d_t dim) {
+  inline auto idx_mapper(const idx3d_t& dim) {
     return map_idx3_t<voxel_t>{dim};
   }
   
