@@ -156,23 +156,19 @@ namespace xpm
       std::locale::global(std::locale("en_US.UTF-8"));
     }
 
-    void init() {
-      std::filesystem::path filename = "config.json";
-      // std::filesystem::path filename = "_other/config_JULIEN.json";
-      // std::filesystem::path filename = "_config.json";
-
-      if (!exists(filename)) {
+    void init(std::filesystem::path input) {
+      if (!exists(input)) {
         std::cout << "Configuration file: ";
-        std::cin >> filename;
+        std::cin >> input;
 
-        if (!exists(filename) && !filename.has_extension())
-          filename.replace_extension("json");
+        if (!exists(input) && !input.has_extension())
+          input.replace_extension("json");
           // std::cout << ".json";
 
         std::cout << '\n';
       }
 
-      auto j = nlohmann::json::parse(std::ifstream{filename}, nullptr, true, true);
+      auto j = nlohmann::json::parse(std::ifstream{input}, nullptr, true, true);
       init(j.is_array() ? j[0] : j);
     }
 

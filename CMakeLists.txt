@@ -74,7 +74,8 @@ else()
   #add_compile_options("-w")
 endif()
 
-set_target_properties(pnextract PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pnextract")
+set_target_properties(pnextract
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pnextract")
 
 if(Qt6_FOUND)
   target_link_libraries(xpm PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets Qt6::Charts)
@@ -132,6 +133,8 @@ endif()
 find_package(Boost COMPONENTS iostreams graph REQUIRED)
 target_link_libraries(xpm PRIVATE Boost::iostreams Boost::graph)
 
+find_package(argh CONFIG REQUIRED)
+target_link_libraries(xpm PRIVATE argh)
 
 find_package(fmt CONFIG REQUIRED)
 target_link_libraries(xpm PRIVATE fmt::fmt)

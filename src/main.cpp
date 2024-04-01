@@ -3,6 +3,8 @@
 #include <QWidget>
 #include <QApplication>
 
+#include <argh.h>
+
 int main(int argc, char* argv[])
 {
   // xpm::transform(
@@ -35,9 +37,13 @@ int main(int argc, char* argv[])
   #endif
 
   dpl::hypre::mpi::mpi_exec = argv[0];
+  auto cmdl = argh::parser(argc, argv);
+
+  std::filesystem::path input;
+  cmdl(1, "config.json") >> input;
 
   try {
-    if (argc == 2 && !std::strcmp(argv[1], "-G")) {
+    if (cmdl["G"]) { /*argc == 2 && !std::strcmp(argv[1], "-G")*/
       using json = nlohmann::json;
 
       auto non_gui_exec = [](const json& j) {
@@ -72,14 +78,11 @@ int main(int argc, char* argv[])
         // add_copy("Copy (primary)", [this] { return modeller.pc_to_plain(std::true_type{}); });
       };
 
-      if (auto root = json::parse(std::ifstream{"config.json"}, nullptr, true, true);
+      if (auto root = json::parse(std::ifstream{input}, nullptr, true, true);
         root.is_array())
         std::ranges::for_each(root, non_gui_exec);
       else
         non_gui_exec(root);
-
-
-      // getchar();
     }
     else {
       auto format = xpm::QVTKWidgetRef::defaultFormat();
@@ -96,10 +99,10 @@ int main(int argc, char* argv[])
       #endif
 
       QApplication app(argc, argv);
-        
+
       xpm::Widget widget;
         
-      widget.Init();
+      widget.Init(input);
         
       // Ui::MainWindow ui;
       // ui.setupUi(&widget);
@@ -112,26 +115,12 @@ int main(int argc, char* argv[])
   }
   catch (const xpm::config_exception& e) {
     fmt::print("\n(error) {}", e.what());
-    // std::getc(std::cin)
-    // auto qq = cin.getch();
-    
-    std::cout << std::flush;
-    getchar();
-
-    // auto lul = _getch();
-    // cin.get();
-
-    // cin.get()
-    // int qq;
-    // std::cin >> qq;
-    // putchar(lul);
   }
 
   #ifdef _WIN32
     MPI_Finalize();
   #endif
     
-
   return 0;
 }
 

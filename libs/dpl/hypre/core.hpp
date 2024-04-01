@@ -148,8 +148,8 @@ namespace dpl::hypre
 
   inline std::pair<HYPRE_Real, HYPRE_Int> solve(
     const ls_known_ref& in, const index_range& range, HYPRE_Complex* values,
-    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20
-  ) {
+    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20)
+  {
     HYPRE_Initialize();
 
     HYPRE_Solver solver;
@@ -159,60 +159,16 @@ namespace dpl::hypre
     HYPRE_BoomerAMGSetTol(solver, tolerance);
     HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
 
-
-    // HYPRE_BoomerAMGSetRelaxType(solver, )
-    // HYPRE_BoomerAMGSetInterpType(solver, 6);
-    // HYPRE_BoomerAMGSetLevelNonGalerkinTol(solver, 0.0, 1);
-    // HYPRE_BoomerAMGSetLevelNonGalerkinTol(solver, 0.01, 2);
-    // HYPRE_BoomerAMGSetNonGalerkinTol(solver, 0.05);
-    
-
-    // HYPRE_BoomerAMGSetMaxLevels(solver, 50);
-    // HYPRE_BoomerAMGSetPMaxElmts(solver, 0);
-    // HYPRE_BoomerAMGSetMaxCoarseSize(solver, 18);
-
-    // HYPRE_BoomerAMGSetCoarsenType(solver, 0);
-    // HYPRE_BoomerAMGSetRestriction(solver, 2);
-    // HYPRE_BoomerAMGSetTruncFactor(solver, 4);
-    // HYPRE_BoomerAMGSetInterpType(solver, 6);
-    // HYPRE_BoomerAMGSetStrongThreshold(solver, 0);
-    // HYPRE_BoomerAMGSetTruncFactor(solver, 0);
-
     auto nrows = range.width();
     auto indices = std::make_unique<HYPRE_BigInt[]>(nrows);
     std::iota(indices.get(), indices.get() + nrows, range.lower);
 
     ij_matrix A{range, indices.get(), in.ncols, in.cols, in.values};
-    ij_vector b{range, in.b};
+    ij_vector b{nrows, indices.get(), in.b};
     ij_vector x{range};
 
-    // const auto t0 = std::chrono::system_clock::now();
-
-    // int w_rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &w_rank);
-    //
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == 0)
-    //   std::cout << "\nPOS_0\n" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
     HYPRE_BoomerAMGSetup(solver, A, b, x);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == 0)
-    //   std::cout << "\nPOS_1\n" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
     HYPRE_BoomerAMGSolve(solver, A, b, x);
-
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // if (w_rank == 0)
-    //   std::cout << "\nPOS_2\n" << std::flush;
-    // MPI_Barrier(MPI_COMM_WORLD);
-
-    // const auto t1 = std::chrono::system_clock::now();
-    // std::cout << "Actual setup&solve: " << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << "ms\n";
-
 
     HYPRE_Real residual = 0;
     HYPRE_Int iters = 0;

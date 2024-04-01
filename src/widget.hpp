@@ -546,8 +546,8 @@ namespace xpm
 
 
   public:
-    void Init() {
-      model_.init();
+    void Init(const std::filesystem::path& input) {
+      model_.init(input);
       
       InitGUI();
 

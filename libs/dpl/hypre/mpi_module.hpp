@@ -35,7 +35,7 @@ namespace dpl::hypre::mpi
     void* ptr_;
 
   public:
-    explicit parser(void* ptr) : ptr_(ptr) {}
+    explicit parser(void* ptr, std::size_t offset = 0) : ptr_(static_cast<unsigned char*>(ptr) + offset) {}
 
     template <typename T>
     void read(T& val) {
@@ -68,9 +68,14 @@ namespace dpl::hypre::mpi
     }
 
     auto* ptr() const { return ptr_; }
+
+    void advance(auto offset) {
+      ptr_ = static_cast<char*>(ptr_) + offset;
+    }
   };
 
   static inline std::filesystem::path mpi_exec;
+  static inline constexpr auto root = 0;
 
   inline constexpr auto smo_hypre_input = "dpl-hypre-input";
   inline constexpr auto smo_hypre_output = "dpl-hypre-output";
@@ -173,43 +178,65 @@ namespace dpl::hypre::mpi
     std::memcpy(p.ptr(), blocks.data(), blocks.size()*sizeof(index_range));
   }
 
+  
+
   inline void process() {
     int m_size, m_rank;  
     MPI_Comm_size(MPI_COMM_WORLD, &m_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &m_rank);
 
-    static constexpr auto root = 0;
-
     auto input = block_info{m_rank};
 
-    auto local_nrows = input.range->width();
-    auto local_values = std::make_unique<HYPRE_Complex[]>(local_nrows);
+    auto nrows = input.range->width();
+    auto values = std::make_unique<HYPRE_Complex[]>(nrows);
 
-    auto [residual, iters] = solve(input, *input.range, local_values.get(), input.tol, input.max_iter);
+    auto [residual, iters] = solve(input, *input.range, values.get(), input.tol, input.max_iter);
 
-    std::unique_ptr<HYPRE_Complex[]> recvbuf;
-    std::unique_ptr<int[]> recvcounts;
-    std::unique_ptr<int[]> displs;
+    // std::unique_ptr<HYPRE_Complex[]> recvbuf;
+    // std::unique_ptr<int[]> recvcounts;
+    // std::unique_ptr<int[]> displs;
+    //
+    // if (m_rank == root) {
+    //   recvbuf = std::make_unique<HYPRE_Complex[]>(input.global_nrows);
+    //   recvcounts = std::make_unique<int[]>(m_size);
+    //   displs = std::make_unique<int[]>(m_size);
+    //
+    //   for (int i = 0; i < m_size; ++i) {
+    //     recvcounts[i] = input.range[i].width();
+    //     displs[i] = input.range[i].lower;
+    //   }
+    // }
+    //
+    // static_assert(std::is_same_v<HYPRE_Complex, double>);
+    //
+    // MPI_Gatherv(
+    //   values.get(), nrows, MPI_DOUBLE,
+    //   recvbuf.get(), recvcounts.get(), displs.get(), MPI_DOUBLE,
+    //   root, MPI_COMM_WORLD);
+    //
+    // if (m_rank == root)
+    //   save_values(recvbuf.get(), input.global_nrows, residual, iters);
 
     if (m_rank == root) {
-      recvbuf = std::make_unique<HYPRE_Complex[]>(input.global_nrows);
-      recvcounts = std::make_unique<int[]>(m_size);
-      displs = std::make_unique<int[]>(m_size);
+      bi::shared_memory_object smo{bi::open_or_create, smo_hypre_output, bi::read_write};
+      smo.truncate(input.global_nrows*sizeof(HYPRE_Complex) + sizeof(HYPRE_Real) + sizeof(HYPRE_Int));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+    
+      auto region = bi::mapped_region{smo, bi::read_write};
+      parser p(region.get_address());
+      p.write(values.get(), nrows);
+      p.advance((input.global_nrows - nrows)*sizeof(HYPRE_Complex));
+      p.write(residual);
+      p.write(iters);
 
-      for (int i = 0; i < m_size; ++i) {
-        recvcounts[i] = input.range[i].width();
-        displs[i] = input.range[i].lower;
-      }
+      MPI_Barrier(MPI_COMM_WORLD);
     }
+    else {
+      MPI_Barrier(MPI_COMM_WORLD);
 
-    static_assert(std::is_same_v<HYPRE_Complex, double>);
-
-    MPI_Gatherv(
-      local_values.get(), local_nrows, MPI_DOUBLE,
-      recvbuf.get(), recvcounts.get(), displs.get(), MPI_DOUBLE,
-      root, MPI_COMM_WORLD);
-
-    if (m_rank == root)
-      dpl::hypre::mpi::save_values(recvbuf.get(), input.global_nrows, residual, iters);
+      bi::shared_memory_object smo{bi::open_only, smo_hypre_output, bi::read_write};
+      auto region = bi::mapped_region{smo, bi::read_write};
+      parser(region.get_address(), input.range->lower*sizeof(HYPRE_Complex))
+        .write(values.get(), nrows);
+    }
   }
 }

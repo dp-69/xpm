@@ -28,26 +28,29 @@
 
 namespace dpl::hypre
 {
+  /**
+   * \brief inclusive [lower, upper]
+   */
   struct index_range
   {
     HYPRE_BigInt lower;
     HYPRE_BigInt upper;
 
     /**
-     * \brief inclusive [lower, upper]
+     * \return
+     *   local nrows (number of rows) as HYPRE_Int for hypre compatibility
      */
-    constexpr auto width() const { return upper - lower + 1; }
+    HYPRE_Int width() const {
+      return upper - lower + 1;  // NOLINT(cppcoreguidelines-narrowing-conversions)
+    }
   };
 
-  namespace mpi
-  {
-    inline MPI_Comm comm =
-      #ifdef MPI_COMM_WORLD 
-        MPI_COMM_WORLD
-      #else
-        0
-      #endif
-    ;
+  namespace mpi {
+    #ifdef MPI_COMM_WORLD 
+      inline MPI_Comm comm = MPI_COMM_WORLD;
+    #else
+      inline MPI_Comm comm = 0;
+    #endif
   }
   
   class ij_vector
@@ -62,18 +65,31 @@ namespace dpl::hypre
       HYPRE_IJVectorAssemble(v_);
     }
 
+    /**
+     * \brief 
+     * \param nvalues 
+     * \param indices local inorder
+     * \param values global
+     */
+    explicit ij_vector(HYPRE_Int nvalues, const HYPRE_BigInt* indices, const HYPRE_Complex* values) {
+      HYPRE_IJVectorCreate(mpi::comm, *indices, *(indices + nvalues - 1), &v_);
+      HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
+      HYPRE_IJVectorInitialize(v_);
+      HYPRE_IJVectorSetValues(v_, nvalues, indices, values + *indices);
+      HYPRE_IJVectorAssemble(v_);
+    }
+
+    /**
+     * \brief 
+     * \param range global
+     * \param values global
+     */
     explicit ij_vector(const index_range& range, const HYPRE_Complex* values) {
       const auto [jlower, jupper] = range;
 
       HYPRE_IJVectorCreate(mpi::comm, jlower, jupper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);
-
-      // auto count = jupper - jlower + 1;
-      // auto indices = std::make_unique<HYPRE_BigInt[]>(count);
-      // std::iota(indices.get(), indices.get() + count, jlower);
-      // HYPRE_IJVectorSetValues(v_, count, indices.get(), values + jlower);
-      // HYPRE_IJVectorSetValues(v_, jupper - jlower + 1, indices, values + jlower);
 
       for (auto i = jlower; i <= jupper; ++i)
         HYPRE_IJVectorSetValues(v_, 1, &i, values + i);
@@ -92,7 +108,7 @@ namespace dpl::hypre
     ij_vector& operator=(ij_vector&& other) = delete;
 
     operator HYPRE_ParVector() const {
-      HYPRE_ParVector ref;  // NOLINT(cppcoreguidelines-init-variables)
+      HYPRE_ParVector ref;
       HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&ref));
       return ref;
     }
