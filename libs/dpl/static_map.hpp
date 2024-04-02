@@ -107,7 +107,7 @@ namespace dpl
         : Base::template first<Return, Pred>(p);
     }
   };
-
+  
 
   template <typename... Args>
   class static_map_impl_ : public static_map_rec_<Args...>

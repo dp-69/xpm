@@ -4,7 +4,9 @@
 #include <numbers>
 #include <regex>
 
-#include <dpl/static_vector.hpp>
+
+#include <dpl/curve2d.hpp>
+// #include <dpl/static_vector.hpp>
 #include <dpl/hypre/mpi_module.hpp>
 
 #include <HYPRE_utilities.h>
@@ -811,27 +813,9 @@ namespace xpm
     } darcy;
 
     
-
-    
-    
-
-
-
-
-
-
     struct input_curves {
-      std::vector<dpl::vector2d> pc; /* [Sw, Pc] */
-      std::array<std::vector<dpl::vector2d>, 2> kr;
-
-      auto calc_pc_inv() const {
-        using namespace std::ranges;
-        auto inv = pc;
-        reverse(inv);
-        for_each(inv, [](dpl::vector2d& p) { std::swap(p.x(), p.y()); });
-        inv.resize(unique(inv, {}, [](const dpl::vector2d& p) { return p.x(); }).begin() - inv.begin());
-        return inv;
-      }
+      dpl::curve2d pc;  /* [Sw, Pc] */
+      std::array<dpl::curve2d, 2> kr;
     } primary,
       secondary;
     
@@ -880,15 +864,15 @@ namespace xpm
 
 
         if (auto j_primary = j_micro("primary"); j_primary) {
-          primary.pc = (*j_primary)["capillary_pressure"];
-          primary.kr[0] = (*j_primary)["relative_permeability"][0];
-          primary.kr[1] = (*j_primary)["relative_permeability"][1];  
+          primary.pc = {(*j_primary)["capillary_pressure"]};
+          primary.kr[0] = {(*j_primary)["relative_permeability"][0]};
+          primary.kr[1] = {(*j_primary)["relative_permeability"][1]};  
         }
 
         if (auto j_secondary = j_micro("secondary"); j_secondary) {
-          secondary.pc = (*j_secondary)["capillary_pressure"];
-          secondary.kr[0] = (*j_secondary)["relative_permeability"][0];
-          secondary.kr[1] = (*j_secondary)["relative_permeability"][1];  
+          secondary.pc = {(*j_secondary)["capillary_pressure"]};
+          secondary.kr[0] = {(*j_secondary)["relative_permeability"][0]};
+          secondary.kr[1] = {(*j_secondary)["relative_permeability"][1]};  
         }
       }
 

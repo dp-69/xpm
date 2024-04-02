@@ -634,7 +634,7 @@ namespace xpm
           pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(model_.pni().pn().node_.span(attrib::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
-            model_.settings().primary.pc.empty() ? 0 : model_.settings().primary.pc.front().y()))))*1.01
+            model_.settings().primary.pc ? model_.settings().primary.pc.front().y() : 0))))*1.01
         );
       }
 
@@ -653,7 +653,7 @@ namespace xpm
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &model_.get_invasion_task(),
           model_.absolute_rate(),
           model_.settings().theta,
-          model_.settings().primary.calc_pc_inv());
+          model_.settings().primary.pc.inverse_unique());
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
@@ -680,7 +680,7 @@ namespace xpm
             auto pc_inv = (
               model_.get_invasion_task().primary_finished()
                 ? model_.settings().secondary
-                : model_.settings().primary).calc_pc_inv();
+                : model_.settings().primary).pc.inverse_unique();
 
             dpl::sfor<6>([&](auto face_idx) {
               dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
@@ -690,7 +690,7 @@ namespace xpm
 
                 if (voxel_t voxel{idx1d}; pni.connected(voxel))
                   if (auto net = pni.net(voxel); state.config(net).phase() == phase_config::phase1())
-                    sw = 1.0 - solve(pc_inv, 1/state.r_cap(net), dpl::extrapolant::flat);
+                    sw = 1.0 - pc_inv.solve(1/state.r_cap(net));
 
                 face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
               }

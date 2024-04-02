@@ -24,7 +24,6 @@ int main(int argc, char* argv[])
 
   // int p = 3;
 
-
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
     dpl::hypre::mpi::process();
@@ -59,7 +58,7 @@ int main(int argc, char* argv[])
           modeller.get_invasion_task().launch_primary(
             modeller.absolute_rate(),
             modeller.settings().theta,
-            modeller.settings().primary.calc_pc_inv());
+            modeller.settings().primary.pc.inverse_unique());
 
           auto dir =
             std::filesystem::path(dpl::hypre::mpi::mpi_exec)

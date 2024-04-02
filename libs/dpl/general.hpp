@@ -148,7 +148,7 @@ namespace dpl
     strong_vector& operator=(const strong_vector& other) = delete;
     strong_vector& operator=(strong_vector&& other) noexcept = default;
 
-    template<std::size_t value>
+    template <std::size_t value>
     explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
       : uptr_{std::make_unique<Value[]>(value)} {}
 
@@ -271,7 +271,7 @@ namespace dpl
     strong_vector& operator=(const strong_vector& other) = delete;
     strong_vector& operator=(strong_vector&& other) noexcept = default;
 
-    template<std::size_t value>
+    template <std::size_t value>
     explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
       : vec_(value) {}
 
@@ -347,10 +347,6 @@ namespace dpl
   template <typename... Args_>
   inline constexpr bool has_any_v = has_any<Args_...>::value;
 
-  template <int i_>
-  using ic = std::integral_constant<int, i_>;
-
-
   
   template <typename V_, typename ...Rest_>
   struct are_arithmetic : std::bool_constant<std::is_arithmetic_v<V_> && are_arithmetic<Rest_...>::value> {};
@@ -390,8 +386,8 @@ namespace dpl
   template <int n0, int n1, typename Functor>
   constexpr void sfor(const Functor& f) {
     if constexpr (n0 < n1) {
-      if constexpr (std::is_invocable_v<Functor, ic<n0>>)
-        f(ic<n0>{});
+      if constexpr (std::is_invocable_v<Functor, std::integral_constant<int, n0>>)
+        f(std::integral_constant<int, n0>{});
       else
         f();
 
@@ -409,8 +405,8 @@ namespace dpl
     template <int n0, int n1, typename Functor>
     constexpr void psfor(std::future<void>* queue, const Functor& f) {
       if constexpr (n0 < n1) {
-        if constexpr (std::is_invocable_v<Functor, ic<n0>>)
-          *queue = std::async(std::launch::async, f, ic<n0>{});
+        if constexpr (std::is_invocable_v<Functor, std::integral_constant<int, n0>>)
+          *queue = std::async(std::launch::async, f, std::integral_constant<int, n0>{});
         else
           *queue = std::async(std::launch::async, f);        
           

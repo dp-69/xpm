@@ -1,7 +1,7 @@
 ﻿/*
  * This file is part of Dmytro Petrovskyy Library (DPL).
  *
- * Copyright (c) 2023
+ * Copyright (c) 2024
  *   | Dmytro Petrovskyy, PhD
  *   | dmytro.petrovsky@gmail.com
  *   | https://www.linkedin.com/in/dmytro-petrovskyy/

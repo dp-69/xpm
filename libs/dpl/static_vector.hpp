@@ -37,9 +37,9 @@
 
 namespace dpl
 {
-  static inline constexpr auto _0 = ic<0>{};
-  static inline constexpr auto _1 = ic<1>{};
-  static inline constexpr auto _2 = ic<2>{};
+  static inline constexpr auto _0 = std::integral_constant<int, 0>{};
+  static inline constexpr auto _1 = std::integral_constant<int, 1>{};
+  static inline constexpr auto _2 = std::integral_constant<int, 2>{};
 
   struct operation
   {
@@ -434,11 +434,9 @@ namespace dpl
     }
 
     template <int i, typename U = int>
-    constexpr vector_n(ic<i>, const U& v = 1) : ptr_{} {
+    constexpr vector_n(std::integral_constant<int, i>, const U& v = 1) : ptr_{} {
       ptr_[i] = v;
     }
-
-    
 
     
     template <typename U>
@@ -537,7 +535,7 @@ namespace dpl
 
   template <typename T>
   auto solve(const std::vector<vector_n<T, 2>>& curve, const auto arg, auto extrapolant) {
-    return solve(std::span<const vector_n<T, 2>>{curve}, arg, extrapolant);
+    return solve(std::span{curve}, arg, extrapolant);
   }
 }
 
@@ -574,8 +572,8 @@ namespace dpl
   template <int count, int dim>
   struct sdim;
 
-  template<int count, int dim>
-  struct _sdim_impl : ic<dim>
+  template <int count, int dim>
+  struct _sdim_impl : std::integral_constant<int, dim>
   {
     static constexpr auto next() {
       return std::conditional_t<
@@ -585,16 +583,19 @@ namespace dpl
     }
   };
 
-  template<int count, int dim>
+  template <int count, int dim>
   struct sdim : _sdim_impl<count, dim> {};
 
-  template<int dim>
+  template <int dim>
   struct sdim<3, dim> : _sdim_impl<3, dim>
   {
-    template<int dim1/*, std::enable_if_t<dim_idx1 != dim_idx, int> = 0*/>
-    static constexpr auto cross(ic<dim1> = {}) {
+    template <int dim1/*, std::enable_if_t<dim_idx1 != dim_idx, int> = 0*/>
+    static constexpr auto cross(std::integral_constant<int, dim1>  = {}) {
       static_assert(dim1 != dim, "Dimensions should not be equal");
-      return sdim<3, vector3i{ic<dim>{}}.cross({ic<dim1>{}}).non_zero_dim()>{};
+      return
+        sdim<3,
+          vector3i{std::integral_constant<int, dim>{}}.cross(
+            {std::integral_constant<int, dim1>{}}).non_zero_dim()>{};
     }
   };
 
@@ -634,8 +635,8 @@ namespace dpl
    *              z min - 4
    *              z max - 5
    */
-  template<int face>
-  struct face_cubic : ic<face>
+  template <int face>
+  struct face_cubic : std::integral_constant<int, face>
   {
     static constexpr auto dim = sdim<3, face/2>{};
     
@@ -644,7 +645,13 @@ namespace dpl
     /**
      * \brief inner direction
      */
-    static constexpr auto non_zero_component = std::conditional_t<is_upper, ic<-1>, ic<1>>{};
+
+    static constexpr auto non_zero_component = std::integral_constant<int, is_upper ? -1 : 1>{};
+    // static constexpr auto non_zero_component =
+    //   std::conditional_t<is_upper,
+    //     std::integral_constant<int, -1>,
+    //     std::integral_constant<int, 1>>
+    //   {};
 
     /**
      * \brief inner direction
