@@ -65,25 +65,6 @@ namespace dpl::hypre
       HYPRE_IJVectorAssemble(v_);
     }
 
-    /**
-     * \brief 
-     * \param nvalues 
-     * \param indices local inorder
-     * \param values global
-     */
-    explicit ij_vector(HYPRE_Int nvalues, const HYPRE_BigInt* indices, const HYPRE_Complex* values) {
-      HYPRE_IJVectorCreate(mpi::comm, *indices, *(indices + nvalues - 1), &v_);
-      HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
-      HYPRE_IJVectorInitialize(v_);
-      HYPRE_IJVectorSetValues(v_, nvalues, indices, values + *indices);
-      HYPRE_IJVectorAssemble(v_);
-    }
-
-    /**
-     * \brief 
-     * \param range global
-     * \param values global
-     */
     explicit ij_vector(const index_range& range, const HYPRE_Complex* values) {
       const auto [jlower, jupper] = range;
 

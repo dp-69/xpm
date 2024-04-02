@@ -164,7 +164,7 @@ namespace dpl::hypre
     std::iota(indices.get(), indices.get() + nrows, range.lower);
 
     ij_matrix A{range, indices.get(), in.ncols, in.cols, in.values};
-    ij_vector b{nrows, indices.get(), in.b};
+    ij_vector b{range, in.b};
     ij_vector x{range};
 
     HYPRE_BoomerAMGSetup(solver, A, b, x);
