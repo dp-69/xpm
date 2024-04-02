@@ -137,18 +137,18 @@ namespace dpl::hypre::mpi
     return {std::move(values), residual, iters};
   }
 
-  inline void save_values(const HYPRE_Complex* values, HYPRE_BigInt nrows, HYPRE_Real residual, HYPRE_Int iters) {
-    bi::shared_memory_object smo{bi::open_or_create, smo_hypre_output, bi::read_write};
-    smo.truncate(nrows*sizeof(HYPRE_Complex) + sizeof(HYPRE_Real) + sizeof(HYPRE_Int));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+  // inline void save_values(const HYPRE_Complex* values, HYPRE_BigInt nrows, HYPRE_Real residual, HYPRE_Int iters) {
+  //   bi::shared_memory_object smo{bi::open_or_create, smo_hypre_output, bi::read_write};
+  //   smo.truncate(nrows*sizeof(HYPRE_Complex) + sizeof(HYPRE_Real) + sizeof(HYPRE_Int));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+  //
+  //   auto region = bi::mapped_region{smo, bi::read_write};
+  //   parser p{region.get_address()};
+  //   p.write(values, nrows);
+  //   p.write(residual);
+  //   p.write(iters);
+  // }
 
-    auto region = bi::mapped_region{smo, bi::read_write};
-    parser p{region.get_address()};
-    p.write(values, nrows);
-    p.write(residual);
-    p.write(iters);
-  }
-
-  inline void save(
+  inline void save_and_reserve(
     const ls_known_ref& input, HYPRE_BigInt nrows, size_t nvalues, const std::vector<index_range>& blocks, HYPRE_Real tol, HYPRE_Int max_iter) {
 
     bi::shared_memory_object smo{bi::open_or_create, smo_hypre_input, bi::read_write};
@@ -176,6 +176,11 @@ namespace dpl::hypre::mpi
     p.write(max_iter);
     
     std::memcpy(p.ptr(), blocks.data(), blocks.size()*sizeof(index_range));
+
+    {
+      bi::shared_memory_object{bi::open_or_create, smo_hypre_output, bi::read_write}
+        .truncate(nrows*sizeof(HYPRE_Complex) + sizeof(HYPRE_Real) + sizeof(HYPRE_Int));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+    }
   }
 
   
@@ -191,6 +196,17 @@ namespace dpl::hypre::mpi
     auto values = std::make_unique<HYPRE_Complex[]>(nrows);
 
     auto [residual, iters] = solve(input, *input.range, values.get(), input.tol, input.max_iter);
+
+    bi::shared_memory_object smo{bi::open_only, smo_hypre_output, bi::read_write};
+    auto region = bi::mapped_region{smo, bi::read_write};
+    parser p(region.get_address(), input.range->lower*sizeof(HYPRE_Complex));
+    p.write(values.get(), nrows);
+
+    if (m_rank == root) {
+      p.advance((input.global_nrows - nrows)*sizeof(HYPRE_Complex));
+      p.write(residual);
+      p.write(iters);
+    }
 
     // std::unique_ptr<HYPRE_Complex[]> recvbuf;
     // std::unique_ptr<int[]> recvcounts;
@@ -216,27 +232,5 @@ namespace dpl::hypre::mpi
     //
     // if (m_rank == root)
     //   save_values(recvbuf.get(), input.global_nrows, residual, iters);
-
-    if (m_rank == root) {
-      bi::shared_memory_object smo{bi::open_or_create, smo_hypre_output, bi::read_write};
-      smo.truncate(input.global_nrows*sizeof(HYPRE_Complex) + sizeof(HYPRE_Real) + sizeof(HYPRE_Int));  // NOLINT(cppcoreguidelines-narrowing-conversions)
-    
-      auto region = bi::mapped_region{smo, bi::read_write};
-      parser p(region.get_address());
-      p.write(values.get(), nrows);
-      p.advance((input.global_nrows - nrows)*sizeof(HYPRE_Complex));
-      p.write(residual);
-      p.write(iters);
-
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-    else {
-      MPI_Barrier(MPI_COMM_WORLD);
-
-      bi::shared_memory_object smo{bi::open_only, smo_hypre_output, bi::read_write};
-      auto region = bi::mapped_region{smo, bi::read_write};
-      parser(region.get_address(), input.range->lower*sizeof(HYPRE_Complex))
-        .write(values.get(), nrows);
-    }
   }
 }

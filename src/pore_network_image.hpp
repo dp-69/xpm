@@ -489,7 +489,7 @@ namespace xpm
       auto [input, nvalues] = generate_pressure_input();
       auto nrows = *node_count();
 
-      dpl::hypre::mpi::save(input, nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations);
+      dpl::hypre::mpi::save_and_reserve(input, nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations);
 
       std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
         dpl::hypre::mpi::mpi_exec).c_str());
