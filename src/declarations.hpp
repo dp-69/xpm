@@ -547,48 +547,6 @@ namespace xpm
     boost::typed_identity_property_map<idx1d_t>
   >;
 
-  template <typename R>
-  class map_idx3_t
-  {
-    R x_, xy_;
-
-  public:
-    map_idx3_t() = default;
-
-    template <typename T>
-    explicit map_idx3_t(const dpl::vector_n<T, 3>& dim)
-      : x_(dim.x()), xy_(static_cast<R>(dim.x())*dim.y()) {}
-
-    // template <typename V>
-    // R operator()(dpl::vector_n<V, 3> v) const {
-    //   return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
-    // }
-
-    // template <typename T>
-    R operator()(auto x, auto y, auto z) const {
-      return static_cast<R>(x) + x_*y + xy_*z;
-    }
-
-    // template <typename T>
-    // R operator()(T x, T y, T z) const {
-    //   return static_cast<R>(x) + x_*y + xy_*z;
-    // }
-
-    template <typename T>
-    R operator()(const dpl::vector_n<T, 3>& v) const {
-      return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
-    }
-
-    auto operator()(std::integral_constant<int, 0>) const { return 1; }
-    auto operator()(std::integral_constant<int, 1>) const { return x_; }
-    auto operator()(std::integral_constant<int, 2>) const { return xy_; }
-  };
-
-  inline auto idx_mapper(const idx3d_t& dim) {
-    return map_idx3_t<voxel_t>{dim};
-  }
-  
-  
 
   template <typename>
   struct wrapper {};
@@ -908,7 +866,7 @@ namespace xpm
     
     is.read(reinterpret_cast<char*>(src.data()), src_total_size*sizeof(Type));
 
-    auto src_mapper = idx_mapper(src_size);
+    dpl::idx1d_map<voxel_t> src_mapper{src_size};
 
     idx3d_t ijk;
     auto& [i, j, k] = ijk;

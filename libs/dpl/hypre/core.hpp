@@ -150,7 +150,11 @@ namespace dpl::hypre
     const ls_known_ref& in, const index_range& range, HYPRE_Complex* values,
     HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20)
   {
-    HYPRE_Initialize();
+    #if (HYPRE_RELEASE_NUMBER == 22300)
+      HYPRE_Init();
+    #else
+      HYPRE_Initialize();
+    #endif
 
     HYPRE_Solver solver;
     
@@ -158,6 +162,7 @@ namespace dpl::hypre
 
     HYPRE_BoomerAMGSetTol(solver, tolerance);
     HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
+    HYPRE_BoomerAMGSetPrintLevel(solver, 3);
 
     auto nrows = range.width();
     auto indices = std::make_unique<HYPRE_BigInt[]>(nrows);

@@ -399,7 +399,9 @@ namespace xpm
     }
 
     std::pair<dpl::hypre::ls_known_storage, size_t> generate_pressure_input() const {
-      dpl::hypre::ls_known_storage_builder builder{*node_count()};
+      dpl::hypre::ls_known_storage_builder builder{
+        static_cast<HYPRE_BigInt>(*node_count())
+      };
 
       for (std::size_t i = 0; i < throat_count(); ++i)
         if (auto [l, r] = throat_[attrib::adj][i]; inner_node(r))
@@ -487,7 +489,7 @@ namespace xpm
 
     void connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations) const {
       auto [input, nvalues] = generate_pressure_input();
-      auto nrows = *node_count();
+      HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
       dpl::hypre::mpi::save_and_reserve(input, nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations);
 
@@ -499,9 +501,12 @@ namespace xpm
 
 
     void connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
-      auto pressure = std::make_unique<double[]>(*node_count());
+      HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
+      auto pressure = std::make_unique<HYPRE_Real[]>(nrows);
+
       auto [residual, iters] = solve(
-        generate_pressure_input().first, {0, *node_count() - 1}, pressure.get(), tolerace, max_iterations); // gross solve (with isolated)
+        generate_pressure_input().first, {0, nrows - 1}, pressure.get(), tolerace, max_iterations); // gross solve (with isolated)
+
       connectivity_flow_summary({std::move(pressure), residual, iters});
     }
   };
@@ -540,7 +545,7 @@ namespace xpm
   {
     voxel_t size_;
     idx3d_t dim_;
-    map_idx3_t<voxel_t> idx1d_mapper_;
+    dpl::idx1d_map<voxel_t> idx1d_mapper_;
 
   public:
     auto size() const {
@@ -556,9 +561,9 @@ namespace xpm
       return idx1d_mapper_(std::forward<Args>(arg)...);
     }
 
-    void set_dim(idx3d_t dim) {
+    void set_dim(const idx3d_t& dim) {
       dim_ = dim;
-      idx1d_mapper_ = idx_mapper(dim_);
+      idx1d_mapper_ = dim_;
     }
 
     parse::image_dict dict;
@@ -811,22 +816,22 @@ namespace xpm
 
 
     template <typename Filter = dpl::default_map::true_t>
-    std::tuple<idx1d_t, rows_mapping> generate_mapping(const dpl::vector3i& blocks, Filter filter = {}) const {
+    std::tuple<HYPRE_BigInt, rows_mapping> generate_mapping(const dpl::vector3i& blocks, Filter filter = {}) const {
       auto block_size = pn_->physical_size/blocks;
 
       using pair = std::pair<net_t, int>;
 
       std::vector<pair> idx_to_block(*connected_count_);
 
-      auto map_idx = idx_mapper(blocks);
+      dpl::idx1d_map block_idx1d{blocks}; /*<voxel_t>*/
 
       auto eval_block = [&](const dpl::vector3d& pos) {
         dpl::vector3i block_idx = pos/block_size;
 
-        return *map_idx(
-            std::clamp(block_idx.x(), 0, blocks.x() - 1), 
-            std::clamp(block_idx.y(), 0, blocks.y() - 1), 
-            std::clamp(block_idx.z(), 0, blocks.z() - 1));
+        return block_idx1d(
+          std::clamp(block_idx.x(), 0, blocks.x() - 1), 
+          std::clamp(block_idx.y(), 0, blocks.y() - 1), 
+          std::clamp(block_idx.z(), 0, blocks.z() - 1));
       };
 
       {
@@ -858,14 +863,14 @@ namespace xpm
       std::ranges::sort(idx_to_block, [](const pair& l, const pair& r) { return l.second < r.second; });
 
       auto end = std::ranges::lower_bound(idx_to_block, rows_mapping::invalid_block, {}, [](const pair& p) { return p.second; });
-      idx1d_t filtered_count = end - idx_to_block.begin();
+      HYPRE_BigInt filtered_count = end - idx_to_block.begin();
       // idx_to_block.resize(filtered_count);
 
       auto block_count = blocks.prod();
 
       rows_mapping mapping{connected_count_, block_count};
       
-      auto count_per_block = std::make_unique<idx1d_t[]>(block_count);
+      auto count_per_block = std::make_unique<HYPRE_BigInt[]>(block_count); // TODO: maybe HYPRE_Int is sufficient
 
       for (int i = 0; i < block_count; ++i)
         count_per_block[i] = 0;
@@ -1060,7 +1065,7 @@ namespace xpm
 
     template <typename Filter = dpl::default_map::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
-      idx1d_t nrows, const dpl::strong_vector<net_t, idx1d_t>& forward, auto term, Filter filter = {}) const {
+      HYPRE_BigInt nrows, const dpl::strong_vector<net_t, idx1d_t>& forward, auto term, Filter filter = {}) const {
 
       using namespace attrib;
 

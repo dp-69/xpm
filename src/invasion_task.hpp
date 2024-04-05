@@ -312,7 +312,7 @@ namespace xpm {
       auto found = pressure_cache::cache().find(hash);
 
       if (!settings_->solver.cache.use || found == pressure_cache::cache().end()) {
-        dpl::strong_vector<net_t, double> pressure(pni_->connected_count());
+        dpl::strong_vector<net_t, HYPRE_Real> pressure(pni_->connected_count());
         auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
 
         {
@@ -816,15 +816,16 @@ namespace xpm {
         if (r_cap < state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
             std::abs(last_pc_point_.x() - pc_point.x()) > settings_->report.sw_pc ||
-            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
+            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_)
+          {
             last_pc_point_ = pc_point;
             primary_.pc.push_back(pc_point);
             write_occupancy_image(pc_point.x());
-
-            
           }
 
-          if (auto sw = 1 - eval_inv_volume()/total_pore_volume_; last_kr_sw - sw > settings_->report.sw_kr) {
+          if (auto sw = 1 - eval_inv_volume()/total_pore_volume_;
+            last_kr_sw - sw > settings_->report.sw_kr)
+          {
             last_kr_sw = sw;
             rel_calc_report(sw);
           }

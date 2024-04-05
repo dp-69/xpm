@@ -780,10 +780,10 @@ namespace xpm
     struct pressure_map
     {
       pore_network_image* pni;
-      dpl::strong_vector<net_t, double>* data;
+      dpl::strong_vector<net_t, HYPRE_Real>* data;
 
       auto operator()(macro_voxel_t auto i) const {
-        return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+        return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<HYPRE_Real>::quiet_NaN();
       }
 
       auto operator()(throat_t i) const {
@@ -791,7 +791,7 @@ namespace xpm
 
         return pni->connected(l)
           ? ((*data)[pni->net(l)] + (*data)[pni->net(r)])/2
-          : std::numeric_limits<double>::quiet_NaN();
+          : std::numeric_limits<HYPRE_Real>::quiet_NaN();
       }
 
       // auto operator()(voxel_t i) const {

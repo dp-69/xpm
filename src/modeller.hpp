@@ -271,7 +271,7 @@ namespace xpm
 
       
 
-      dpl::strong_vector<net_t, double> pressure;
+      dpl::strong_vector<net_t, HYPRE_Real> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
       HYPRE_Int iters = 0;
 

@@ -30,16 +30,10 @@
 
 // TODO includes
 #include <nlohmann/json.hpp>
-// #include <QColor>
-
-
-// #include <tuple>
 
 namespace dpl
 {
   static inline constexpr auto _0 = std::integral_constant<int, 0>{};
-  static inline constexpr auto _1 = std::integral_constant<int, 1>{};
-  static inline constexpr auto _2 = std::integral_constant<int, 2>{};
 
   struct operation
   {
@@ -533,38 +527,33 @@ namespace dpl
     return solve(*(iter - 1), *iter, arg);
   }
 
-  template <typename T>
-  auto solve(const std::vector<vector_n<T, 2>>& curve, const auto arg, auto extrapolant) {
-    return solve(std::span{curve}, arg, extrapolant);
-  }
+  // template <typename T>
+  // auto solve(const std::vector<vector_n<T, 2>>& curve, const auto arg, auto extrapolant) {
+  //   return solve(std::span{curve}, arg, extrapolant);
+  // }
 }
 
+
+// NOLINTBEGIN(cert-dcl58-cpp)
 namespace std
 {
   template <typename Type, int n>
-  struct tuple_size<dpl::vector_n<Type, n>> : integral_constant<size_t, n> {};        
+  struct tuple_size<dpl::vector_n<Type, n>> : integral_constant<size_t, n> {};
 
   template <size_t i, typename Type, int n>
-  struct tuple_element<i, dpl::vector_n<Type, n>>
-  {
+  struct tuple_element<i, dpl::vector_n<Type, n>> {
     using type = Type;
   };
-
 
   template <typename Type, int n>
   struct tuple_size<dpl::vector_n_map<Type, n>> : integral_constant<size_t, n> {};    
 
   template <size_t i, typename Type, int n>
-  struct tuple_element<i, dpl::vector_n_map<Type, n>>
-  {
+  struct tuple_element<i, dpl::vector_n_map<Type, n>> {
     using type = Type;
   };
 }
-
-
-
-
-
+// NOLINTEND(cert-dcl58-cpp)
 
 
 namespace dpl
@@ -599,41 +588,31 @@ namespace dpl
     }
   };
 
-
-
-
-
   template<int dim>
   struct cdims
   {
-    static constexpr auto e0 = dpl::sdim<3, dim>{};
-    static constexpr auto e1 = e0.next();
-    static constexpr auto e2 = e1.next();
+    static constexpr inline auto e0 = dpl::sdim<3, dim>{};
+    static constexpr inline auto e1 = e0.next();
+    static constexpr inline auto e2 = e1.next();
 
     template <typename Tuple>
     static constexpr auto tie(Tuple& t) {
       return std::tie(t[e0], t[e1], t[e2]);
     }
+
+    static constexpr inline auto i = e0;
+    static constexpr inline auto j = e1;
+    static constexpr inline auto k = e2;
   };
 
-    
-
-  // namespace color
-  // {
-  //   static inline constexpr auto white = vector3d{1.0};
-  //   static inline constexpr auto black = vector3d{0.0};
-  // }
-
-  
-
   /**
-   * \tparam face in [0, 5]
-   *              x min - 0
-   *              x max - 1
-   *              y min - 2
-   *              y max - 3
-   *              z min - 4
-   *              z max - 5
+   * \tparam face \n
+   *   0 - x min\n
+   *   1 - x max\n
+   *   2 - y min\n
+   *   3 - y max\n
+   *   4 - z min\n
+   *   5 - z max\n
    */
   template <int face>
   struct face_cubic : std::integral_constant<int, face>
@@ -645,7 +624,6 @@ namespace dpl
     /**
      * \brief inner direction
      */
-
     static constexpr auto non_zero_component = std::integral_constant<int, is_upper ? -1 : 1>{};
     // static constexpr auto non_zero_component =
     //   std::conditional_t<is_upper,
@@ -658,11 +636,43 @@ namespace dpl
      */
     static constexpr auto normal = vector3i{dim, non_zero_component};
   };
+
+  template <int face>
+  struct cdims_by_face : cdims<face_cubic<face>::dim> {};
+
+
+
+
+
+
+
+
+  template <typename R>
+  class idx1d_map
+  {
+    R x_, xy_;
+
+  public:
+    idx1d_map() = default;
+
+    template <typename T>
+    idx1d_map(const vector_n<T, 3>& dim)
+      : x_(dim.x()), xy_(static_cast<R>(dim.x())*dim.y()) {}
+
+    R operator()(auto x, auto y, auto z) const {
+      return static_cast<R>(x) + x_*y + xy_*z;
+    }
+
+    template <typename T>
+    R operator()(const vector_n<T, 3>& v) const {
+      return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
+    }
+
+    auto  operator()(std::integral_constant<int, 0>) const { return 1; }
+    auto& operator()(std::integral_constant<int, 1>) const { return x_; }
+    auto& operator()(std::integral_constant<int, 2>) const { return xy_; }
+  };
+
+  template <typename T>
+  idx1d_map(const vector_n<T, 3>&) -> idx1d_map<T>;
 }
-
-
-
-
-
-
-
