@@ -162,7 +162,7 @@ namespace dpl::hypre
 
     HYPRE_BoomerAMGSetTol(solver, tolerance);
     HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
-    HYPRE_BoomerAMGSetPrintLevel(solver, 3);
+    // HYPRE_BoomerAMGSetPrintLevel(solver, 3);
 
     auto nrows = range.width();
     auto indices = std::make_unique<HYPRE_BigInt[]>(nrows);

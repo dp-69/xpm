@@ -56,12 +56,11 @@ namespace dpl::vtk
     }
   };
   
-  template<int face_idx, typename idx1d_t>
+  template<int face, typename idx1d_t>
   class GlyphMapperFaceGeneric : public GlyphMapperFace<idx1d_t>
   {
-    using face = face_cubic<face_idx>;
-    using dims = cdims<face::dim>;
-    using idx3d_t = vector_n<idx1d_t, 3>;
+    static constexpr sface<face> sface;
+    static constexpr cdims rel{sface};
 
     static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {
       auto quad = vtkSmartPointer<vtkPolyData>::New();
@@ -73,21 +72,21 @@ namespace dpl::vtk
       quad->SetPolys(cells);
         
       vector3d pos;
-      pos[dims::e0] = 0;
-      pos[dims::e1] = -half_length;
-      pos[dims::e2] = -half_length;
+      pos[rel.i] = 0;
+      pos[rel.j] = -half_length;
+      pos[rel.k] = -half_length;
       points->InsertNextPoint(pos);
 
-      pos[dims::e1] = half_length;
+      pos[rel.j] = half_length;
       points->InsertNextPoint(pos);
 
-      pos[dims::e2] = half_length;
+      pos[rel.k] = half_length;
       points->InsertNextPoint(pos);
 
-      pos[dims::e1] = -half_length;
+      pos[rel.j] = -half_length;
       points->InsertNextPoint(pos);
 
-      if constexpr (face::is_upper) {
+      if constexpr (sface.is_upper) {
         vtkIdType indices[] = {0, 1, 2, 3};
         cells->InsertNextCell(4, indices);
       }
@@ -117,13 +116,13 @@ namespace dpl::vtk
     }
 
     void Populate(const vector3i& cells, const vector3d& cell_size, const auto& filter) {
-      idx3d_t map_idx{1, cells.x(), cells.x()*cells.y()};
-      idx3d_t ijk;
+      idx1d_map<idx1d_t> map_idx{cells};
+      vector_n<idx1d_t, 3> ijk;
       
-      auto [e0, e1, e2] = dims::tie(ijk);
-      auto [e0_count, e1_count, e2_count] = dims::tie(cells);
+      auto [e0, e1, e2] = rel.tie(ijk);
+      auto [e0_count, e1_count, e2_count] = rel.tie(cells);
       
-      auto adj_step = map_idx[dims::e0];
+      auto adj_step = map_idx(rel.i);
 
       vector3d pos;
       
@@ -133,13 +132,13 @@ namespace dpl::vtk
         for (e1 = 0; e1 < e1_count; ++e1) {
           e0 = 0;
 
-          idx1d = ijk.dot(map_idx);
+          idx1d = map_idx(ijk);
 
-          if constexpr (!face::is_upper) {
+          if constexpr (!sface.is_upper) {
             if (filter(idx1d)) {
-              pos[dims::e0] = 0; //(0)*cell_size[e1_dim];
-              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
-              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
+              pos[rel.i] = 0; //(0)*cell_size[e1_dim];
+              pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+              pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion) 
 
               this->points_->InsertNextPoint(pos);
               this->original_indices_.push_back(idx1d);
@@ -147,18 +146,18 @@ namespace dpl::vtk
           }
           
           for (; e0 < e0_count - 1; ++e0) {
-            idx1d = ijk.dot(map_idx);
+            idx1d = map_idx(ijk);
             bool filtered = filter(idx1d);
 
             auto adj_idx1d = idx1d + adj_step;
             bool adj_filtered = filter(adj_idx1d);
 
             if (filtered != adj_filtered) {
-              pos[dims::e0] = (e0 + 1.0)*cell_size[dims::e0];
-              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
-              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
+              pos[rel.i] = (e0 + 1.0)*cell_size[rel.i];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+              pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+              pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
 
-              if constexpr (face::is_upper) {
+              if constexpr (sface.is_upper) {
                 if (filtered) {
                   this->points_->InsertNextPoint(pos);
                   this->original_indices_.push_back(idx1d);
@@ -174,13 +173,13 @@ namespace dpl::vtk
           }
 
 
-          if constexpr (face::is_upper) {
-            idx1d = ijk.dot(map_idx);
+          if constexpr (sface.is_upper) {
+            idx1d = map_idx(ijk);
             
             if (filter(idx1d)) {
-              pos[dims::e0] = (e0_count)*cell_size[dims::e0];
-              pos[dims::e1] = (e1 + 0.5)*cell_size[dims::e1];
-              pos[dims::e2] = (e2 + 0.5)*cell_size[dims::e2];
+              pos[rel.i] = (e0_count)*cell_size[rel.i];
+              pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+              pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
               
               this->points_->InsertNextPoint(pos);
               this->original_indices_.push_back(idx1d);
@@ -198,13 +197,13 @@ namespace dpl::vtk
   {
   public:
     void Init(double half_length) {
-      dpl::sfor<6>([=, this](auto i) {
+      dpl::sfor<6>([half_length, this](auto i) {
         std::get<i>(faces_).Init(half_length);
       });
     }
 
     void Populate(const vector3i& dims, const vector3d& cell_size, const auto& filter) {
-      dpl::psfor<6>([=, this](auto i) {
+      dpl::psfor<6>([&](auto i) {
         std::get<i>(faces_).Populate(dims, cell_size, filter);
       });
     }

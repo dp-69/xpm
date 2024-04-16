@@ -3,10 +3,10 @@
 #include <fstream>
 #include <numbers>
 #include <regex>
+#include <filesystem>
 
-
+#include <dpl/json.hpp>
 #include <dpl/curve2d.hpp>
-// #include <dpl/static_vector.hpp>
 #include <dpl/hypre/mpi_module.hpp>
 
 #include <HYPRE_utilities.h>
@@ -121,15 +121,15 @@ namespace xpm
 
   class phase_config
   {
-    static inline constexpr unsigned char phase0_ = 0;
-    static inline constexpr unsigned char phase1_ = 128;
+    static constexpr unsigned char phase0_ = 0;
+    static constexpr unsigned char phase1_ = 128;
 
-    static inline constexpr unsigned char phase_bits_ = 192;
-    static inline constexpr unsigned char layout_bits_ = 3;
+    static constexpr unsigned char phase_bits_ = 192;
+    static constexpr unsigned char layout_bits_ = 3;
     
 
-    static inline constexpr unsigned char single_ = 0;
-    static inline constexpr unsigned char bulk_films_ = 1;
+    static constexpr unsigned char single_ = 0;
+    static constexpr unsigned char bulk_films_ = 1;
     // static inline constexpr unsigned char phase1_bulk_films_ = phase1_ | bulk_films_;
 
     unsigned char value;
@@ -210,10 +210,10 @@ namespace xpm
   {
     struct equilateral_triangle
     {
-      static inline constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
-      static inline constexpr auto beta = std::numbers::pi/3/2;
-      static inline constexpr auto sin_beta = 0.5;
-      static inline constexpr auto corners = 3;
+      static constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
+      static constexpr auto beta = std::numbers::pi/3/2;
+      static constexpr auto sin_beta = 0.5;
+      static constexpr auto corners = 3;
 
       static constexpr double sqr(double x) { return x*x; }
 
@@ -457,11 +457,16 @@ namespace xpm
   using idx1d_t = int64_t;
   using idx3d_t = dpl::vector_n<idx1d_t, 3>;
 
-  struct voxel_tag {};
-  using voxel_t = dpl::strong_integer<idx1d_t, voxel_tag>; /* index */
+  namespace helper
+  {
+    struct voxel_tag {};
+    struct macro_tag {};
+    struct net_tag {};
+  }
 
-  struct macro_tag {};
-  using macro_t = dpl::strong_integer<idx1d_t, macro_tag>; /* index */
+  using voxel_t = dpl::strong_integer<idx1d_t, helper::voxel_tag>;
+  using macro_t = dpl::strong_integer<idx1d_t, helper::macro_tag>;
+  using net_t   = dpl::strong_integer<idx1d_t, helper::net_tag>;  
 
   using throat_t = std::size_t;
 
@@ -471,38 +476,35 @@ namespace xpm
   template<class T>
   concept macro_throat_t = std::is_same_v<T, macro_t> || std::is_same_v<T, throat_t>;
 
-  struct net_tag {};
-  using net_t = dpl::strong_integer<idx1d_t, net_tag>; /* index */
+  
+  
 
   
   
 
   namespace voxel_prop
   {
-    struct phase_tag {};
-    using phase_t = dpl::strong_integer<std::uint8_t, phase_tag>;
+    namespace helper
+    {
+      struct phase_tag {};
+      struct velem_tag {};
+    }
+
+    
+    using phase_t = dpl::strong_integer<std::uint8_t, helper::phase_tag>;
 
     /**
      * \brief
      *   for a void voxel - a macro node it belongs
      *   for a microporous voxel - an adjacent pore node
      */
-    struct velem_tag {};
-    struct velem_t : dpl::strong_integer<std::int32_t, velem_tag>
+    struct velem_t : dpl::strong_integer<std::int32_t, helper::velem_tag, true>
     {
-    private:
-      static inline constexpr auto not_valid = std::numeric_limits<type>::max();
-
-    public:
-      velem_t() : strong_integer{not_valid} {}
-      constexpr explicit velem_t(const type v) : strong_integer{v} {}
+      constexpr velem_t() : strong_integer{invalid_value()} {}
+      constexpr explicit velem_t(type v) : strong_integer{v} {}
 
       explicit constexpr operator macro_t() const {
         return macro_t{value};
-      }
-
-      explicit constexpr operator bool() const {
-        return value != not_valid;
       }
     };
   }
@@ -687,48 +689,9 @@ namespace xpm
       void set_poro_perm(const nlohmann::json& list) {
         using namespace voxel_prop;
 
-        for (const auto& j : list) {
+        for (const auto& j : list)
           poro_perm[phase_t{j["value"].get<phase_t::type>()}] =
             {j["porosity"], j["permeability"].get<double>()*presets::mD_to_m2};
-        }
-
-
-        // poro_perm_t def = {list[0]["porosity"], list[0]["permeability"].get<double>()*presets::mD_to_m2};
-        //
-        // perm_single = def.perm;
-        //
-        // for (auto& x : poro_perm) {
-        //   fmt::print("{}, {}\n", x.is_nan(), x.poro);
-        //   x = def;
-        // }
-        //
-        // // for (int i : std::views::iota(0, 256))
-        // //   poro_perm[voxel_prop::phase_t(i)] = def;  // NOLINT(clang-diagnostic-implicit-int-conversion)
-        //
-        // for (int i = 0, size = list.size(); i < size; ++i) {
-        //   auto const& jj = list[i];
-        //   int from = jj["value"];
-        //   int to = i == size - 1 ? 256 : list[i + 1]["value"].get<uint8_t>();
-        //
-        //   fmt::print("== from: {}, to: {}\n", from, to);
-        //
-        //   for (int k = from; k < to; ++k) {
-        //     poro_perm[voxel_prop::phase_t(k)] =
-        //       {jj["porosity"], jj["permeability"].get<double>()*presets::mD_to_m2};  
-        //   }
-        // }
-
-        // for (int i : std::views::iota(0, 256)) {
-        //   fmt::print("val: {}, poro: {}\n", i, poro_perm[voxel_property::phase_t(i)].poro);
-        // }
-
-        // for (const auto& jj : j | std::views::drop(1)) {
-        //   uint8_t val = jj["value"];
-        //
-        //
-        //   poro_perm[voxel_property::phase_t(val)] =
-        //     {jj["porosity"], jj["permeability"].get<double>()*presets::mD_to_m2};
-        // }
       }
 
       auto poro(voxel_prop::phase_t p) const {
@@ -738,36 +701,6 @@ namespace xpm
       auto perm(voxel_prop::phase_t p) const {
         return poro_perm[p].perm;
       }
-
-      // auto perm(voxel_t i) const {
-      //   // if (poro_arr) {
-      //   //   auto poro = poro_arr[i];
-      //   //   return A*std::pow(poro, n1)/std::pow(1 - poro, n2);
-      //   // }
-      //
-      //   return perm_single;
-      // }
-
-      // void read_grey(const std::filesystem::path& path, const dpl::vector3i& size) {
-      //   voxel_t total_size{size.prod()};
-      //
-      //   poro_arr.resize(total_size);
-      //
-      //   std::vector<std::uint8_t> arr(*total_size);
-      //   {
-      //     std::ifstream is{path, std::ios::binary};
-      //     is.read(reinterpret_cast<char*>(arr.data()), *total_size*sizeof(std::uint8_t)); // NOLINT(cppcoreguidelines-narrowing-conversions)
-      //   }
-      //   
-      //   idx3d_t ijk;
-      //   auto& [i, j, k] = ijk;
-      //   voxel_t idx1d{0};
-      //   
-      //   for (k = 0; k < size.z(); ++k)
-      //     for (j = 0; j < size.y(); ++j)
-      //       for (i = 0; i < size.x(); ++i, ++idx1d)
-      //         poro_arr[idx1d] = (255 - arr[*idx1d])/255.;
-      // }
     } darcy;
 
     

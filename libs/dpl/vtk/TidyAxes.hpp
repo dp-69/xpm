@@ -47,17 +47,17 @@
   #include <boost/format.hpp>
 #endif
 
+#include <array>
+
 namespace dpl::vtk
 {
-  template <int face_idx>
+  template <int face>
   class FaceProperties
   {
     friend class TidyAxes;
     
-    static constexpr auto face = dpl::face_cubic<face_idx>{};
-    static constexpr auto face_dim = face.dim;
-    static constexpr auto n_dim = face_dim.next();
-    static constexpr auto m_dim = n_dim.next();
+    static constexpr sface<face> sface;
+    static constexpr cdims rel{sface};
     
     vtkNew<vtkPoints> points_;
     vtkNew<vtkCellArray> lines_;
@@ -89,13 +89,15 @@ namespace dpl::vtk
       viewport_ = renderer;
     }
 
+    
+
     template <int span_dim_idx>
-    void BuildGridlines(double min, double step, int count) {
-      static constexpr int run_dim_idx = face_dim.template cross<span_dim_idx>();
+    void BuildGridlines(sdim<3, span_dim_idx>, double min, double step, int count) {
+      static constexpr auto run_dim_idx = third<rel.i, span_dim_idx>();
       
       vector3d r;
 
-      r[face_dim] = bounds_[face];
+      r[rel.i] = bounds_[sface];
 
       auto point_idx = points_->GetNumberOfPoints();
 
@@ -118,8 +120,8 @@ namespace dpl::vtk
       points_->Initialize();
       lines_->Initialize();
 
-      this->BuildGridlines<m_dim>(min[n_dim], step[n_dim], count[n_dim]);
-      this->BuildGridlines<n_dim>(min[m_dim], step[m_dim], count[m_dim]);
+      BuildGridlines(rel.k, min[rel.j], step[rel.j], count[rel.j]);
+      BuildGridlines(rel.j, min[rel.k], step[rel.k], count[rel.k]);
 
       mapper_->Update();
     }
@@ -130,10 +132,9 @@ namespace dpl::vtk
       if (viewport_size.sum() == 0)
         return;
 
-
       if (auto* camera = viewport_->GetActiveCamera();
         (vector3d_map{camera->GetFocalPoint()} - vector3d_map{camera->GetPosition()})
-        .normalise().dot(face.normal) > 0.2) { // 0.2 is a manual coefficient, a more robust solution is preferred
+        .normalise().dot(sface.normal) > 0.2) { // 0.2 is a manual coefficient, a more robust solution is preferred
         gridlines_actor_->SetVisibility(false);
         return;
       }
@@ -145,21 +146,21 @@ namespace dpl::vtk
       
       vector3d r;
 
-      r[face_dim] = bounds_[face];
-      r[n_dim] = bounds_[n_dim*2];
-      r[m_dim] = bounds_[m_dim*2];
+      r[rel.i] = bounds_[sface];
+      r[rel.j] = bounds_[rel.j*2];
+      r[rel.k] = bounds_[rel.k*2];
       coord->SetValue(r);
       face_triangle_display[0] = coord->GetComputedDoubleViewportValue(viewport_);
 
-      r[m_dim] = bounds_[m_dim*2 + 1];
+      r[rel.k] = bounds_[rel.k*2 + 1];
       coord->SetValue(r);
       face_triangle_display[1] = coord->GetComputedDoubleViewportValue(viewport_);
       
-      r[n_dim] = bounds_[n_dim*2 + 1];
+      r[rel.j] = bounds_[rel.j*2 + 1];
       coord->SetValue(r);
       face_triangle_display[2] = coord->GetComputedDoubleViewportValue(viewport_);
 
-      // r[m_dim] = bounds_[m_dim*2];
+      // r[rel.k] = bounds_[rel.k*2];
       // coord->SetValue(r);
       // face_triangle_display[3] = coord->GetComputedDoubleViewportValue(viewport_);
 
@@ -173,8 +174,8 @@ namespace dpl::vtk
       
       // if (on_screen >= 3)
       gridlines_actor_->SetVisibility(
-        face.non_zero_component*
-        dpl::operation::cross::z(
+        sface.non_zero_component*
+        operation::cross::z(
           face_triangle_display[1] - face_triangle_display[0],
           face_triangle_display[2] - face_triangle_display[1]) < 0);
       // else {
@@ -277,10 +278,10 @@ namespace dpl::vtk
       return {VTK_TEXT_LEFT, VTK_TEXT_CENTERED};
     }
 
-    template <int face_idx0, int face_idx1>
-    void RefreshAxis(dpl::face_cubic<face_idx0> f0 = {}, dpl::face_cubic<face_idx1> f1 = {}) {
-      if (!this->Face(f0).gridlines_actor_->GetVisibility() &&
-          !this->Face(f1).gridlines_actor_->GetVisibility())
+    template <int face0, int face1>
+    void RefreshAxis(sface<face0> f0 = {}, sface<face1> f1 = {}) {
+      if (!Face(f0).gridlines_actor_->GetVisibility() &&
+          !Face(f1).gridlines_actor_->GetVisibility())
         return;
 
       #ifdef __cpp_lib_format
@@ -292,23 +293,21 @@ namespace dpl::vtk
       #endif
 
       
-      
-      
-      static constexpr auto run_dim = f0.dim.cross(f1.dim);
+      static constexpr auto run_dim = third(f0.dim, f1.dim);
 
       vector3d r;
 
-      r[f0.dim] = bounds_[face_idx0];
-      r[f1.dim] = bounds_[face_idx1];
+      r[f0.dim] = bounds_[face0];
+      r[f1.dim] = bounds_[face1];
       r[run_dim] = bounds_[run_dim*2];
       auto p0 = r;
 
       r[run_dim] = bounds_[run_dim*2 + 1];
       auto p1 = r;
-      
+
       if (
-        this->Face(f0).gridlines_actor_->GetVisibility() &&
-        this->Face(f1).gridlines_actor_->GetVisibility()) {
+        Face(f0).gridlines_actor_->GetVisibility() &&
+        Face(f1).gridlines_actor_->GetVisibility()) {
         // axes_box_.colors_->InsertNextTuple(vector3d{255, 255, 255}); // color per vtk cell, e.g. line
       }
       else {
@@ -328,8 +327,8 @@ namespace dpl::vtk
         coord->SetValue(p1);
         viewport_coord[1] = coord->GetComputedDoubleViewportValue(renderer_);
 
-        if (static constexpr bool flip = vector3i{run_dim}.cross(f0.normal).dot(f1.normal) < 0;
-          this->Face(f0).gridlines_actor_->GetVisibility() ? flip : !flip) {
+        if (static constexpr bool flip = cross(vector3i{run_dim}, f0.normal).dot(f1.normal) < 0;
+          Face(f0).gridlines_actor_->GetVisibility() ? flip : !flip) {
           std::swap(p0[run_dim], p1[run_dim]);
           std::swap(viewport_coord[0], viewport_coord[1]);
         }
@@ -505,9 +504,9 @@ namespace dpl::vtk
       }
     }
 
-    template <int face_idx>
-    FaceProperties<face_idx>& Face(std::integral_constant<int, face_idx>) {
-      return std::get<face_idx>(face_properties_);
+    template <int face>
+    FaceProperties<face>& Face(std::integral_constant<int, face>) {
+      return std::get<face>(face_properties_);
     }
     
     vtkNew<vtkActor2D> label_actors_[500];
@@ -522,9 +521,8 @@ namespace dpl::vtk
   
   public:
     TidyAxes() {
-      dpl::sfor<6>([&](auto i) {
-        auto& face = this->Face(i);
-        face.bounds_ = bounds_.data();
+      sfor<6>([&](auto i) {
+        Face(i).bounds_ = bounds_.data();
       });
 
       axes_box_.actor_->UseBoundsOff();
@@ -657,13 +655,8 @@ namespace dpl::vtk
       }
       
       
-      dpl::sfor<6>([&](auto i) {
-        this->Face(i).Init(
-          renderer,
-          vector3d{0.6}
-          // settings.publishing ? vector3d{0.6} : vector3d{1}
-          ,
-          line_width);
+      sfor<6>([&](auto i) {
+        Face(i).Init(renderer, vector3d{0.6}, line_width); //settings.publishing ? vector3d{0.6} : vector3d{1}
       });
 
       renderer_->GetActiveCamera()->AddObserver(vtkCommand::ModifiedEvent, this, &TidyAxes::RefreshAxes);
@@ -674,8 +667,8 @@ namespace dpl::vtk
     }
     
     void RefreshAxes() {
-      dpl::sfor<6>([&](auto i) {
-        this->Face(i).RefreshVisibility();
+      sfor<6>([&](auto i) {
+        Face(i).RefreshVisibility();
       });
       
       axes_box_.points_->Initialize();
@@ -693,13 +686,13 @@ namespace dpl::vtk
         title_actors_[i]->VisibilityOff();
       visible_titles_ = 0;
 
-      dpl::sfor<3>([&](auto face_idx0) {
-        dpl::sfor<face_idx0 + 1, 3>([&](auto face_idx1) {
-          RefreshAxis<face_idx0.value*2, face_idx1.value*2>();
-          RefreshAxis<face_idx0.value*2, face_idx1.value*2 + 1>();
+      sfor<3>([this]<int face0> {
+        sfor<face0 + 1, 3>([this]<int face1> {
+          RefreshAxis<face0*2, face1*2>();
+          RefreshAxis<face0*2, face1*2 + 1>();
           
-          RefreshAxis<face_idx0.value*2 + 1, face_idx1.value*2>();
-          RefreshAxis<face_idx0.value*2 + 1, face_idx1.value*2 + 1>();
+          RefreshAxis<face0*2 + 1, face1*2>();
+          RefreshAxis<face0*2 + 1, face1*2 + 1>();
         });
       });
             
@@ -708,7 +701,7 @@ namespace dpl::vtk
     }
 
     void Build(double bounds[6], vector3d min, vector3d step, vector3i count) {
-      dpl::sfor<6>([&](auto i) {
+      sfor<6>([&](auto i) {
         bounds_[i] = bounds[i];
       });
 
@@ -716,8 +709,8 @@ namespace dpl::vtk
       step_ = step;
       count_ = count;
       
-      dpl::sfor<6>([&](auto i) {
-        this->Face(i).BuildGridlines(min, step, count);
+      sfor<6>([&](auto i) {
+        Face(i).BuildGridlines(min, step, count);
       });
 
       RefreshAxes();

@@ -267,7 +267,7 @@ namespace xpm
 
       std::cout << fmt::format(" done\n  macro: {:L}\n  voxel: {:L}\n\n",
         pni_.connected_macro_count(),
-        pni_.connected_count() - pni_.connected_macro_count());
+        *pni_.connected_count() - *pni_.connected_macro_count());
 
       
 

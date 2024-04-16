@@ -15,14 +15,14 @@ namespace xpm {
     dpl::strong_vector<net_t, double> local_;
     std::vector<double> local_t_;
 
-    static inline constexpr auto r_cap_mobile_ = std::numeric_limits<double>::min();
+    static constexpr auto r_cap_mobile_ = std::numeric_limits<double>::min();
 
   public:
     double r_cap_global;
 
     void resize(net_t net_count, std::size_t throat_count) {
       config_.resize(net_count);
-      local_.resize(net_count, r_cap_mobile_);
+      local_.assign(net_count, r_cap_mobile_);
 
       config_t_.resize(throat_count);
       local_t_.resize(throat_count, r_cap_mobile_);

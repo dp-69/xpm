@@ -21,7 +21,7 @@ namespace xpm
 {
   struct rows_mapping
   {
-    static inline constexpr auto invalid_block = std::numeric_limits<int>::max();
+    static constexpr auto invalid_block = std::numeric_limits<int>::max();
 
     dpl::strong_vector<net_t, idx1d_t> forward;
     std::unique_ptr<net_t[]> backward;
@@ -666,7 +666,7 @@ namespace xpm
     pore_network* pn_;
     image_data* img_;
 
-    static inline constexpr net_t isolated_idx_{std::numeric_limits<idx1d_t>::max()};
+    static constexpr net_t isolated_idx_{std::numeric_limits<idx1d_t>::max()};
 
     struct total_tag {};
     using total_t = dpl::strong_integer<idx1d_t, total_tag>;

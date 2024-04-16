@@ -23,240 +23,148 @@
 
 #pragma once
 
-#include <ratio>
+#include <concepts>
 
 namespace dpl::units
 {
-  template <typename Quantity>
-  struct quantity_traits;
-  
-
-  static inline constexpr auto milli = std::milli{};
-  static inline constexpr auto centi = std::centi{};
-  
-
-  constexpr auto pow(double value, int exponent) {
-    auto result = 1.0;
-    for (auto i = 0; i < exponent; ++i)
-      result *= value;
-    return result;
+  template<typename T>
+  constexpr T pow(T value, std::integral auto exponent) {
+    return exponent == 0 ? 1 : value*pow(value, exponent - 1);
   }
 
 
-  struct _no_coef_t {};
-  
-  template <typename Unit>
-  inline constexpr auto coef = _no_coef_t{};
+  template <typename>
+  inline constexpr auto coef = nullptr;
 
-  template <typename Unit>
-  inline constexpr bool has_coef = !std::is_same_v<decltype(coef<Unit>), _no_coef_t>;
-  
-  
+  template <typename T>
+  inline constexpr bool has_coef = std::is_arithmetic_v<decltype(coef<T>)>;
 
-  struct _unit_tag {};
-  
-  template <typename Unit, typename Quantity>
-  struct _unit_base : _unit_tag
-  {
-  private:
+  template<typename Quantity, typename Tag>
+  struct def_unit {
+    template <typename U> requires std::is_arithmetic_v<U>
+    static constexpr auto parse(const U u) {
+      return u;
+    }
+
+    template <typename U>                                                            
+    static constexpr auto parse(const def_unit<Quantity, U> u) {
+      using standard_tag = typename Quantity::standard;                                      
+                                                                                     
+      if constexpr (std::is_same_v<Tag, standard_tag> && has_coef<U>)                         
+        return u.value*coef<U>;                                                     
+      else if constexpr (std::is_same_v<U, standard_tag> && has_coef<Tag>)                    
+        return u.value/coef<Tag>;                                                  
+      else if constexpr (has_coef<U> && has_coef<Tag>)                              
+        return u.value*coef<U>/coef<Tag>;                                          
+      else                                                                           
+        static_assert(always_false<U>, "Cannot be converted.");                      
+    }
+
+    double value;
+
+    auto& operator*() const { return value; }
+    auto& operator*() { return value; }
+
+    constexpr def_unit() : value{1.0} {}                                                                            
+
+    // constexpr def_unit(const auto u)  {                                              
+    //   value = parse(u);                                                    
+    // }    
+
+    template <typename U> requires std::is_arithmetic_v<U>
+    constexpr def_unit(const U u)  {                                              
+      value = parse(u);                                                    
+    }
+    
     template <typename U>
-    constexpr double parse(U u) {
-      if constexpr (std::is_arithmetic_v<U>)
-        return u;
-      else {
-        static_assert(std::is_same_v<quantity, typename U::quantity>, "Different quantities.");
-
-        using SI = typename unit::quantity::SI;
-        
-        if constexpr (std::is_same_v<unit, SI> && has_coef<U>)
-          return u.value*coef<U>;
-        else if constexpr (std::is_same_v<U, SI> && has_coef<unit>)
-          return u.value/coef<unit>;
-        else if constexpr (has_coef<U> && has_coef<unit>)
-          return u.value*coef<U>/coef<unit>;
-        else
-          static_assert(always_false<U>, "Cannot be converted.");
-      }
-    }
-    
-  public:
-    using unit = Unit;
-    using quantity = Quantity;
-
-    double value = 1.0;
-
-    constexpr operator double() const { return value; }
-
-    const double& operator*() const { return value; }
-    double& operator*() { return value; }
-    
-    template <typename U = double>
-    constexpr _unit_base(U u = 1.0) {
-      value = parse(u);
-    }
-    
-    template <typename U, std::enable_if_t<std::is_arithmetic_v<U> || std::is_base_of_v<U, _unit_tag>, int> = 0>
-    auto& operator=(U u) {
-      value = parse(u);
-      return static_cast<unit&>(*this); // NOLINT (misc-unconventional-assign-operator)
-    }
-    
-    // auto& operator=(double v) {
-    //   value = v;
-    //   return static_cast<unit&>(*this); // NOLINT (misc-unconventional-assign-operator)
-    // }
-
-    // template <typename T>
-    // auto& operator=(const T& t) {
-    //   value = static_cast<double>(t);
-    //   return static_cast<unit&>(*this); // NOLINT (misc-unconventional-assign-operator)
-    // }
-    
-    constexpr unit operator*(double x) const {
-      return {value*x};
+    constexpr def_unit(const def_unit<Quantity, U> u) {                                              
+      value = parse(u);                                                    
     }
 
-    constexpr unit operator/(double x) const {
-      return {value/x};
+    template <typename U> requires std::is_arithmetic_v<U>                       
+    auto& operator=(const U u) {                                                 
+      value = parse(u);                                                    
+      return *this;                                                              
+    }                                                                            
+                                                                                 
+    template <typename U>                                                        
+    auto& operator=(const def_unit<Quantity, U> u) {                                 
+      value = parse(u);                                                    
+      return *this;                                                              
     }
   };
 
-  template <typename Unit, typename Quantity>
-  constexpr auto operator*(double l, const _unit_base<Unit, Quantity>& r) {
-    return Unit{l*r.value};
-  }
+  template<typename Quantity, typename Tag>
+  inline constexpr auto coef<def_unit<Quantity, Tag>> = coef<Tag>;
+
+  // template <typename>
+  // struct quantity_dim { static constexpr int value = 1; };
+
+  // #define DEF_DIM(quantity, dim) \
+  //   template <> struct quantity_dim<quantity> { static constexpr int value = dim; };
+
+  // NOLINTBEGIN(bugprone-macro-parentheses)
+  #define DEF_SI(quantity, unit)                                              \
+    namespace helper { struct unit##_tag {}; }                                \
+    struct quantity { using standard = helper::unit##_tag; };                 \
+    using unit = def_unit<quantity, helper::unit##_tag>;
+
+
+  #define DEF_NON_SI(quantity, unit, mult)                                    \
+    namespace helper { struct unit##_tag {}; }                                \
+    using unit = def_unit<quantity, helper::unit##_tag>;                      \
+    template <> inline constexpr double coef<helper::unit##_tag> = mult; 
+  // NOLINTEND(bugprone-macro-parentheses)
+
+  DEF_SI(length, metre)
+    DEF_NON_SI(length, centimetre, 0.01)
+    DEF_NON_SI(length, foot, 0.3048)
+    DEF_NON_SI(length, inch, coef<foot>/12)
   
-  template <typename Unit, typename Quantity>
-  constexpr auto operator/(double l, const _unit_base<Unit, Quantity>& r) {
-    return Unit{l/r.value};
-  }
+  DEF_SI(volume, metre3)
+    DEF_NON_SI(volume, foot3, pow(coef<foot>, 3))
+    DEF_NON_SI(volume, barrel, 0.158987)
 
-#ifdef INCLUDE_NLOHMANN_JSON_HPP_
-  template <typename Unit, typename Quantity>
-  void to_json(nlohmann::json& j, const _unit_base<Unit, Quantity>& u) {
-    j = u.value;
-  }
+  DEF_SI(pressure, pascal)
+    DEF_NON_SI(pressure, megapascal, 1e6)
+    DEF_NON_SI(pressure, bar, 1e5)
+    DEF_NON_SI(pressure, psi, 6894.7572932)
 
-  template <typename Unit, typename Quantity>
-  void from_json(const nlohmann::json& j, _unit_base<Unit, Quantity>& u) {
-    u.value = j;
-  }
-#endif
-
-
-
+  DEF_SI(time, second)
+    DEF_NON_SI(time, day, 86400)
+    DEF_NON_SI(time, year, 365*coef<day>)
   
+  DEF_SI(viscosity, pascal_second)
+    DEF_NON_SI(viscosity, poise, 0.1)
+    DEF_NON_SI(viscosity, centipoise, 0.01*coef<poise>)
 
-  // NOLINTNEXTLINE (cppcoreguidelines-macro-usage)
-  #define DPL_UNIT(unit, quantity) \
-    struct unit : _unit_base<unit, quantity> { using _unit_base<unit, quantity>::operator=; }; 
+  DEF_SI(area, metre2)
+    DEF_NON_SI(area, darcy, 9.869233e-13)
+    DEF_NON_SI(area, millidarcy, 1e-3*coef<darcy>)
 
-  template <typename UnitSI, int Dim = 1>
-  struct _quantity_base
+  using permeability = area;
+
+  // -------
+
+  struct pore_volume
   {
-    using SI = UnitSI;
-    static constexpr auto dim = Dim;
+    double value;
+
+    pore_volume(const double value) : value(value) {}
+
+    auto& operator*() const { return value; }
+    auto& operator*() { return value; }
   };
-  
-  // -------
-    
-  struct length;
-
-  DPL_UNIT(metre, length)
-  DPL_UNIT(centimetre, length)
-  DPL_UNIT(foot, length)
-  DPL_UNIT(inch, length)
-  
-  struct length : _quantity_base<metre> {};
-
-  // -------
-  
-  struct volume;
-
-  DPL_UNIT(metre3, volume)
-  DPL_UNIT(foot3, volume)
-  DPL_UNIT(barrel, volume)
-
-  struct volume : _quantity_base<metre3, 3> {};
-
-  // -------
-  
-  struct pressure;
-
-  DPL_UNIT(pascal, pressure)
-  DPL_UNIT(megapascal, pressure)
-  DPL_UNIT(bar, pressure)
-  DPL_UNIT(psi, pressure)
-
-  struct pressure : _quantity_base<pascal> {};
-
-  // -------
-
-  struct time;
-
-  DPL_UNIT(second, time)
-  DPL_UNIT(day, time)
-  DPL_UNIT(year, time)
-  
-  struct time : _quantity_base<second> {};
-
-  // -------
-
-  struct viscosity;
-
-  DPL_UNIT(pascal_second, viscosity)
-  DPL_UNIT(poise, viscosity)
-  DPL_UNIT(centipoise, viscosity)
-
-  struct viscosity : _quantity_base<pascal_second> {};
-
-  // -------
 
 
-
-  
-  
-
-  
-
-  template <> inline constexpr double coef<foot> = 0.3048;
-  template <> inline constexpr double coef<centimetre> = 0.01;
-  template <> inline constexpr double coef<inch> = coef<foot>/12;
-  
-  template <> inline constexpr double coef<foot3> = pow(coef<foot>, 3);
-  template <> inline constexpr double coef<barrel> = 0.158987;
-  
-  template <> inline constexpr double coef<day> = 86400;
-  template <> inline constexpr double coef<year> = 365*coef<day>;
-
-  template <> inline constexpr double coef<bar> = 1e5;
-  template <> inline constexpr double coef<megapascal> = 1e6;
-  template <> inline constexpr double coef<psi> = 6894.7572932;
-
-  template <> inline constexpr double coef<poise> = 0.1;
-  template <> inline constexpr double coef<centipoise> = 0.01*coef<poise>;
-
-
-
-  
-
-  template<std::intmax_t N, intmax_t D, typename U, std::enable_if_t<std::is_base_of_v<_unit_tag, U>, int> = 0>
-  constexpr auto operator^(const std::ratio<N, D>& l, const U& r) {
-    return r*pow(1.0*l.num/l.den, U::quantity::dim);
-  }
-
-  template <typename Stream, typename U, std::enable_if_t<std::is_base_of_v<_unit_tag, U>, int> = 0>
-  auto& operator<<(Stream& s, const U& r) {
-    s << r.value;
-    return s;
+  template <typename Stream, typename Quantity, typename Tag>
+  auto& operator<<(Stream& stream, const def_unit<Quantity, Tag>& unit) {
+    stream << unit.value;
+    return stream;
   }
 
   
-  
-       
-  
-  
-  
-
-  
+  #undef DEF_SI
+  #undef DEF_UNIT
 }
+
