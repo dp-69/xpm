@@ -303,7 +303,7 @@ namespace xpm {
       coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*settings_->darcy.perm(img_->phase[i]); }, phase1};
 
       auto [nrows, mapping] = pni_->generate_mapping(*settings_->solver.decomposition, filter);
-      auto [nvalues, input] = pni_->generate_pressure_input(nrows, mapping.forward, term, filter);
+      auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), term, filter);
 
       auto hash = pressure_cache::hash(nvalues, input);
 
@@ -321,11 +321,11 @@ namespace xpm {
           // solve(input, {0, nrows - 1}, decomposed_pressure.get(), settings_->solver.tolerance, settings_->solver.max_iterations);
 
           auto t0 = high_resolution_clock::now();
-          dpl::hypre::mpi::save_and_reserve(input, nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations);
+          dpl::hypre::mpi::save_and_reserve_file(std::move(input), nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations, 0);
           auto t1 = high_resolution_clock::now();
           std::system(fmt::format("mpiexec -np {} \"{}\" -s", settings_->solver.decomposition->prod(), dpl::hypre::mpi::mpi_exec).c_str()); // NOLINT(concurrency-mt-unsafe)
           auto t2 = high_resolution_clock::now();
-          std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values(nrows);
+          std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values_file(nrows);
 
           std::cout << fmt::format(" | store: {} s, solve: {} s\n",
             duration_cast<seconds>(t1 - t0).count(), duration_cast<seconds>(t2 - t1).count());

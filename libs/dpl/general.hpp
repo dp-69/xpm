@@ -42,6 +42,11 @@
 
 namespace dpl
 {
+  template<typename T>
+  constexpr T pow(T value, std::integral auto exponent) {
+    return exponent == 0 ? 1 : value*pow(value, exponent - 1);
+  }
+
   class default_map
   {
     static inline auto true_ = [](auto) { return true; };
@@ -132,6 +137,10 @@ namespace dpl
     explicit strong_vector(strong_integer<U, Tag, V, W> size, Value value)
       : strong_vector{size} {
       std::fill_n(uptr_.get(), *size, value);
+    }
+
+    void clear() {
+      uptr_.reset();
     }
 
     void resize(strong_integer<U, Tag, V, W> size) {

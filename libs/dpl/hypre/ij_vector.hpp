@@ -94,6 +94,11 @@ namespace dpl::hypre
       return ref;
     }
 
+    void get_values(const index_range& range, HYPRE_Complex* values) const {
+      for (auto i = range.lower; i <= range.upper; ++i)
+        HYPRE_IJVectorGetValues(v_, 1, &i, values++);
+    }
+
     void get_values(HYPRE_Int nvalues, const HYPRE_BigInt* indices, HYPRE_Complex* values) const {
       HYPRE_IJVectorGetValues(v_, nvalues, indices, values);
     }

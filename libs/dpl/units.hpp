@@ -23,16 +23,12 @@
 
 #pragma once
 
+#include "general.hpp"
+
 #include <concepts>
 
 namespace dpl::units
 {
-  template<typename T>
-  constexpr T pow(T value, std::integral auto exponent) {
-    return exponent == 0 ? 1 : value*pow(value, exponent - 1);
-  }
-
-
   template <typename>
   inline constexpr auto coef = nullptr;
 
@@ -72,7 +68,7 @@ namespace dpl::units
     // }    
 
     template <typename U> requires std::is_arithmetic_v<U>
-    constexpr def_unit(const U u)  {                                              
+    constexpr def_unit(const U u) {                                              
       value = parse(u);                                                    
     }
     
@@ -93,6 +89,8 @@ namespace dpl::units
       return *this;                                                              
     }
   };
+
+  
 
   template<typename Quantity, typename Tag>
   inline constexpr auto coef<def_unit<Quantity, Tag>> = coef<Tag>;
@@ -144,6 +142,10 @@ namespace dpl::units
 
   using permeability = area;
 
+  DEF_SI(digital_size, byte)
+    DEF_NON_SI(digital_size, megabyte, pow(2, 20))
+    DEF_NON_SI(digital_size, gigabyte, pow(2, 30))
+
   // -------
 
   struct pore_volume
@@ -167,4 +169,3 @@ namespace dpl::units
   #undef DEF_SI
   #undef DEF_UNIT
 }
-

@@ -491,21 +491,21 @@ namespace xpm
       auto [input, nvalues] = generate_pressure_input();
       HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
-      dpl::hypre::mpi::save_and_reserve(input, nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations);
+      dpl::hypre::mpi::save_and_reserve_file(std::move(input), nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations, 0);
 
       std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
         dpl::hypre::mpi::mpi_exec).c_str());
 
-      connectivity_flow_summary(dpl::hypre::mpi::load_values(nrows));
+      connectivity_flow_summary(dpl::hypre::mpi::load_values_file(nrows));
     }
 
 
     void connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
       HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
-      auto pressure = std::make_unique<HYPRE_Real[]>(nrows);
+      // auto pressure = std::make_unique<HYPRE_Real[]>(nrows);
 
-      auto [residual, iters] = solve(
-        generate_pressure_input().first, {0, nrows - 1}, pressure.get(), tolerace, max_iterations); // gross solve (with isolated)
+      auto [pressure, residual, iters] = solve(
+        generate_pressure_input().first, {0, nrows - 1}, /*pressure.get(),*/ tolerace, max_iterations); // gross solve (with isolated)
 
       connectivity_flow_summary({std::move(pressure), residual, iters});
     }
@@ -1065,7 +1065,7 @@ namespace xpm
 
     template <typename Filter = dpl::default_map::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
-      HYPRE_BigInt nrows, const dpl::strong_vector<net_t, idx1d_t>& forward, auto term, Filter filter = {}) const {
+      HYPRE_BigInt nrows, dpl::strong_vector<net_t, idx1d_t>&& forward, auto term, Filter filter = {}) const {
 
       using namespace attrib;
 
@@ -1168,6 +1168,8 @@ namespace xpm
               }
           }
       }
+
+      forward.clear();
 
       return {builder.nvalues(), builder.acquire()};
     }

@@ -34,6 +34,43 @@ namespace dpl::hypre
     HYPRE_IJMatrix m_;
 
   public:
+    ij_matrix(const index_range& range, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
+      const auto [ilower, iupper] = range;
+      const auto nrows = range.width();
+
+      HYPRE_IJMatrixCreate(mpi::comm, ilower, iupper, ilower, iupper, &m_);
+      HYPRE_IJMatrixSetObjectType(m_, HYPRE_PARCSR);
+
+      auto shift = std::accumulate(ncols, ncols + ilower, static_cast<size_t>(0));
+
+      {
+        auto diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
+        auto off_diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
+      
+        std::fill_n(diag_sizes.get(), nrows, 0);
+        std::fill_n(off_diag_sizes.get(), nrows, 0);
+
+        const auto* cols_ptr = cols + shift;
+        for (auto i = ilower; i <= iupper; ++i)
+          for (HYPRE_Int col_idx = 0; col_idx < ncols[i]; ++col_idx)
+            if (auto col = *cols_ptr++; ilower <= col && col <= iupper)
+              ++diag_sizes[i - ilower];
+            else
+              ++off_diag_sizes[i - ilower];
+
+        HYPRE_IJMatrixSetRowSizes(m_, ncols + ilower);
+        HYPRE_IJMatrixSetDiagOffdSizes(m_, diag_sizes.get(), off_diag_sizes.get());
+        HYPRE_IJMatrixSetMaxOffProcElmts(m_, 0);
+      }
+
+      HYPRE_IJMatrixInitialize(m_);
+      for (auto i = ilower; i <= iupper; ++i) {
+        HYPRE_IJMatrixSetValues(m_, 1, ncols + i, &i, cols + shift, values + shift);
+        shift += ncols[i];
+      }
+      HYPRE_IJMatrixAssemble(m_);
+    }
+
     ij_matrix(const index_range& range, const HYPRE_BigInt* rows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
       const auto [ilower, iupper] = range;
       const auto nrows = range.width();

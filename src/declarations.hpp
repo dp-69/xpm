@@ -1,12 +1,13 @@
 #pragma once
 
+#include <filesystem>
 #include <fstream>
 #include <numbers>
 #include <regex>
-#include <filesystem>
 
-#include <dpl/json.hpp>
 #include <dpl/curve2d.hpp>
+#include <dpl/fmt-formatter.hpp>
+#include <dpl/json.hpp>
 #include <dpl/hypre/mpi_module.hpp>
 
 #include <HYPRE_utilities.h>
@@ -16,46 +17,16 @@
 #include <boost/math/tools/roots.hpp>
 #include <boost/pending/disjoint_sets.hpp>
 
-#include <fmt/format.h>
 
 
 
 
-template <>
-struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
-{
-  template <typename FormatContext>
-  auto format(const std::filesystem::path& path, FormatContext& ctx) {
-    return formatter<std::string_view>::format(path.string(), ctx);
-  }
-};
-
-template <typename T, typename Tag>
-struct fmt::formatter<dpl::strong_integer<T, Tag>> : formatter<T>
-{
-  template <typename FormatContext>
-  auto format(dpl::strong_integer<T, Tag> si, FormatContext& ctx) {
-    return formatter<T>::format(*si, ctx);
-  }
-};
 
 
-// template <typename T, int n>
-//   class vector_n
 
-template <typename T>
-struct fmt::formatter<dpl::vector_n<T, 3>>
-{
-  template<typename ParseContext>
-  static constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
 
-  template <typename FormatContext>
-  auto format(dpl::vector_n<T, 3> si, FormatContext& ctx) {
-    return fmt::format_to(ctx.out(), "({}, {}, {})", si.x(), si.y(), si.z());
-  }
-};
+
+
 
   
   
@@ -715,6 +686,7 @@ namespace xpm
       std::optional<dpl::vector3i> decomposition;
       HYPRE_Real tolerance = 1.e-20;
       HYPRE_Int max_iterations = 20;
+      HYPRE_Int aggressive_levels = 0;
 
       struct {
         bool use = true;
@@ -724,6 +696,7 @@ namespace xpm
       void load(wrap j) {
         tolerance = (*j)["tolerance"];
         max_iterations = (*j)["max_iterations"];
+        j.set(aggressive_levels, "aggressive_number_of_levels");
         j.set(decomposition, "decomposition");
         j.set(cache.use, "cache", "use");
         j.set(cache.save, "cache", "save");

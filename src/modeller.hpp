@@ -173,6 +173,8 @@ namespace xpm
     }
 
     auto compute_pressure() {
+      using namespace dpl;
+
       std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
 
       auto pnm_path = extract_network()/"";
@@ -181,7 +183,7 @@ namespace xpm
 
       //------------------------------
 
-      dpl::vector3i procs{1};
+      vector3i procs{1};
 
       if (settings_.solver.decomposition)
         procs = *settings_.solver.decomposition;
@@ -221,8 +223,8 @@ namespace xpm
       {
         using namespace voxel_prop;
 
-        dpl::strong_array<phase_t, bool> occs;
-        dpl::strong_array<phase_t, idx1d_t> count(0);
+        strong_array<phase_t, bool> occs;
+        strong_array<phase_t, idx1d_t> count(0);
         for (auto p : img_.phase.span(img_.size())) {
           occs[p] = true;
           ++count[p];
@@ -271,7 +273,7 @@ namespace xpm
 
       
 
-      dpl::strong_vector<net_t, HYPRE_Real> pressure;
+      strong_vector<net_t, HYPRE_Real> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
       HYPRE_Int iters = 0;
 
@@ -286,34 +288,46 @@ namespace xpm
       std::cout
         << " done\n"
         << "  input build...";
-      
-      auto [nvalues, input] = pni_.generate_pressure_input(nrows, mapping.forward, single_phase_conductance{&pn_,
+
+      using namespace hypre;
+
+      try_report_memory("PRE input");
+
+      auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), single_phase_conductance{&pn_,
         [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
       });
 
+      try_report_memory("POST input");
+
       std::cout << " done\n";
+
+      std::filesystem::create_directory("cache");
 
       if (
         auto cache_path = fmt::format("cache/{}-pressure-{:x}.bin", settings_.image.path.stem(), pressure_cache::hash(nvalues, input));
-
         settings_.solver.cache.use && std::filesystem::exists(cache_path))
-      { // TODO
+      {
         std::cout << "  using cache\n";
-
-        std::ifstream is(cache_path, std::ifstream::binary);
-        is.seekg(0, std::ios::end);
-        // auto nrows = is.tellg()/sizeof(HYPRE_Complex);
-        is.seekg(0, std::ios::beg);
         pressure.resize(net_t(nrows));
-        is.read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));
+        std::ifstream{cache_path, std::ifstream::binary}
+          .read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));  // NOLINT(cppcoreguidelines-narrowing-conversions)
       }
       else {
-        std::cout << 
-          fmt::format("  input store [{} MB]...", (
+        fmt::print("  input store [{} MB]...", units::megabyte{
+          units::byte{
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
-            nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex)))/1024/1024);
+            nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex))
+          }
+        });
 
-        dpl::hypre::mpi::save_and_reserve(input, nrows, nvalues, mapping.block_rows, settings_.solver.tolerance, settings_.solver.max_iterations);
+
+        {
+          mpi::save_and_reserve_file(std::move(input), nrows, nvalues, mapping.block_rows,
+            settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels);
+
+          try_report_memory("PRE xpm MPI");
+        }
+        
 
         std::cout
           << " done\n"
@@ -323,9 +337,11 @@ namespace xpm
         using clock = std::chrono::high_resolution_clock;
 
         auto start = clock::now();
-        
+
+        // mpi::process();
+
         std::system(  // NOLINT(concurrency-mt-unsafe)
-          fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), dpl::hypre::mpi::mpi_exec).c_str()); 
+          fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), mpi::mpi_exec).c_str()); 
         
         auto stop = clock::now();
         
@@ -333,7 +349,7 @@ namespace xpm
 
         {
           std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
-          std::tie(decomposed_pressure, residual, iters) = dpl::hypre::mpi::load_values(nrows);
+          std::tie(decomposed_pressure, residual, iters) = mpi::load_values_file(nrows);
 
           pressure.resize(net_t(nrows));
 
@@ -342,9 +358,8 @@ namespace xpm
         }
 
         if (settings_.solver.cache.save) {
-          std::filesystem::create_directory("cache");
-          std::ofstream cache_stream(cache_path, std::ofstream::binary);
-          cache_stream.write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*nrows/**pni_.connected_count()*/);
+          std::ofstream{cache_path, std::ofstream::binary}
+            .write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*nrows);
           std::cout << "  cached\n";
         }
       }
