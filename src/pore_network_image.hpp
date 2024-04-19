@@ -7,7 +7,6 @@
 #include <dpl/soa.hpp>
 #include <dpl/graph/dc_graph.hpp>
 #include <dpl/hypre/core.hpp>
-#include <dpl/hypre/mpi_module.hpp>
 
 #include <boost/format.hpp>
 #include <boost/pending/disjoint_sets.hpp>
@@ -431,7 +430,7 @@ namespace xpm
 
 
      
-    void connectivity_flow_summary(const dpl::hypre::mpi::solve_result& solve) const {
+    void connectivity_flow_summary(const dpl::hypre::solve_result& solve) const {
       const auto& [pressure, residual, iter] = solve; 
 
       disjoint_sets ds(*node_count());
@@ -491,23 +490,22 @@ namespace xpm
       auto [input, nvalues] = generate_pressure_input();
       HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
-      dpl::hypre::mpi::save_and_reserve_file(std::move(input), nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations, 0);
+      dpl::hypre::save_input(std::move(input), nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations, 0);
 
       std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
-        dpl::hypre::mpi::mpi_exec).c_str());
+        dpl::mpi::exec).c_str());
 
-      connectivity_flow_summary(dpl::hypre::mpi::load_values_file(nrows));
+      connectivity_flow_summary(dpl::hypre::load_values(nrows));
     }
 
 
     void connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
-      HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
-      // auto pressure = std::make_unique<HYPRE_Real[]>(nrows);
-
-      auto [pressure, residual, iters] = solve(
-        generate_pressure_input().first, {0, nrows - 1}, /*pressure.get(),*/ tolerace, max_iterations); // gross solve (with isolated)
-
-      connectivity_flow_summary({std::move(pressure), residual, iters});
+      // gross solve (with isolated)
+      connectivity_flow_summary(
+        solve( 
+          generate_pressure_input().first, dpl::hypre::index_range(0, *node_count() - 1),
+          tolerace, max_iterations)
+      );
     }
   };
 

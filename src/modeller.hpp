@@ -289,15 +289,14 @@ namespace xpm
         << " done\n"
         << "  input build...";
 
-      using namespace hypre;
 
-      try_report_memory("PRE input");
+      system::print_memory("PRE input");
 
       auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), single_phase_conductance{&pn_,
         [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
       });
 
-      try_report_memory("POST input");
+      system::print_memory("POST input");
 
       std::cout << " done\n";
 
@@ -321,13 +320,11 @@ namespace xpm
         });
 
 
-        {
-          mpi::save_and_reserve_file(std::move(input), nrows, nvalues, mapping.block_rows,
-            settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels);
+        save_input(std::move(input), nrows, nvalues, mapping.block_rows,
+          settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels);
 
-          try_report_memory("PRE xpm MPI");
-        }
-        
+        system::print_memory("PRE xpm MPI");
+
 
         std::cout
           << " done\n"
@@ -338,10 +335,8 @@ namespace xpm
 
         auto start = clock::now();
 
-        // mpi::process();
-
         std::system(  // NOLINT(concurrency-mt-unsafe)
-          fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), mpi::mpi_exec).c_str()); 
+          fmt::format("mpiexec -np {} \"{}\" -s", procs.prod(), mpi::exec).c_str()); 
         
         auto stop = clock::now();
         
@@ -349,7 +344,7 @@ namespace xpm
 
         {
           std::unique_ptr<HYPRE_Complex[]> decomposed_pressure;
-          std::tie(decomposed_pressure, residual, iters) = mpi::load_values_file(nrows);
+          std::tie(decomposed_pressure, residual, iters) = hypre::load_values(nrows);
 
           pressure.resize(net_t(nrows));
 

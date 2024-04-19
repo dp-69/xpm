@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include "../mpi_defs.hpp"
+
 #include <HYPRE.h>
 #include <HYPRE_parcsr_ls.h>
 
@@ -36,6 +38,10 @@ namespace dpl::hypre
     HYPRE_BigInt lower;
     HYPRE_BigInt upper;
 
+    index_range() = default;
+    index_range(HYPRE_BigInt lower, HYPRE_BigInt upper)
+      : lower(lower), upper(upper) {}
+
     /**
      * \return
      *   local nrows (number of rows) as HYPRE_Int for hypre compatibility
@@ -44,35 +50,26 @@ namespace dpl::hypre
       return upper - lower + 1;  // NOLINT(cppcoreguidelines-narrowing-conversions)
     }
   };
-
-  namespace mpi {
-    #ifdef MPI_COMM_WORLD 
-      inline MPI_Comm comm = MPI_COMM_WORLD;
-    #else
-      inline MPI_Comm comm = 0;
-    #endif
-  }
+  
   
   class ij_vector
   {
     HYPRE_IJVector v_;
   
   public:
-    explicit ij_vector(const index_range& range) {
+    explicit ij_vector(const index_range& range) {                                  // NOLINT(cppcoreguidelines-pro-type-member-init)
       HYPRE_IJVectorCreate(mpi::comm, range.lower, range.upper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);
       HYPRE_IJVectorAssemble(v_);
     }
 
-    explicit ij_vector(const index_range& range, const HYPRE_Complex* values) {
-      const auto [jlower, jupper] = range;
-
-      HYPRE_IJVectorCreate(mpi::comm, jlower, jupper, &v_);
+    explicit ij_vector(const index_range& range, const HYPRE_Complex* values) {     // NOLINT(cppcoreguidelines-pro-type-member-init)
+      HYPRE_IJVectorCreate(mpi::comm, range.lower, range.upper, &v_);
       HYPRE_IJVectorSetObjectType(v_, HYPRE_PARCSR);
       HYPRE_IJVectorInitialize(v_);
 
-      for (auto i = jlower; i <= jupper; ++i)
+      for (auto i = range.lower; i <= range.upper; ++i)
         HYPRE_IJVectorSetValues(v_, 1, &i, values + i);
 
       HYPRE_IJVectorAssemble(v_);
@@ -88,8 +85,8 @@ namespace dpl::hypre
     ij_vector& operator=(const ij_vector& other) = delete;
     ij_vector& operator=(ij_vector&& other) = delete;
 
-    operator HYPRE_ParVector() const {
-      HYPRE_ParVector ref;
+    operator HYPRE_ParVector() const {                                              // NOLINT(CppNonExplicitConversionOperator)
+      HYPRE_ParVector ref;                                                          // NOLINT(cppcoreguidelines-init-variables)
       HYPRE_IJVectorGetObject(v_, reinterpret_cast<void**>(&ref));
       return ref;
     }

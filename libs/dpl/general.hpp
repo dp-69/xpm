@@ -42,6 +42,60 @@
 
 namespace dpl
 {
+  class stream_reader
+  {
+    std::ifstream stream_;
+
+  public:
+    explicit stream_reader(const auto& path, std::ios_base::openmode mode = std::ios::binary)
+      : stream_{path, mode} {
+    }
+
+    template <typename T>
+    auto& operator()(T& val) {
+      stream_.read(reinterpret_cast<char*>(&val), sizeof(T));
+      return *this;
+    }
+
+    template <typename T>
+    auto& operator()(T* ptr, auto size) {
+      stream_.read(reinterpret_cast<char*>(ptr), size*sizeof(T));
+      return *this;
+    }
+
+    template <typename T>
+    auto& operator()(std::unique_ptr<T[]>& ptr, auto size) {
+      return (*this)(ptr.get(), size);
+    }
+  };
+
+  class stream_writer
+  {
+    std::ofstream stream_;
+
+  public:
+    explicit stream_writer(const auto& path, std::ios_base::openmode mode = std::ios::binary)
+      : stream_{path, mode} {
+    }
+
+    template <typename T>
+    auto& operator()(T val) {
+      stream_.write(reinterpret_cast<const char*>(&val), sizeof(T));
+      return *this;
+    }
+
+    template <typename T>
+    auto& operator()(T* ptr, auto size) {
+      stream_.write(reinterpret_cast<const char*>(ptr), size*sizeof(T));
+      return *this;
+    }
+
+    template <typename T>
+    auto& operator()(const std::unique_ptr<T[]>& ptr, auto size) {
+      return (*this)(ptr.get(), size);
+    }
+  };
+
   template<typename T>
   constexpr T pow(T value, std::integral auto exponent) {
     return exponent == 0 ? 1 : value*pow(value, exponent - 1);

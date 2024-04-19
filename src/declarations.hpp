@@ -8,26 +8,10 @@
 #include <dpl/curve2d.hpp>
 #include <dpl/fmt-formatter.hpp>
 #include <dpl/json.hpp>
-#include <dpl/hypre/mpi_module.hpp>
+#include <dpl/hypre/core.hpp>
 
-#include <HYPRE_utilities.h>
-#include <iostream>
-
-#include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/math/tools/roots.hpp>
 #include <boost/pending/disjoint_sets.hpp>
-
-
-
-
-
-
-
-
-
-
-
-
   
   
 
@@ -49,7 +33,7 @@ namespace xpm
     static inline std::unique_ptr<std::unordered_map<std::size_t, double>> cache_ = nullptr;
 
     static auto path() {
-      return std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("cache")/"solve.json";
+      return std::filesystem::path(dpl::mpi::exec).replace_filename("cache")/"solve.json";
     }
 
   public:

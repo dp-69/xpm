@@ -24,37 +24,14 @@
 #pragma once
 
 #include "ij_matrix.hpp"
-#include "../system.hpp" // TODO
-
-#include <HYPRE_utilities.h>
-#include <iostream>
+#include "../system.hpp"
 
 #include <boost/iostreams/device/mapped_file.hpp>
 
-#include <fmt/core.h> // TODO
-
 namespace dpl::hypre
 {
-  inline constexpr auto smo_hypre_input = "dpl-hypre-input";
-  inline constexpr auto smo_hypre_output = "dpl-hypre-output";
-
-
-
-  inline void try_report_memory(const char* text, int print_level = 3, int m_rank = 0) {
-    if (print_level > 0) {
-      MPI_Barrier(mpi::comm);
-      if (m_rank == 0) {
-        fmt::print("\n ~~~~~~~~~~~~~~~~ {} [{} GB] ~~~~~~~~~~~~~~~~\n", text, get_memory_consumption<units::gigabyte>());
-        std::cout << "" << std::flush;
-      }
-      MPI_Barrier(mpi::comm);
-    }
-  }
-
-
-
-
-
+  inline constexpr auto hypre_input_name = "dpl-hypre-input";
+  inline constexpr auto hypre_output_name = "dpl-hypre-output";
 
   /**
    * \brief
@@ -78,12 +55,12 @@ namespace dpl::hypre
 
     std::unique_ptr<HYPRE_Complex[]> b;
 
-    ls_known_storage() = default;
-    ls_known_storage(const ls_known_storage& other) = delete;
-    ls_known_storage(ls_known_storage&& other) noexcept = default;
-    ls_known_storage& operator=(const ls_known_storage& other) = delete;
-    ls_known_storage& operator=(ls_known_storage&& other) noexcept = default;
-    ~ls_known_storage() = default;
+    // ls_known_storage() = default;
+    // ls_known_storage(const ls_known_storage& other) = delete;
+    // ls_known_storage(ls_known_storage&& other) noexcept = default;
+    // ls_known_storage& operator=(const ls_known_storage& other) = delete;
+    // ls_known_storage& operator=(ls_known_storage&& other) noexcept = default;
+    // ~ls_known_storage() = default;
 
     operator ls_known_ref() const { // NOLINT(CppNonExplicitConversionOperator)
       return { ncols.get(), cols.get(), values.get(), b.get() };
@@ -103,10 +80,10 @@ namespace dpl::hypre
     Proj proj_;
 
     HYPRE_BigInt nrows_;
-    size_t nvalues_;
+    std::size_t nvalues_;
     ls_known_storage lks_;
 
-    std::unique_ptr<size_t[]> diag_shift_;
+    std::unique_ptr<std::size_t[]> diag_shift_;
     std::unique_ptr<HYPRE_Int[]> off_relative_;
 
   public:
@@ -134,7 +111,7 @@ namespace dpl::hypre
       lks_.cols = std::make_unique<HYPRE_BigInt[]>(nvalues_);
       lks_.values = std::make_unique<HYPRE_Complex[]>(nvalues_);
 
-      diag_shift_ = std::make_unique<size_t[]>(nrows_);
+      diag_shift_ = std::make_unique<std::size_t[]>(nrows_);
       off_relative_ = std::make_unique<HYPRE_Int[]>(nrows_);
 
       diag_shift_[0] = 0;
@@ -182,98 +159,97 @@ namespace dpl::hypre
     }
   };
 
-
-  class parser
+  class ls_known_file_ref
   {
-    void* ptr_;
+    class ptr_parser
+    {
+      void* ptr_;
 
-  public:
-    explicit parser(void* ptr, std::size_t offset = 0) : ptr_(static_cast<unsigned char*>(ptr) + offset) {}
+    public:
+      explicit ptr_parser(const char* ptr) : ptr_((void*) ptr) {}  // NOLINT(CppCStyleCast)
 
-    template <typename T>
-    void read(T& val) {
-      val = *static_cast<T*>(ptr_);
-      ptr_ = static_cast<char*>(ptr_) + sizeof(T); 
-    }
-    
-    template <typename T, typename S>
-    void read_ref(T*& val, S size) {
-      val = static_cast<T*>(ptr_);
-      ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
-    }
+      template <typename T>
+      auto& operator()(T& val) {
+        val = *static_cast<T*>(ptr_);
+        ptr_ = static_cast<char*>(ptr_) + sizeof(T);
+        return *this;
+      }
+      
+      template <typename T, typename S = int>
+      auto& operator()(T*& val, S size = 0) {
+        val = static_cast<T*>(ptr_);
+        ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
+        return *this;
+      }
 
-    // template <typename T, typename S>
-    // void read_copy(T* val, S size) {
-    //   std::memcpy(val, ptr_, size*sizeof(T));
-    //   ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
-    // }
+      auto* ptr() const { return ptr_; }
+    };
 
-    // template <typename T>
-    // void write(T val) {
-    //   *static_cast<T*>(ptr_) = val;
-    //   ptr_ = static_cast<char*>(ptr_) + sizeof(T);
-    // }
-
-    // template <typename T, typename S>
-    // void write(T* val, S size) {
-    //   std::memcpy(ptr_, val, size*sizeof(T));
-    //   ptr_ = static_cast<char*>(ptr_) + size*sizeof(T);
-    // }
-
-    auto* ptr() const { return ptr_; }
-
-    // void advance(auto offset) {
-    //   ptr_ = static_cast<char*>(ptr_) + offset;
-    // }
-  };
-
-  class block_info
-  {
     boost::iostreams::mapped_file_source mfs_;
 
-    
-
   public:
+    ls_known_file_ref() {   // NOLINT(cppcoreguidelines-pro-type-member-init)
+      mfs_.open((std::filesystem::path("cache")/hypre_input_name).string());
 
+      std::size_t nvalues;  // NOLINT(cppcoreguidelines-init-variables)
 
-    explicit block_info(int rank) {
-      mfs_.open((std::filesystem::path("cache")/smo_hypre_input).string());
-      // mfs = boost::iostreams::mapped_file_source{filename};
-
-      size_t nvalues;
-
-      parser p{(void*)mfs_.data()};  // NOLINT(CppCStyleCast)
-      
-      p.read(global_nrows);
-      p.read(nvalues);
-      p.read_ref(lkr.ncols, global_nrows);
-      p.read_ref(lkr.b, global_nrows);
-      p.read_ref(lkr.cols, nvalues);
-      p.read_ref(lkr.values, nvalues);
-      p.read(tol);
-      p.read(max_iter);
-      p.read(agg_num_levels);
-
-      range = static_cast<index_range*>(p.ptr()) + rank;
+      ptr_parser{mfs_.data()}
+        (nrows)
+        (nvalues)
+        (lkr.ncols, nrows)
+        (lkr.b, nrows)
+        (lkr.cols, nvalues)
+        (lkr.values, nvalues)
+        (tol)
+        (max_iter)
+        (agg_num_levels)
+        (ranges);
     }
 
-    ls_known_ref lkr;
-
-    HYPRE_BigInt global_nrows;
-    index_range* range;
+    ls_known_ref lkr;   
+    HYPRE_BigInt nrows; 
+    index_range* ranges;
 
     HYPRE_Real tol;
     HYPRE_Int max_iter;
     HYPRE_Int agg_num_levels;
-
-    operator ls_known_ref() const { return lkr; }  // NOLINT(CppNonExplicitConversionOperator)
   };
 
+  using solve_result = std::tuple<std::unique_ptr<HYPRE_Complex[]>, HYPRE_Real, HYPRE_Int>;
 
-  inline std::tuple<
-    std::unique_ptr<HYPRE_Complex[]>,
-    HYPRE_Real, HYPRE_Int>
-  solve(std::unique_ptr<block_info> block, HYPRE_Int print_level = 0)
+  inline void save_input(
+    ls_known_storage&& input, HYPRE_BigInt nrows, std::size_t nvalues, const std::vector<index_range>& blocks,  // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved)
+    HYPRE_Real tol, HYPRE_Int max_iter, HYPRE_Int agg_num_levels)
+  {
+    stream_writer{std::filesystem::path{"cache"}/hypre_input_name}
+      (nrows)
+      (nvalues)
+      (input.ncols, nrows)
+      (input.b, nrows)
+      (input.cols, nvalues)
+      (input.values, nvalues)
+      (tol)
+      (max_iter)
+      (agg_num_levels)
+      (blocks.data(), blocks.size());
+
+    input.clear();
+  }
+
+  inline solve_result load_values(HYPRE_BigInt nrows) {
+    auto values = std::make_unique<HYPRE_Complex[]>(nrows);
+    HYPRE_Real residual;                                                  // NOLINT(cppcoreguidelines-init-variables)
+    HYPRE_Int iters;                                                      // NOLINT(cppcoreguidelines-init-variables)
+
+    stream_reader{std::filesystem::path{"cache"}/hypre_output_name}
+      (values, nrows)
+      (residual)
+      (iters);
+
+    return {std::move(values), residual, iters};
+  }
+  
+  inline solve_result solve(std::unique_ptr<ls_known_file_ref> block, mpi::rank_t rank, HYPRE_Int print_level = 0)
   {
     #if (HYPRE_RELEASE_NUMBER == 22300)
       HYPRE_Init();
@@ -281,7 +257,7 @@ namespace dpl::hypre
       HYPRE_Initialize();
     #endif
 
-    HYPRE_Solver solver;
+    HYPRE_Solver solver;          // NOLINT(cppcoreguidelines-init-variables)
     
     HYPRE_BoomerAMGCreate(&solver);      
     
@@ -290,33 +266,26 @@ namespace dpl::hypre
     HYPRE_BoomerAMGSetPrintLevel(solver, print_level);
     HYPRE_BoomerAMGSetAggNumLevels(solver, block->agg_num_levels);
 
-    auto range = *block->range;
-    // auto nrows = range.width();
-    // auto indices = std::make_unique<HYPRE_BigInt[]>(nrows);
-    // std::iota(indices.get(), indices.get() + nrows, range.lower); // TODO: avoid indices allocation?
-
+    auto range = block->ranges[*rank];
     
-    ij_matrix A{range, /*indices.get(), */block->lkr.ncols, block->lkr.cols, block->lkr.values};
+    ij_matrix A{range, block->lkr.ncols, block->lkr.cols, block->lkr.values};
     ij_vector b{range, block->lkr.b};
     ij_vector x{range};
 
     block.reset();
 
-    int m_rank;  
-    MPI_Comm_rank(mpi::comm, &m_rank);
-
-    try_report_memory("<POST> HYPRE_Matrix Fill", print_level, m_rank);
+    system::print_memory("<POST> HYPRE_Matrix Fill", print_level, rank);
 
     HYPRE_BoomerAMGSetup(solver, A, b, x);
 
-    try_report_memory("<POST> HYPRE_BoomerAMGSetup", print_level, m_rank);
+    system::print_memory("<POST> HYPRE_BoomerAMGSetup", print_level, rank);
 
     HYPRE_BoomerAMGSolve(solver, A, b, x);
 
-    try_report_memory("<POST> HYPRE_BoomerAMGSolve", print_level, m_rank);
+    system::print_memory("<POST> HYPRE_BoomerAMGSolve", print_level, rank);
 
-    HYPRE_Real residual = 0;
-    HYPRE_Int iters = 0;
+    HYPRE_Real residual;          // NOLINT(cppcoreguidelines-init-variables)
+    HYPRE_Int iters;              // NOLINT(cppcoreguidelines-init-variables)
     
     HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &residual);
     HYPRE_BoomerAMGGetNumIterations(solver, &iters);
@@ -325,22 +294,18 @@ namespace dpl::hypre
 
     auto values = std::make_unique<HYPRE_Complex[]>(range.width());
     x.get_values(range, values.get());
-    // x.get_values(nrows, indices.get(), values.get());
 
     HYPRE_Finalize();
 
-    try_report_memory("<POST> HYPRE Destroy and Finalize", print_level, m_rank);
+    system::print_memory("<POST> HYPRE Destroy and Finalize", print_level, rank);
 
     return std::make_tuple(std::move(values), residual, iters);
   }
 
 
-  inline std::tuple<
-    std::unique_ptr<HYPRE_Complex[]>,
-    HYPRE_Real, HYPRE_Int>
-  solve(
+  inline solve_result solve(
     const ls_known_ref& in, const index_range& range, 
-    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20, HYPRE_Int agg_num_levels = 0, HYPRE_Int print_level = 0)
+    HYPRE_Real tolerance = 1.e-20, HYPRE_Int max_iterations = 20/*, HYPRE_Int agg_num_levels = 0, HYPRE_Int print_level = 0*/)
   {
     #if (HYPRE_RELEASE_NUMBER == 22300)
       HYPRE_Init();
@@ -348,23 +313,12 @@ namespace dpl::hypre
       HYPRE_Initialize();
     #endif
 
-    HYPRE_Solver solver;
+    HYPRE_Solver solver;          // NOLINT(cppcoreguidelines-init-variables)  
     
     HYPRE_BoomerAMGCreate(&solver);      
 
     HYPRE_BoomerAMGSetTol(solver, tolerance);
     HYPRE_BoomerAMGSetMaxIter(solver, max_iterations);
-    HYPRE_BoomerAMGSetPrintLevel(solver, print_level);
-
-    HYPRE_BoomerAMGSetAggNumLevels(solver, agg_num_levels);
-    // HYPRE_BoomerAMGSetAggInterpType(solver, 1); // ?
-
-    // HYPRE_BoomerAMGSetStrongThreshold(solver, 0.1);
-
-    // HYPRE_BoomerAMGSetRelaxType(solver, 9); 
-    // HYPRE_BoomerAMGSetRelaxType()
-    // HYPRE_BoomerAMGSetCoarsenType(solver, 6);
-    // HYPRE_BoomerAMGSetMaxLevels(solver, 3);
 
     auto nrows = range.width();
     auto indices = std::make_unique<HYPRE_BigInt[]>(nrows);
@@ -375,21 +329,11 @@ namespace dpl::hypre
     ij_vector x{range};
 
 
-    int m_rank;  
-    MPI_Comm_rank(mpi::comm, &m_rank);
-
-    try_report_memory("<POST> HYPRE_Matrix Fill", print_level, m_rank);
-
     HYPRE_BoomerAMGSetup(solver, A, b, x);
-
-    try_report_memory("<POST> HYPRE_BoomerAMGSetup", print_level, m_rank);
-
     HYPRE_BoomerAMGSolve(solver, A, b, x);
 
-    try_report_memory("<POST> HYPRE_BoomerAMGSolve", print_level, m_rank);
-
-    HYPRE_Real residual = 0;
-    HYPRE_Int iters = 0;
+    HYPRE_Real residual;          // NOLINT(cppcoreguidelines-init-variables)
+    HYPRE_Int iters;              // NOLINT(cppcoreguidelines-init-variables)
     
     HYPRE_BoomerAMGGetFinalRelativeResidualNorm(solver, &residual);
     HYPRE_BoomerAMGGetNumIterations(solver, &iters);
@@ -402,8 +346,47 @@ namespace dpl::hypre
 
     HYPRE_Finalize();
 
-    try_report_memory("<POST> HYPRE Destroy and Finalize", print_level, m_rank);
-
     return std::make_tuple(std::move(values), residual, iters);
+  }
+
+  inline void process() {
+    mpi::rank_t rank;
+
+    system::print_memory("START xpm MPI", 3, rank);
+
+    auto input = std::make_unique<ls_known_file_ref>();
+    auto global_offset = input->nrows*sizeof(HYPRE_Complex);
+    auto range = input->ranges[*rank];
+
+    auto [values, residual, iters] = solve(std::move(input), rank, 3);
+
+    {
+      MPI_File m_file;                                                              // NOLINT(cppcoreguidelines-init-variables)
+
+      auto filename = (std::filesystem::path{"cache"}/hypre_output_name).string();
+
+      MPI_File_open(MPI_COMM_WORLD, filename.c_str(), MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &m_file);
+
+      MPI_Status status;
+
+      MPI_File_write_at_all(m_file, range.lower*sizeof(HYPRE_Complex),              // NOLINT(cppcoreguidelines-narrowing-conversions)
+        values.get(), range.width(), 
+        sizeof(HYPRE_Complex) == 8 ? MPI_DOUBLE : MPI_FLOAT,                        // NOLINT(CppUnreachableCode)
+        &status);  
+
+      if (rank) { /* root */
+        MPI_File_write_at(m_file, global_offset,                      &residual, sizeof(HYPRE_Real), MPI_BYTE, &status);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+        MPI_File_write_at(m_file, global_offset + sizeof(HYPRE_Real), &iters,    sizeof(HYPRE_Int),  MPI_BYTE, &status);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+      }
+      
+      MPI_File_close(&m_file);
+
+      MPI_Barrier(MPI_COMM_WORLD);
+
+      // if (m_rank == root)
+      //   stream_writer{filename, std::ios::binary | std::ios::app/*, global_count*sizeof(HYPRE_Complex)*/}
+      //     (residual)
+      //     (iters);
+    }
   }
 }

@@ -1,13 +1,8 @@
 #pragma once
 
 #include "modeller.hpp"
-
-
 #include "functions.h"
 
-#include <dpl/units.hpp>
-#include <dpl/hypre/InputDeprec.hpp>
-#include <dpl/hypre/mpi_module.hpp>
 #include <dpl/qt/layout.hpp>
 #include <dpl/qt/property_editor/PropertyItemsBase.hpp>
 #include <dpl/qt/property_editor/QPropertyTreeView.hpp>
@@ -64,8 +59,6 @@
 #include <algorithm>
 #include <future>
 #include <unordered_set>
-
-#include <nlohmann/json.hpp>
 
 // #undef LoadImage
 

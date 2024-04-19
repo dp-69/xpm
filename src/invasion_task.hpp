@@ -234,9 +234,9 @@ namespace xpm {
     void init() {
       if (settings_->occupancy_images) {
         image_dir_ =
-          std::filesystem::path(dpl::hypre::mpi::mpi_exec)
+          std::filesystem::path(dpl::mpi::exec)
             .replace_filename("results")/settings_->image.path.stem()/"images";
-          // std::filesystem::path(dpl::hypre::mpi::mpi_exec).replace_filename("image")/settings_->image.path.stem();
+          // std::filesystem::path(dpl::mpi::exec).replace_filename("image")/settings_->image.path.stem();
 
         remove_all(image_dir_);
         create_directories(image_dir_);
@@ -321,11 +321,11 @@ namespace xpm {
           // solve(input, {0, nrows - 1}, decomposed_pressure.get(), settings_->solver.tolerance, settings_->solver.max_iterations);
 
           auto t0 = high_resolution_clock::now();
-          dpl::hypre::mpi::save_and_reserve_file(std::move(input), nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations, 0);
+          dpl::hypre::save_input(std::move(input), nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations, 0);
           auto t1 = high_resolution_clock::now();
-          std::system(fmt::format("mpiexec -np {} \"{}\" -s", settings_->solver.decomposition->prod(), dpl::hypre::mpi::mpi_exec).c_str()); // NOLINT(concurrency-mt-unsafe)
+          std::system(fmt::format("mpiexec -np {} \"{}\" -s", settings_->solver.decomposition->prod(), dpl::mpi::exec).c_str()); // NOLINT(concurrency-mt-unsafe)
           auto t2 = high_resolution_clock::now();
-          std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::mpi::load_values_file(nrows);
+          std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::load_values(nrows);
 
           std::cout << fmt::format(" | store: {} s, solve: {} s\n",
             duration_cast<seconds>(t1 - t0).count(), duration_cast<seconds>(t2 - t1).count());

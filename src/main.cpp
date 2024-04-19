@@ -15,8 +15,6 @@ int main(int argc, char* argv[])
   //   [](std::uint8_t v) { return /*v < 50 ? 0 : */v; });
   //
   // getchar();
-
-
   
   // for (auto lul : std::ranges::iota_view(xpm::voxel_t{0}, 10)) {
   //   std::cout << *lul;
@@ -26,7 +24,7 @@ int main(int argc, char* argv[])
 
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
-    dpl::hypre::mpi::process();
+    dpl::hypre::process();
     MPI_Finalize();
     return 0;
   }
@@ -35,7 +33,7 @@ int main(int argc, char* argv[])
     MPI_Init(&argc, &argv);
   #endif
 
-  dpl::hypre::mpi::mpi_exec = argv[0];
+  dpl::mpi::exec = argv[0];
   auto cmdl = argh::parser(argc, argv);
 
   std::filesystem::path input;
@@ -61,7 +59,7 @@ int main(int argc, char* argv[])
             modeller.settings().primary.pc.inverse_unique());
 
           auto dir =
-            std::filesystem::path(dpl::hypre::mpi::mpi_exec)
+            std::filesystem::path(dpl::mpi::exec)
               .replace_filename("results")/modeller.settings().image.path.stem();
 
           create_directories(dir);

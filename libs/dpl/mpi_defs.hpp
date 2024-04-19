@@ -23,42 +23,41 @@
 
 #pragma once
 
-#include "units.hpp"
-#include "mpi_defs.hpp"
+#include <mpi.h>
 
-#include <fmt/core.h>
+#include <filesystem>
 
-#include <iostream>
-
-#ifdef _WIN32
-  #include <windows.h>
-  #undef max
-  #undef min
-
-  namespace dpl::system
-  {
-    template <typename T = units::byte>
-    T get_memory_consumption() {
-      MEMORYSTATUSEX status;
-      status.dwLength = sizeof(status);
-
-      GlobalMemoryStatusEx(&status);
-
-      return units::byte{status.ullTotalPhys - status.ullAvailPhys};
-    }
-  }
-#endif
-
-namespace dpl::system
+namespace dpl::mpi
 {
-  inline void print_memory(const char* text, int print_level = 3, mpi::rank_t rank = mpi::rank_t::root()) {
-    if (print_level > 0) {
-      MPI_Barrier(mpi::comm);
-      if (rank) { /* root */
-        fmt::print("\n ~~~~~~~~~~~~~~~~ {} [{} GB] ~~~~~~~~~~~~~~~~\n", text, get_memory_consumption<units::gigabyte>());
-        std::cout << "" << std::flush;
-      }
-      MPI_Barrier(mpi::comm);
+  static inline std::filesystem::path exec;
+
+  #ifdef MPI_COMM_WORLD 
+    inline MPI_Comm comm = MPI_COMM_WORLD;
+  #else
+    inline MPI_Comm comm = 0;
+  #endif
+
+  struct rank_t
+  {
+    int value;
+
+    rank_t() {  // NOLINT(cppcoreguidelines-pro-type-member-init)
+      MPI_Comm_rank(comm, &value);
     }
-  }
+
+    explicit constexpr rank_t(int value)
+      : value{value} {}
+
+    constexpr auto operator*() const noexcept {
+      return value;
+    }
+
+    explicit constexpr operator bool() const noexcept {
+      return value == 0;
+    }
+
+    static constexpr rank_t root() noexcept {
+      return rank_t{0};
+    }
+  };
 }

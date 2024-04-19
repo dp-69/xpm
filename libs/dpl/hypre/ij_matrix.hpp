@@ -34,7 +34,7 @@ namespace dpl::hypre
     HYPRE_IJMatrix m_;
 
   public:
-    ij_matrix(const index_range& range, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
+    ij_matrix(const index_range& range, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {  // NOLINT(cppcoreguidelines-pro-type-member-init)
       const auto [ilower, iupper] = range;
       const auto nrows = range.width();
 
@@ -44,7 +44,7 @@ namespace dpl::hypre
       auto shift = std::accumulate(ncols, ncols + ilower, static_cast<size_t>(0));
 
       {
-        auto diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
+        auto diag_sizes     = std::make_unique<HYPRE_Int[]>(nrows);
         auto off_diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
       
         std::fill_n(diag_sizes.get(), nrows, 0);
@@ -71,7 +71,7 @@ namespace dpl::hypre
       HYPRE_IJMatrixAssemble(m_);
     }
 
-    ij_matrix(const index_range& range, const HYPRE_BigInt* rows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {
+    ij_matrix(const index_range& range, const HYPRE_BigInt* rows, HYPRE_Int* ncols, const HYPRE_BigInt* cols, const HYPRE_Complex* values) {  // NOLINT(cppcoreguidelines-pro-type-member-init)
       const auto [ilower, iupper] = range;
       const auto nrows = range.width();
 
@@ -81,7 +81,7 @@ namespace dpl::hypre
       auto shift = std::accumulate(ncols, ncols + ilower, static_cast<size_t>(0));
 
       {
-        auto diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
+        auto diag_sizes =     std::make_unique<HYPRE_Int[]>(nrows);
         auto off_diag_sizes = std::make_unique<HYPRE_Int[]>(nrows);
       
         std::fill_n(diag_sizes.get(), nrows, 0);
@@ -115,8 +115,8 @@ namespace dpl::hypre
     ij_matrix(ij_matrix&& other) = delete;
     ij_matrix& operator=(ij_matrix&& other) = delete;
 
-    operator HYPRE_ParCSRMatrix() const {
-      HYPRE_ParCSRMatrix ref;  // NOLINT(cppcoreguidelines-init-variables)
+    operator HYPRE_ParCSRMatrix() const {             // NOLINT(CppNonExplicitConversionOperator)
+      HYPRE_ParCSRMatrix ref;                         // NOLINT(cppcoreguidelines-init-variables)
       HYPRE_IJMatrixGetObject(m_, reinterpret_cast<void**>(&ref));
       return ref;
     }
