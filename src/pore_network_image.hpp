@@ -480,8 +480,8 @@ namespace xpm
         "  inlet perm: {:.6f} mD\n"
         "  outlet perm: {:.6f} mD\n"
         "  residual: {:.4g}, iterations: {}\n",
-        inlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
-        outlet_flow/physical_size.x()/presets::darcy_to_m2*1000,
+        inlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
+        outlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
         residual,
         iter);
     }

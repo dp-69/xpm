@@ -29,6 +29,57 @@
 
 namespace dpl::vtk
 {
+  struct CameraSettings
+  {
+    bool parallel = false;
+    double parallel_scale = 1.0;
+    double view_angle;
+    vector3d position;
+    vector3d focal_point;
+    vector3d view_up;
+
+    CameraSettings() = default;
+
+    explicit CameraSettings(vtkCamera* cam) {
+      parallel = cam->GetParallelProjection();
+      parallel_scale = cam->GetParallelScale();
+      cam->GetPosition(position);
+      cam->GetViewUp(view_up);
+      cam->GetFocalPoint(focal_point);
+      view_angle = cam->GetViewAngle();
+    }
+
+    void operator>>(vtkCamera* cam) {
+      cam->SetParallelProjection(parallel);
+      cam->SetParallelScale(parallel_scale);
+      cam->SetPosition(position);
+      cam->SetViewUp(view_up);
+      cam->SetFocalPoint(focal_point);
+      cam->SetViewAngle(view_angle);
+    }
+  };
+
+  inline void to_json(nlohmann::json& j, const CameraSettings& p) {
+    j = nlohmann::json{
+      {"parallel",       p.parallel},
+      {"parallel_scale", p.parallel_scale},
+      {"position",       p.position},
+      {"focal_point",    p.focal_point},
+      {"view_up",        p.view_up},
+      {"view_angle",     p.view_angle}
+    };
+  }
+  
+  inline void from_json(const nlohmann::json& j, CameraSettings& p) {
+    p.position       = j.at("position");
+    p.focal_point    = j.at("focal_point");
+    p.view_up        = j.at("view_up");
+    p.parallel       = j.at("parallel");
+    p.parallel_scale = j.at("parallel_scale");
+    p.view_angle     = j.at("view_angle");
+  }
+
+
   inline void PopulateLut(vtkLookupTable* lut, const std::vector<std::pair<vtkIdType, vector3d>>& entries) {      
     auto prev = entries.begin();      
     auto curr = prev;

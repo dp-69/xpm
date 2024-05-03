@@ -172,7 +172,7 @@ namespace xpm
       init(j.is_array() ? j[0] : j);
     }
 
-    auto compute_pressure() {
+    void prepare() {
       using namespace dpl;
 
       std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
@@ -183,21 +183,21 @@ namespace xpm
 
       //------------------------------
 
-      vector3i procs{1};
-
-      if (settings_.solver.decomposition)
-        procs = *settings_.solver.decomposition;
-      else {
-        if (auto proc_count = std::thread::hardware_concurrency();
-          proc_count == 12)
-          procs = {2, 2, 3};
-        else if (proc_count == 24)
-          procs = {4, 3, 2};
-        else if (proc_count == 32)
-          procs = {4, 4, 2};
-        else if (proc_count == 48)
-          procs = {4, 4, 3};
-      }
+      // vector3i procs{1};
+      //
+      // if (settings_.solver.decomposition)
+      //   procs = *settings_.solver.decomposition;
+      // else {
+      //   if (auto proc_count = std::thread::hardware_concurrency();
+      //     proc_count == 12)
+      //     procs = {2, 2, 3};
+      //   else if (proc_count == 24)
+      //     procs = {4, 3, 2};
+      //   else if (proc_count == 32)
+      //     procs = {4, 4, 2};
+      //   else if (proc_count == 48)
+      //     procs = {4, 4, 3};
+      // }
 
       pn_.read_from_text_file(pnm_path);
 
@@ -223,17 +223,17 @@ namespace xpm
       {
         using namespace voxel_prop;
 
-        strong_array<phase_t, bool> occs;
+        strong_array<phase_t, bool> occurances;
         strong_array<phase_t, idx1d_t> count(0);
         for (auto p : img_.phase.span(img_.size())) {
-          occs[p] = true;
+          occurances[p] = true;
           ++count[p];
         }
 
         std::list<phase_t> missing;
-        for (std::size_t i = 0; i < 256; ++i)
+        for (int i = 0; i < 256; ++i)
           if (phase_t p(i);  // NOLINT(clang-diagnostic-implicit-int-conversion)
-            settings_.image.phases.is_darcy(p) && occs[p] && settings_.darcy.poro_perm[p].is_nan()) {
+            settings_.image.phases.is_darcy(p) && occurances[p] && settings_.darcy.poro_perm[p].is_nan()) {
             missing.push_back(p);
           }
 
@@ -270,8 +270,110 @@ namespace xpm
       std::cout << fmt::format(" done\n  macro: {:L}\n  voxel: {:L}\n\n",
         pni_.connected_macro_count(),
         *pni_.connected_count() - *pni_.connected_macro_count());
+    }
+
+    auto compute_pressure() {
+      // using namespace dpl;
+      //
+      // std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
+      //
+      // auto pnm_path = extract_network()/"";
+      //
+      // // auto begin_init_time = clock::now();
+      //
+      // //------------------------------
+      //
+      //
+      // pn_.read_from_text_file(pnm_path);
+      //
+      // #ifdef XPM_DEBUG_OUTPUT
+      //   std::cout
+      //     << fmt::format("network\n  nodes: {:L}\n  throats: {:L}\n", pn_.node_count(), pn_.throat_count())
+      //     << (pn_.eval_inlet_outlet_connectivity() ? "  (connected)" : "  (disconected)") << '\n';
+      // #endif
+      //
+      // #ifdef _WIN32
+      //   pn_.connectivity_flow_summary(settings_.solver.tolerance, settings_.solver.max_iterations);
+      // #else
+      //   pn_.connectivity_flow_summary_MPI(settings_.solver.tolerance, settings_.solver.max_iterations);
+      // #endif
+      //
+      // std::cout << '\n';
+      //
+      // img_.dict = settings_.image.phases;
+      //
+      // img_.read_image("pnextract"/settings_.image.pnextract_filename());
+      // img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
+      //
+      // {
+      //   using namespace voxel_prop;
+      //
+      //   strong_array<phase_t, bool> occurance;
+      //   strong_array<phase_t, idx1d_t> count(0);
+      //   for (auto p : img_.phase.span(img_.size())) {
+      //     occurance[p] = true;
+      //     ++count[p];
+      //   }
+      //
+      //   std::list<phase_t> missing;
+      //   for (int i = 0; i < 256; ++i)
+      //     if (phase_t p(i);  // NOLINT(clang-diagnostic-implicit-int-conversion)
+      //       settings_.image.phases.is_darcy(p) && occurance[p] && settings_.darcy.poro_perm[p].is_nan()) {
+      //       missing.push_back(p);
+      //     }
+      //
+      //   // { "value": 118, "porosity": 0.15, "permeability": 1.061493 }
+      //
+      //   if (!missing.empty()) {
+      //     std::cout << "unassigned porosity and permeability: [\n";
+      //
+      //     auto print = [](auto iter) {
+      //       fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
+      //     };
+      //
+      //     auto iter = missing.begin();
+      //     auto end = missing.end();
+      //
+      //     print(iter);
+      //     while (++iter != end) {
+      //       std::cout << ",\n";
+      //       print(iter);
+      //     }
+      //     std::cout << "\n]\n";
+      //
+      //     throw config_exception("missing microporosity values.");
+      //   }
+      // }
+      //
+      //
+      // img_.read_icl_velems(pnm_path);
+      //
+      // std::cout << "connectivity (isolated components)...";
+      //
+      // pni_.evaluate_isolated();
+      //
+      // std::cout << fmt::format(" done\n  macro: {:L}\n  voxel: {:L}\n\n",
+      //   pni_.connected_macro_count(),
+      //   *pni_.connected_count() - *pni_.connected_macro_count());
 
       
+      using namespace dpl;
+
+      vector3i procs{1};
+      
+      if (settings_.solver.decomposition)
+        procs = *settings_.solver.decomposition;
+      else {
+        if (auto proc_count = std::thread::hardware_concurrency();
+          proc_count == 12)
+          procs = {2, 2, 3};
+        else if (proc_count == 24)
+          procs = {4, 3, 2};
+        else if (proc_count == 32)
+          procs = {4, 4, 2};
+        else if (proc_count == 48)
+          procs = {4, 4, 3};
+      }
 
       strong_vector<net_t, HYPRE_Real> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
@@ -374,8 +476,8 @@ namespace xpm
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
           // settings_.darcy.perm_single/darcy_to_m2*1000,
-          inlet/pn_.physical_size.x()/darcy_to_m2*1000,
-          outlet/pn_.physical_size.x()/darcy_to_m2*1000,
+          inlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,
+          outlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,
           residual, iters);
 
         absolute_rate_ = inlet;

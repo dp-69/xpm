@@ -9,6 +9,7 @@
 #include <dpl/fmt-formatter.hpp>
 #include <dpl/json.hpp>
 #include <dpl/hypre/core.hpp>
+#include <dpl/qt/parse.hpp>
 
 #include <boost/math/tools/roots.hpp>
 #include <boost/pending/disjoint_sets.hpp>
@@ -574,6 +575,8 @@ namespace xpm
   {
     double poro;
     double perm;
+    QColor color;
+
 
     static poro_perm_t nan() {
       poro_perm_t pp;
@@ -644,9 +647,22 @@ namespace xpm
       void set_poro_perm(const nlohmann::json& list) {
         using namespace voxel_prop;
 
-        for (const auto& j : list)
-          poro_perm[phase_t{j["value"].get<phase_t::type>()}] =
-            {j["porosity"], j["permeability"].get<double>()*presets::mD_to_m2};
+        int i = 0;
+
+        auto mult = 255./(list.size() + 1);  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+
+        for (const auto& j : list) {
+          auto& ref = poro_perm[phase_t{j["value"].get<phase_t::type>()}];
+
+          ref.poro = j["porosity"];
+          ref.perm = j["permeability"].get<double>()*presets::mD_to_m2;
+          ref.color = QColor::fromHsl(++i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+
+          dpl::qt::try_parse(j, ref.color);
+
+          // poro_perm[phase_t{j["value"].get<phase_t::type>()}] =
+          //   {j["porosity"], j["permeability"].get<double>()*presets::mD_to_m2};
+        }
       }
 
       auto poro(voxel_prop::phase_t p) const {

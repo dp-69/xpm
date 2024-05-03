@@ -536,6 +536,11 @@ namespace dpl::qt::property_editor
       return AddItem(root_, functor);
     }
 
+    template <typename T, typename... Args>
+    auto* emplace_back(Args&&... args) {
+      return AddItem(T{std::forward<Args>(args)...});
+    }
+
     auto* AddCategory(PropertyCategory* category, std::string_view name, std::string_view tooltip = {}) {      
       auto* ptr = new PropertyCategory{name, tooltip};
       ptr->parent_ = category;

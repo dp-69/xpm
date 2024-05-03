@@ -207,6 +207,8 @@ namespace dpl::vtk
     
   class TidyAxes
   {
+    bool visibility_ = true;
+
     std::array<double, 6> bounds_;
 
     std::tuple<
@@ -505,7 +507,7 @@ namespace dpl::vtk
     }
 
     template <int face>
-    FaceProperties<face>& Face(std::integral_constant<int, face>) {
+    FaceProperties<face>& Face(std::integral_constant<int, face> = {}) {
       return std::get<face>(face_properties_);
     }
     
@@ -665,10 +667,30 @@ namespace dpl::vtk
     void SetScale(const vector3d& scale) {
       scale_ = scale;
     }
+
+    void SetVisibility(bool v) {
+      visibility_ = v;
+      RefreshAxes();
+    }
+
+    bool GetVisibility() const {
+      return visibility_;
+    }
+
     
+
+    // void Hide() {
+    //   sfor<6>([&](auto i) {
+    //     Face(i).Hide();
+    //   });
+    // }
+
     void RefreshAxes() {
       sfor<6>([&](auto i) {
-        Face(i).RefreshVisibility();
+        if (visibility_)
+          Face(i).RefreshVisibility();
+        else
+          Face(i).gridlines_actor_->SetVisibility(false);
       });
       
       axes_box_.points_->Initialize();
