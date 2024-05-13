@@ -493,18 +493,36 @@ namespace xpm
   namespace attrib {
     def_attrib(pos)
     def_attrib(r_ins)
-    def_attrib(adj)
+
+    /*
+     * left index < right index
+     *
+     * inlet or outlet are always when (inlet, outlet) is not possible
+     *
+     */
+    def_attrib(adj) 
     def_attrib(length)
     def_attrib(length0)
     def_attrib(length1)
     def_attrib(volume)
   }
 
-  using disjoint_sets = boost::disjoint_sets_with_storage<
-    boost::typed_identity_property_map<idx1d_t>,
-    boost::typed_identity_property_map<idx1d_t>
-  >;
+  // using disjoint_sets = boost::disjoint_sets<int*, idx1d_t*>;
+  //   boost::disjoint_sets_with_storage<
+  //   boost::typed_identity_property_map<idx1d_t>,
+  //   boost::typed_identity_property_map<idx1d_t>
+  // >;
 
+  template <typename Rank = idx1d_t>
+  std::tuple<std::unique_ptr<Rank[]>, std::unique_ptr<idx1d_t[]>> init_rank_parent(idx1d_t size) {
+    auto rank = std::make_unique<Rank[]>(size);
+    auto parent = std::make_unique<idx1d_t[]>(size);
+
+    std::fill_n(rank.get(), size, 0);
+    std::iota(parent.get(), parent.get() + size, 0);
+
+    return std::make_tuple(std::move(rank), std::move(parent));
+  }
 
   template <typename>
   struct wrapper {};
@@ -707,8 +725,8 @@ namespace xpm
     struct {
       bool invasion_percolation = true;
       std::string display = "saturation";
-      double sw_pc = 0.05;
-      double sw_kr = 0.075;
+      double sw_of_pc = 0.05;
+      double sw_of_kr = 0.075;
     } report;
     
 
@@ -741,8 +759,8 @@ namespace xpm
       }
 
       j.set(occupancy_images, "report", "occupancy_images");
-      j.set(report.sw_pc, "report", "capillary_pressure_sw_step");
-      j.set(report.sw_kr, "report", "relative_permeability_sw_step");
+      j.set(report.sw_of_pc, "report", "capillary_pressure_sw_step");
+      j.set(report.sw_of_kr, "report", "relative_permeability_sw_step");
       j.set(report.display, "report", "display");
       j.set(report.invasion_percolation, "report", "invasion_percolation");
       j.set(max_pc, "max_capillary_pressure");

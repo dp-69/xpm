@@ -392,13 +392,13 @@ namespace xpm
         << "  input build...";
 
 
-      system::print_memory("PRE input");
+      system::print_memory("PRE input", hypre::hypre_print_level);
 
       auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), single_phase_conductance{&pn_,
         [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
       });
 
-      system::print_memory("POST input");
+      system::print_memory("POST input", hypre::hypre_print_level);
 
       std::cout << " done\n";
 
@@ -425,7 +425,7 @@ namespace xpm
         save_input(std::move(input), nrows, nvalues, mapping.block_rows,
           settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels);
 
-        system::print_memory("PRE xpm MPI");
+        system::print_memory("PRE xpm MPI", hypre::hypre_print_level);
 
 
         std::cout

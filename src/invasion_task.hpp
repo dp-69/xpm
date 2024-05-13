@@ -410,14 +410,14 @@ namespace xpm {
       }
 
 
-      auto eval_inv_volume = [&] {
-        auto macro = area_corner_mult*eq_tr::area_corners(theta, state_.r_cap_global) + inv_volume_coef0;
+      auto eval_inv_volume = [&](double r_cap_global) {
+        auto macro = area_corner_mult*eq_tr::area_corners(theta, r_cap_global) + inv_volume_coef0;
         if (pc_to_sw)
-          macro += pc_to_sw.solve(1/state_.r_cap_global)*cell_volume*inv_total_porosity;
+          macro += pc_to_sw.solve(1/r_cap_global)*cell_volume*inv_total_porosity;
         return macro;
       };
 
-      auto eval_pc_point = [&] { return dpl::vector2d{eval_inv_volume()/total_pore_volume_, 1/state_.r_cap_global}; };
+      auto eval_pc_point = [&] { return dpl::vector2d{eval_inv_volume(state_.r_cap_global)/total_pore_volume_, 1/state_.r_cap_global}; };
 
       using namespace dpl::graph;
 
@@ -551,20 +551,42 @@ namespace xpm {
         ++progress_idx_;
 
         if (settings_->secondary.kr[0]) {
-          auto steps = 6;
+          for (auto [c_sw, c_pc] : settings_->secondary.pc) {
+            // if (c_pc <= end_pc)
+            //   continue;
 
-          for (auto i = 1; i < steps; ++i) {
-            auto pc = 1/settings_->secondary.pc.solve(1.*i/steps);
-
-            if (pc <= 1/queue.front().r_cap)
+            if (c_pc <= queue.front().pressure_cap())
               break;
 
-            state_.r_cap_global = pc;
-            auto sw = eval_inv_volume()/total_pore_volume_;
-            last_kr_sw = sw;
-            rel_calc_report(sw);
-            ++progress_idx_;
+            if (auto total_sw = eval_inv_volume(1/c_pc)/total_pore_volume_;
+              total_sw - last_kr_sw > settings_->report.sw_of_kr)
+            {
+              state_.r_cap_global = 1/c_pc;
+              last_kr_sw = total_sw;
+              rel_calc_report(total_sw);
+
+              ++progress_idx_;
+            }
           }
+
+
+
+
+
+          // auto steps = 6;
+          //
+          // for (auto i = 1; i < steps; ++i) {
+          //   auto r_cap = 1/settings_->secondary.pc.solve(1.*i/steps);
+          //
+          //   if (r_cap >= queue.front().r_cap)
+          //     break;
+          //
+          //   state_.r_cap_global = r_cap;
+          //   auto sw = eval_inv_volume(state_.r_cap_global)/total_pore_volume_;
+          //   last_kr_sw = sw;
+          //   rel_calc_report(sw);
+          //   ++progress_idx_;
+          // }
         }
       }
       else {
@@ -578,14 +600,16 @@ namespace xpm {
       auto progress_percolation = [&](auto idx, double r_cap) {
         if (r_cap > state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
-            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ settings_->report.sw_pc ||
+            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ settings_->report.sw_of_pc ||
             std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
             last_pc_point_ = pc_point;
             secondary_.pc.push_back(pc_point);
             write_occupancy_image(pc_point.x());
           }
 
-          if (auto sw = eval_inv_volume()/total_pore_volume_; sw - last_kr_sw > /*0.025*/ settings_->report.sw_kr) {
+          if (auto sw = eval_inv_volume(state_.r_cap_global)/total_pore_volume_;
+            sw - last_kr_sw > /*0.025*/ settings_->report.sw_of_kr)
+          {
             last_kr_sw = sw;
             rel_calc_report(sw);
           }
@@ -732,7 +756,7 @@ namespace xpm {
 
 
       secondary_.pc.push_back(eval_pc_point());
-      rel_calc_report(eval_inv_volume()/total_pore_volume_);
+      rel_calc_report(eval_inv_volume(state_.r_cap_global)/total_pore_volume_);
       ++progress_idx_;
     }
 
@@ -760,7 +784,8 @@ namespace xpm {
           if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && pni_->connected(l))
             min_r_cap_throat = std::min(min_r_cap_throat, r_ins(pn_, i));
 
-        min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films(theta, min_r_cap_throat);pc_max_step_ = 0.075/min_r_cap_throat;
+        min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films(theta, min_r_cap_throat);
+        pc_max_step_ = 0.075/min_r_cap_throat;
       }
 
       dpl::strong_vector<net_t, bool> explored(pni_->connected_count());
@@ -790,14 +815,14 @@ namespace xpm {
 
       auto cell_volume = (pn_->physical_size/img_->dim()).prod();
 
-      auto eval_inv_volume = [&] {
-        auto macro = inv_volume_coefs[0] + inv_volume_coefs[2]*state_.r_cap_global*state_.r_cap_global;
+      auto eval_inv_volume = [&](double r_cap_global) {
+        auto macro = inv_volume_coefs[0] + inv_volume_coefs[2]*r_cap_global*r_cap_global;
         if (pc_to_sw)
-          macro += (1 - pc_to_sw.solve(1/state_.r_cap_global))*cell_volume*inv_total_porosity;
+          macro += (1 - pc_to_sw.solve(1/r_cap_global))*cell_volume*inv_total_porosity;
         return macro;
       };
 
-      auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume()/total_pore_volume_, 1/state_.r_cap_global}; };
+      auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume(state_.r_cap_global)/total_pore_volume_, 1/state_.r_cap_global}; };
 
       auto rel_calc_report = [this, /*t0, */theta, absolute_rate, &pc_to_sw](double sw) {
         // fmt::print("{}ms\n", duration_cast<milliseconds>(high_resolution_clock::now() - t0).count());
@@ -814,8 +839,10 @@ namespace xpm {
 
       auto progress_percolation = [&](auto idx, double r_cap) {
         if (r_cap < state_.r_cap_global) {
-          if (auto pc_point = eval_pc_point();
-            std::abs(last_pc_point_.x() - pc_point.x()) > settings_->report.sw_pc ||
+          auto pc_point = eval_pc_point();
+
+          if (
+            std::abs(last_pc_point_.x() - pc_point.x()) > settings_->report.sw_of_pc ||
             std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_)
           {
             last_pc_point_ = pc_point;
@@ -823,11 +850,9 @@ namespace xpm {
             write_occupancy_image(pc_point.x());
           }
 
-          if (auto sw = 1 - eval_inv_volume()/total_pore_volume_;
-            last_kr_sw - sw > settings_->report.sw_kr)
-          {
-            last_kr_sw = sw;
-            rel_calc_report(sw);
+          if (last_kr_sw - pc_point.x() > settings_->report.sw_of_kr) {
+            last_kr_sw = pc_point.x();
+            rel_calc_report(pc_point.x());
           }
 
           state_.r_cap_global = r_cap;
@@ -860,7 +885,7 @@ namespace xpm {
           last_pc_point_ = eval_pc_point();
           primary_.pc.push_back(last_pc_point_);
           write_occupancy_image(last_pc_point_.x());
-          rel_calc_report(1 - eval_inv_volume()/total_pore_volume_);
+          rel_calc_report(1 - eval_inv_volume(state_.r_cap_global)/total_pore_volume_);
           break;
         }
 
@@ -985,38 +1010,51 @@ namespace xpm {
         
 
         // if (!settings_->primary.kr[0].empty()) 
+         // if (last_kr_sw - pc_point.x() > settings_->report.sw_of_kr) {
+         //    last_kr_sw = pc_point.x();
+         //    rel_calc_report(pc_point.x());
+         //  }
+       
         {
-          auto steps = 6;
-
-          // auto i = 0;
-          // while (true)
-          //   if (
-          //     auto next_r_cap = 1/solve(settings_->primary.pc, 1 - 1.*i++/steps, dpl::extrapolant::flat);
-          //     1/next_r_cap < settings_->max_pc) {
-          //
-          //     rel_calc_report(1 - eval_inv_volume()/total_pore_volume_);
-          //     ++progress_idx_;
-          //   }
-          //   else
-          //     break;
-
-          for (auto i = 0; i < steps; ++i) {
-            auto next_r_cap = 1/settings_->primary.pc.solve(1 - 1.*i/steps);
-
-            if (1/next_r_cap <= end_pc)
+          for (auto [c_sw, c_pc] : std::ranges::reverse_view(settings_->primary.pc)) {
+            if (c_pc <= end_pc)
               continue;
 
-            if (1/next_r_cap > settings_->max_pc)
+            if (c_pc > settings_->max_pc)
               break;
 
-            state_.r_cap_global = next_r_cap;
-            rel_calc_report(1 - eval_inv_volume()/total_pore_volume_);
-            ++progress_idx_;
+            if (auto total_sw = 1 - eval_inv_volume(1/c_pc)/total_pore_volume_;
+              last_kr_sw - total_sw > settings_->report.sw_of_kr)
+            {
+              state_.r_cap_global = 1/c_pc;
+              last_kr_sw = total_sw;
+              rel_calc_report(total_sw);
+
+              ++progress_idx_;
+            }
           }
+
+          // auto steps = 6;
+          //
+          // for (auto i = 0; i < steps; ++i) {
+          //   auto next_r_cap = 1/settings_->primary.pc.solve(1 - 1.*i/steps);
+          //
+          //   if (1/next_r_cap <= end_pc)
+          //     continue;
+          //
+          //   if (1/next_r_cap > settings_->max_pc)
+          //     break;
+          //
+          //   state_.r_cap_global = next_r_cap;
+          //   rel_calc_report(1 - eval_inv_volume()/total_pore_volume_);
+          //   ++progress_idx_;
+          // }
         }
       }
 
-      primary_.kr.emplace_back(0, 0, 1);
+      if (primary_.kr.back()[2] < 1)
+        primary_.kr.emplace_back(0, 0, 1);
+
       ++progress_idx_;
 
       // getchar();

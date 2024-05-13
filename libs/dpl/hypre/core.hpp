@@ -33,6 +33,8 @@ namespace dpl::hypre
   inline constexpr auto hypre_input_name = "dpl-hypre-input";
   inline constexpr auto hypre_output_name = "dpl-hypre-output";
 
+  inline constexpr int hypre_print_level = 0;
+
   /**
    * \brief
    *    nrows = length(ncols) = length(b), number of rows
@@ -352,13 +354,13 @@ namespace dpl::hypre
   inline void process() {
     mpi::rank_t rank;
 
-    system::print_memory("START xpm MPI", 3, rank);
+    system::print_memory("START xpm MPI", hypre_print_level, rank);
 
     auto input = std::make_unique<ls_known_file_ref>();
     auto global_offset = input->nrows*sizeof(HYPRE_Complex);
     auto range = input->ranges[*rank];
 
-    auto [values, residual, iters] = solve(std::move(input), rank, 3);
+    auto [values, residual, iters] = solve(std::move(input), rank, hypre_print_level);
 
     {
       MPI_File m_file;                                                              // NOLINT(cppcoreguidelines-init-variables)

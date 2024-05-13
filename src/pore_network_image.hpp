@@ -389,7 +389,8 @@ namespace xpm
 
 
     bool eval_inlet_outlet_connectivity() const {
-      disjoint_sets ds(*node_count() + 2);
+      auto [rank, parent] = init_rank_parent(*node_count() + 2);
+      boost::disjoint_sets ds(rank.get(), parent.get());
 
       for (auto [l, r] : throat_.span(attrib::adj))
         ds.union_set(*l, *r);
@@ -433,7 +434,9 @@ namespace xpm
     void connectivity_flow_summary(const dpl::hypre::solve_result& solve) const {
       const auto& [pressure, residual, iter] = solve; 
 
-      disjoint_sets ds(*node_count());
+      auto [rank, parent] = init_rank_parent(*node_count());
+      boost::disjoint_sets ds(rank.get(), parent.get());
+
       std::vector<bool> connected_inlet(*node_count());
       std::vector<bool> connected_outlet(*node_count());
       
@@ -738,7 +741,8 @@ namespace xpm
     void evaluate_isolated() {
       auto gross_total_size = *pn_->node_count() + *img_->size();
 
-      disjoint_sets ds(gross_total_size);
+      auto [rank, parent] = init_rank_parent(gross_total_size);
+      boost::disjoint_sets ds(rank.get(), parent.get());
 
       for (auto [l, r] : pn_->throat_.span(attrib::adj))
         if (pn_->inner_node(r)) // macro-macro
@@ -800,9 +804,12 @@ namespace xpm
       connected_count_ = connected_macro_count_;
 
       for (voxel_t i{0}; i < img_->size(); ++i) {
-        auto total_idx = total(i);
-        auto rep = ds.find_set(*total_idx); 
-        total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
+        if (auto total_idx = total(i); img_->dict.is_darcy(img_->phase[i])) {
+          auto rep = ds.find_set(*total_idx); 
+          total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
+        }
+        else
+          total_to_net_map_[total_idx] = isolated_idx_;
       }
 
       net_to_total_map_.resize(connected_count_);
