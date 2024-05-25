@@ -15,6 +15,10 @@ The latest release can be found at
 
 To run xpm, unpack a zip archive and run the executable `xpm.exe`. -->
 
+## Publications
+
+- [Poster](https://doi.org/10.6084/m9.figshare.25902862.v1) presented at Interpore 2024, Qingdao, China
+
 ## Build instructions
 
 ### Windows
