@@ -525,7 +525,7 @@ namespace xpm
       auto [input, nvalues] = generate_pressure_input();
       HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
-      dpl::hypre::save_input(std::move(input), nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations, 0);
+      dpl::hypre::save_input(std::move(input), nrows, nvalues, {{0, nrows - 1}}, tolerance, max_iterations, 0, 0);
 
       std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
         dpl::mpi::exec).c_str());
@@ -1181,16 +1181,16 @@ namespace xpm
                 if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{velem})) { // macro-darcy
                   macro_t adj_macro_idx{velem};
 
-                  auto li = cell_size.x()/2;
+                  // auto li = cell_size.x()/2;
                   auto gi = term(idx1d);
 
                   auto lj = r_ins(pn_, adj_macro_idx);
                   auto gj = term(adj_macro_idx);
 
-                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - li - lj);
+                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - cell_size.x()/2 - lj);
                   auto gt = gj;
                   
-                  auto coef = -1.0/(li/gi + lt/gt + lj/gj);
+                  auto coef = -1.0/(0.5/gi/cell_size.x() + lt/gt + lj/gj);
 
                   builder.set(adj_macro_idx, idx1d, coef);
                 }

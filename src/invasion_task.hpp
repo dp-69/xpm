@@ -345,7 +345,7 @@ namespace xpm {
           // solve(input, {0, nrows - 1}, decomposed_pressure.get(), settings_->solver.tolerance, settings_->solver.max_iterations);
 
           auto t0 = high_resolution_clock::now();
-          dpl::hypre::save_input(std::move(input), nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations, 0);
+          dpl::hypre::save_input(std::move(input), nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations, 0, 0);
           auto t1 = high_resolution_clock::now();
           std::system(fmt::format("mpiexec -np {} \"{}\" -s", settings_->solver.decomposition->prod(), dpl::mpi::exec).c_str()); // NOLINT(concurrency-mt-unsafe)
           auto t2 = high_resolution_clock::now();

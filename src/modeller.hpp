@@ -471,7 +471,7 @@ namespace xpm
 
 
         save_input(std::move(input), nrows, nvalues, mapping.block_rows,
-          settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels);
+          settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels, settings_.solver.print_level);
 
         system::print_memory("PRE xpm MPI", hypre::hypre_print_level);
 

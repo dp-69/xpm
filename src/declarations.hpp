@@ -730,6 +730,7 @@ namespace xpm
       HYPRE_Real tolerance = 1.e-20;
       HYPRE_Int max_iterations = 20;
       HYPRE_Int aggressive_levels = 0;
+      HYPRE_Int print_level = 0;
 
       struct {
         bool use = true;
@@ -740,6 +741,7 @@ namespace xpm
         tolerance = (*j)["tolerance"];
         max_iterations = (*j)["max_iterations"];
         j.set(aggressive_levels, "aggressive_number_of_levels");
+        j.set(print_level, "print_level");
         j.set(decomposition, "decomposition");
         j.set(cache.use, "cache", "use");
         j.set(cache.save, "cache", "save");

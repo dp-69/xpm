@@ -236,6 +236,7 @@ namespace dpl::hypre
         (tol)
         (max_iter)
         (agg_num_levels)
+        (print_level)
         (ranges);
     }
 
@@ -246,13 +247,14 @@ namespace dpl::hypre
     HYPRE_Real tol;
     HYPRE_Int max_iter;
     HYPRE_Int agg_num_levels;
+    HYPRE_Int print_level;
   };
 
   using solve_result = std::tuple<std::unique_ptr<HYPRE_Complex[]>, HYPRE_Real, HYPRE_Int>;
 
   inline void save_input(
     ls_known_storage&& input, HYPRE_BigInt nrows, std::size_t nvalues, const std::vector<index_range>& blocks,  // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved)
-    HYPRE_Real tol, HYPRE_Int max_iter, HYPRE_Int agg_num_levels)
+    HYPRE_Real tol, HYPRE_Int max_iter, HYPRE_Int agg_num_levels, HYPRE_Int print_level)
   {
     stream_writer{std::filesystem::path{"cache"}/hypre_input_name}
       (nrows)
@@ -264,6 +266,7 @@ namespace dpl::hypre
       (tol)
       (max_iter)
       (agg_num_levels)
+      (print_level)
       (blocks.data(), blocks.size());
 
     input.clear();
@@ -296,7 +299,7 @@ namespace dpl::hypre
     
     HYPRE_BoomerAMGSetTol(solver, block->tol);
     HYPRE_BoomerAMGSetMaxIter(solver, block->max_iter);
-    HYPRE_BoomerAMGSetPrintLevel(solver, print_level);
+    HYPRE_BoomerAMGSetPrintLevel(solver, block->print_level);
     HYPRE_BoomerAMGSetAggNumLevels(solver, block->agg_num_levels);
 
     auto range = block->ranges[*rank];
