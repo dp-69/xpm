@@ -472,6 +472,7 @@ namespace xpm
 
     
     using phase_t = dpl::strong_integer<std::uint8_t, helper::phase_tag>;
+    static inline constexpr dpl::full_range_unsigned<phase_t> phases;
 
     /**
      * \brief
@@ -691,7 +692,7 @@ namespace xpm
 
         int i = 0;
 
-        auto mult = 255./(list.size() + 1);  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+        auto mult = 255./(list.size() + 1);                 // NOLINT(clang-diagnostic-implicit-int-float-conversion)
 
         for (const auto& j : list) {
           auto& ref = poro_perm[phase_t{j["value"].get<phase_t::type>()}];

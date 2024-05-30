@@ -42,6 +42,38 @@
 
 namespace dpl
 {
+  template <typename T>
+  struct full_range_iterator
+  {
+    int value;
+
+    constexpr T operator*() const noexcept {
+      return T(value);
+    }
+
+    constexpr auto& operator++() noexcept {
+      ++value;
+      return *this;
+    }
+
+    constexpr bool operator!=(full_range_iterator rhs) const noexcept {
+      return value != rhs.value;
+    }
+  };
+
+  template <typename T>
+  struct full_range_unsigned
+  {
+    using iter = full_range_iterator<T>;
+
+    static constexpr iter begin() noexcept { return iter{0}; }
+    static constexpr iter end()   noexcept { return iter{1 << sizeof(T)*8}; }
+  };
+
+  /*
+   * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+   */
+
   class stream_reader
   {
     std::ifstream stream_;
@@ -100,6 +132,10 @@ namespace dpl
   constexpr T pow(T value, std::integral auto exponent) {
     return exponent == 0 ? 1 : value*pow(value, exponent - 1);
   }
+
+  /*
+   * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+   */
 
   class default_map
   {

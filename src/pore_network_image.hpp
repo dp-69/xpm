@@ -455,7 +455,7 @@ namespace xpm
 
 
      
-    void connectivity_flow_summary(const dpl::hypre::solve_result& solve) const {
+    std::array<double, 2> connectivity_flow_summary(const dpl::hypre::solve_result& solve) const {
       const auto& [pressure, residual, iter] = solve; 
 
       auto [rank, parent] = init_rank_parent(*node_count());
@@ -501,19 +501,27 @@ namespace xpm
           if (connected(l))
             outlet_flow += macro_macro_coef(i, l, r)*(0 - pressure[*l]);
       }
-      
+
+
+      std::array perm = {
+        inlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
+        outlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000
+      };
+
       std::cout << fmt::format(
         "\n"
         "  inlet perm: {:.6f} mD\n"
         "  outlet perm: {:.6f} mD\n"
         "  residual: {:.4g}, iterations: {}\n",
-        inlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
-        outlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
+        perm[0],
+        perm[1],
         residual,
         iter);
+
+      return perm;
     }
 
-    void connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations) const {
+    std::array<double, 2> connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations) const {
       auto [input, nvalues] = generate_pressure_input();
       HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
@@ -522,13 +530,13 @@ namespace xpm
       std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
         dpl::mpi::exec).c_str());
 
-      connectivity_flow_summary(dpl::hypre::load_values(nrows));
+      return connectivity_flow_summary(dpl::hypre::load_values(nrows));
     }
 
 
-    void connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
+    std::array<double, 2> connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
       // gross solve (with isolated)
-      connectivity_flow_summary(
+      return connectivity_flow_summary(
         solve( 
           generate_pressure_input().first, dpl::hypre::index_range(0, *node_count() - 1),
           tolerace, max_iterations)
@@ -622,7 +630,7 @@ namespace xpm
         "  total: {:L}\n"
         "  void: {:L} | {:.1f}%\n"
         "  solid: {:L}\n"
-        "  microprs: {:L}\n\n",
+        "  microprs: {:L}\n",
         size_, void_count, 100.*void_count/ *size_, solid_count, darcy_count);  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
     }
 

@@ -36,9 +36,19 @@ namespace xpm
     image_data img_;
     pore_network_image pni_{pn_, img_};
     runtime_settings settings_;
-    double absolute_rate_;
-    invasion_task invasion_task_{pni_, settings_};
 
+
+    struct
+    {
+      std::array<double, 2> perm_macro;   /* mD */
+      std::array<double, 2> perm_total;    /* mD */
+
+      double porosity;
+    } petrophysics_summary_;
+
+    double absolute_rate_;
+
+    invasion_task invasion_task_{pni_, settings_};
 
     auto pc_to_string(auto primary, fmt::format_string<const double&, const double&> f, auto sep, auto begin, auto end) const {
       using namespace std;
@@ -65,6 +75,10 @@ namespace xpm
     
     
   public:
+    auto& petrophysics_summary() const {
+      return petrophysics_summary_;
+    }
+
     auto kr_to_string(
       auto primary,
       fmt::format_string<const double&, const double&, const double&> f, auto sep, auto begin, auto end) const {
@@ -231,6 +245,8 @@ namespace xpm
           << (pn_.eval_inlet_outlet_connectivity() ? "  (connected)" : "  (disconected)") << '\n';
       #endif
 
+        
+      petrophysics_summary_.perm_macro = 
       #ifdef _WIN32
         pn_.connectivity_flow_summary(settings_.solver.tolerance, settings_.solver.max_iterations);
       #else
@@ -247,24 +263,19 @@ namespace xpm
       {
         using namespace voxel_prop;
 
-        strong_array<phase_t, bool> occurances;
         strong_array<phase_t, idx1d_t> count(0);
         for (auto p : img_.phase.span(img_.size())) {
-          occurances[p] = true;
+          // occured[p] = true;
           ++count[p];
         }
 
         std::list<phase_t> missing;
-        for (int i = 0; i < 256; ++i)
-          if (phase_t p(i);  // NOLINT(clang-diagnostic-implicit-int-conversion)
-            settings_.image.phases.is_darcy(p) && occurances[p] && settings_.darcy.poro_perm[p].is_nan()) {
+        for (auto p : phases)
+          if (settings_.image.phases.is_darcy(p) && count[p] && settings_.darcy.poro_perm[p].is_nan())
             missing.push_back(p);
-          }
-
-        // { "value": 118, "porosity": 0.15, "permeability": 1.061493 }
 
         if (!missing.empty()) {
-          std::cout << "unassigned porosity and permeability: [\n";
+          std::cout << "\nunassigned porosity and permeability: [\n";
 
           auto print = [](auto iter) {
             fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
@@ -282,6 +293,19 @@ namespace xpm
 
           throw config_exception("missing microporosity values.");
         }
+
+        double total_fractions = 0.0;
+
+        for (auto p : phases)
+          if (count[p])
+            if (settings_.image.phases.is_void(p))                              
+              total_fractions += count[p];                                    // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+            else if (!settings_.image.phases.is_solid(p))
+              total_fractions += count[p]*settings_.darcy.poro_perm[p].poro;  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+
+        petrophysics_summary_.porosity = total_fractions*(pn_.physical_size/img_.dim()).prod()/pn_.physical_size.prod();
+
+        fmt::print("  total porosity: {:.2f}%\n\n", petrophysics_summary_.porosity*100);
       }
 
 
@@ -494,14 +518,20 @@ namespace xpm
 
         using namespace presets;
 
+
+        petrophysics_summary_.perm_total = {
+          inlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,
+          outlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000
+        };
+
         std::cout << fmt::format(
           // "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
           // settings_.darcy.perm_single/darcy_to_m2*1000,
-          inlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,
-          outlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,
+          petrophysics_summary_.perm_total[0],
+          petrophysics_summary_.perm_total[1],
           residual, iters);
 
         absolute_rate_ = inlet;

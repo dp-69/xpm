@@ -76,6 +76,21 @@ int main(int argc, char* argv[])
         modeller.prepare();
         modeller.compute_pressure();
 
+        auto dir =
+          std::filesystem::path(dpl::mpi::exec)
+            .replace_filename("results")/modeller.settings().image.path.stem();
+
+        create_directories(dir);
+
+        {
+          nlohmann::json pp_j;
+          pp_j["total_poro"] = modeller.petrophysics_summary().porosity;
+          pp_j["total_perm"] = modeller.petrophysics_summary().perm_total;
+          pp_j["macro_perm"] = modeller.petrophysics_summary().perm_macro;
+
+          std::ofstream{dir/"petrophysics_summary.json"} << pp_j.dump(2);
+        }
+
         if (modeller.settings().report.invasion_percolation) {
           modeller.get_invasion_task().init();
       
@@ -84,17 +99,13 @@ int main(int argc, char* argv[])
             modeller.settings().theta,
             modeller.settings().primary.pc.inverse_unique());
 
-          auto dir =
-            std::filesystem::path(dpl::mpi::exec)
-              .replace_filename("results")/modeller.settings().image.path.stem();
+          
 
-          create_directories(dir);
+          std::ofstream{dir/"pc_primary.txt"} << modeller.pc_to_plain(std::true_type{});
+          std::ofstream{dir/"pc_secondary.txt"} << modeller.pc_to_plain(std::false_type{});
 
-          std::ofstream(dir/"pc_primary.txt") << modeller.pc_to_plain(std::true_type{});
-          std::ofstream(dir/"pc_secondary.txt") << modeller.pc_to_plain(std::false_type{});
-
-          std::ofstream(dir/"kr_primary.txt") << modeller.kr_to_plain(std::true_type{});
-          std::ofstream(dir/"kr_secondary.txt") << modeller.kr_to_plain(std::false_type{});
+          std::ofstream{dir/"kr_primary.txt"} << modeller.kr_to_plain(std::true_type{});
+          std::ofstream{dir/"kr_secondary.txt"} << modeller.kr_to_plain(std::false_type{});
         }
 
         std::cout << '\n';
