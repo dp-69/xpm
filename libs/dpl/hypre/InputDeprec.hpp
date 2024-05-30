@@ -74,58 +74,60 @@ namespace dpl::hypre
     }       
   };
 
-  struct InputDeprec
-  {
-    HYPRE_BigInt nrows;    
-    std::vector<HYPRE_Int> ncols_per_row; // size of nrows       
-    std::vector<HYPRE_Complex> constants; // size of nrows
+  // struct InputDeprec
+  // {
+  //   HYPRE_BigInt nrows;    
+  //   std::vector<HYPRE_Int> ncols_per_row; // size of nrows       
+  //   std::vector<HYPRE_Complex> constants; // size of nrows
+  //
+  //   std::vector<HYPRE_BigInt> cols_of_coefs; 
+  //   std::vector<HYPRE_Complex> coefs;
+  //
+  //   auto get_ref() {
+  //     return ls_known_ref{
+  //       ncols_per_row.data(),
+  //       cols_of_coefs.data(),
+  //       coefs.data(),
+  //       constants.data()
+  //     };
+  //   }
+  //
+  //   InputDeprec() = default;
+  //
+  //   InputDeprec(const InputDeprec& other) = default;
+  //   InputDeprec(InputDeprec&& other) noexcept = default;
+  //   InputDeprec& operator=(const InputDeprec& other) = default;
+  //   InputDeprec& operator=(InputDeprec&& other) noexcept = default;
+  //   
+  //
+  //   InputDeprec(sparse_matrix_builder& m, std::vector<HYPRE_Complex>&& b) {             
+  //     nrows = m.nrows;
+  //     ncols_per_row.assign(m.nrows, 1);
+  //     constants = std::move(b);            
+  //     
+  //     const auto coef_count = nrows + m.off_diag_count_;
+  //     
+  //     cols_of_coefs.resize(coef_count);
+  //     coefs.assign(coef_count, 0);
+  //
+  //           
+  //     for (HYPRE_Int row_idx = 0, coef_idx = 0; row_idx < nrows; row_idx++) {                
+  //       auto diag_idx = coef_idx++;
+  //       cols_of_coefs[diag_idx] = row_idx; // diagonal coef
+  //       coefs[diag_idx] = m.diag[row_idx]; //       
+  //       
+  //       for (auto [j, j_off_coef] : m.off_diag[row_idx]) {
+  //         ++ncols_per_row[row_idx];
+  //         
+  //         auto off_diag_idx = coef_idx++;
+  //         cols_of_coefs[off_diag_idx] = j;          
+  //         coefs[off_diag_idx] = j_off_coef;
+  //       }                                                
+  //     }          
+  //   }
+  // };
 
-    std::vector<HYPRE_BigInt> cols_of_coefs; 
-    std::vector<HYPRE_Complex> coefs;
 
-    auto get_ref() {
-      return ls_known_ref{
-        ncols_per_row.data(),
-        cols_of_coefs.data(),
-        coefs.data(),
-        constants.data()
-      };
-    }
-
-    InputDeprec() = default;
-
-    InputDeprec(const InputDeprec& other) = default;
-    InputDeprec(InputDeprec&& other) noexcept = default;
-    InputDeprec& operator=(const InputDeprec& other) = default;
-    InputDeprec& operator=(InputDeprec&& other) noexcept = default;
-    
-
-    InputDeprec(sparse_matrix_builder& m, std::vector<HYPRE_Complex>&& b) {             
-      nrows = m.nrows;
-      ncols_per_row.assign(m.nrows, 1);
-      constants = std::move(b);            
-      
-      const auto coef_count = nrows + m.off_diag_count_;
-      
-      cols_of_coefs.resize(coef_count);
-      coefs.assign(coef_count, 0);
-
-            
-      for (HYPRE_Int row_idx = 0, coef_idx = 0; row_idx < nrows; row_idx++) {                
-        auto diag_idx = coef_idx++;
-        cols_of_coefs[diag_idx] = row_idx; // diagonal coef
-        coefs[diag_idx] = m.diag[row_idx]; //       
-        
-        for (auto [j, j_off_coef] : m.off_diag[row_idx]) {
-          ++ncols_per_row[row_idx];
-          
-          auto off_diag_idx = coef_idx++;
-          cols_of_coefs[off_diag_idx] = j;          
-          coefs[off_diag_idx] = j_off_coef;
-        }                                                
-      }          
-    }
-  };
 }
 
 

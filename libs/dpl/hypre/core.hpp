@@ -103,7 +103,7 @@ namespace dpl::hypre
       nvalues_ = nrows;
     }
 
-    void reserve(/*HYPRE_BigInt*/auto i0, /*HYPRE_BigInt*/auto i1) {
+    void reserve(auto i0, auto i1) {
       ++lks_.ncols[proj_(i0)];
       ++lks_.ncols[proj_(i1)];
       nvalues_ += 2;
@@ -130,35 +130,66 @@ namespace dpl::hypre
       }
     }
 
-    void add_b(/*HYPRE_BigInt*/auto i, HYPRE_Complex value) {
+    void add_b(auto i, HYPRE_Complex value) {
       lks_.b[proj_(i)] += value;
     }
 
-    void add_diag(/*HYPRE_BigInt*/auto i, HYPRE_Complex value) {
+    void add_diag(auto i, HYPRE_Complex value) {
       lks_.values[diag_shift_[proj_(i)]] += value;
     }
 
-    void set(/*HYPRE_BigInt*/auto i0, /*HYPRE_BigInt*/auto i1, HYPRE_Complex value) {
-      auto shift0 = diag_shift_[proj_(i0)];
+    auto diag_shift(auto i) const {
+      return diag_shift_[proj_(i)];
+    }
+
+    // std::unique_ptr<HYPRE_Complex[]> copy_diag_values() const {
+    //   auto values = std::make_unique<HYPRE_Complex[]>(nrows_);
+    //   for (HYPRE_BigInt i = 0; i < nrows_; ++i)
+    //     values[i] = lks_.values[diag_shift(i)];
+    //   return std::move(values);
+    // }
+    //
+    // void write_diag_values(HYPRE_Complex* diag_values) {
+    //   for (HYPRE_BigInt i = 0; i < nrows_; ++i)
+    //     lks_.values[diag_shift(i)] = diag_values[i];
+    // }
+
+    void set(auto i0, auto i1, HYPRE_Complex value) {
+      auto shift0 = diag_shift(i0);
       lks_.values[shift0] += value; // diag
       shift0 += ++off_relative_[proj_(i0)];
       lks_.cols[shift0] = proj_(i1);
       lks_.values[shift0] = -value;
 
-      auto shift1 = diag_shift_[proj_(i1)];
+      auto shift1 = diag_shift(i1);
       lks_.values[shift1] += value; // diag
       shift1 += ++off_relative_[proj_(i1)];
       lks_.cols[shift1] = proj_(i0);
       lks_.values[shift1] = -value;
     }
 
-    auto acquire() {
+    ls_known_storage acquire() {
       return std::move(lks_);
+    }
+
+    // ls_known_storage duplicate() {
+    //   return std::move(lks_);
+    // }
+
+
+    auto nrows() const {
+      return nrows_;
     }
 
     auto nvalues() const {
       return nvalues_;
     }
+
+    auto& storage() {
+      return lks_;
+    }
+
+    
   };
 
   class ls_known_file_ref

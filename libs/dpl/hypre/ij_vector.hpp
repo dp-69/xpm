@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "../mpi_defs.hpp"
+#include "../defs_mpi.hpp"
 
 #include <HYPRE.h>
 #include <HYPRE_parcsr_ls.h>

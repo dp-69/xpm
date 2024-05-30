@@ -35,6 +35,10 @@ namespace dpl::units
   template <typename T>
   inline constexpr bool has_coef = std::is_arithmetic_v<decltype(coef<T>)>;
 
+
+  template <typename>
+  struct sqrt_t {};
+
   template<typename Quantity, typename Tag>
   struct def_unit {
     template <typename U> requires std::is_arithmetic_v<U>
@@ -60,6 +64,23 @@ namespace dpl::units
 
     auto& operator*() const { return value; }
     auto& operator*() { return value; }
+
+    // explicit constexpr operator double() const noexcept {
+    //   return value;
+    // }
+
+    template <typename T> requires std::is_arithmetic_v<T>
+    constexpr auto operator/(T u) const noexcept {
+      return def_unit{value/u};
+    }
+
+    constexpr auto operator*(def_unit u) const noexcept {
+      return def_unit<sqrt_t<Quantity>, sqrt_t<Tag>>{value*u.value};
+    }
+
+    constexpr auto operator+(def_unit u) const noexcept {
+      return def_unit{value + u.value};
+    }
 
     constexpr def_unit() : value{1.0} {}                                                                            
 
@@ -152,7 +173,7 @@ namespace dpl::units
   {
     double value;
 
-    pore_volume(const double value) : value(value) {}
+    explicit pore_volume(const double value) : value(value) {}
 
     auto& operator*() const { return value; }
     auto& operator*() { return value; }
@@ -165,6 +186,10 @@ namespace dpl::units
     return stream;
   }
 
+  template <typename Quantity, typename Tag>
+  auto sqrt(def_unit<sqrt_t<Quantity>, sqrt_t<Tag>> u) {
+    return def_unit<Quantity, Tag>{std::sqrt(u.value)};
+  }
   
   #undef DEF_SI
   #undef DEF_UNIT

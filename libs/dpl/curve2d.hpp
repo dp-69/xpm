@@ -25,6 +25,8 @@
 
 #include "static_vector.hpp"
 
+#include <algorithm>
+
 namespace dpl
 {
   /**
@@ -53,7 +55,10 @@ namespace dpl
     // }
 
     auto inverse_unique() const {
-      using namespace std::ranges;
+      using
+        std::ranges::reverse,
+        std::ranges::unique;
+
       auto vec = storage;
       reverse(vec);
       vec.resize(unique(vec, {}, [](const vector2d& p) { return p.y(); }).begin() - vec.begin());
@@ -62,8 +67,20 @@ namespace dpl
       return curve2d{std::move(vec)};
     }
 
-    auto solve(double value/*, auto ext = */) const {
+    auto solve(double value) const {
       return dpl::solve(std::span{storage}, value, extrapolant::flat);
+    }
+
+    auto solve(double value, lerp_base::log10_t, lerp_base::linear_t) const {
+      return dpl::solve(std::span{storage}, value, extrapolant::flat, lerp_base::log10, lerp_base::linear);
+    }
+
+    auto operator()(double value) const {
+      return solve(value);
+    }
+
+    auto operator()(double value, lerp_base::log10_t, lerp_base::linear_t) const {
+      return solve(value, lerp_base::log10, lerp_base::linear);
     }
 
     auto begin() const {

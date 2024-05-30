@@ -24,7 +24,8 @@
 #pragma once
 
 #include "units.hpp"
-#include "mpi_defs.hpp"
+#include "defs_mpi.hpp"
+#include "defs_fmt.hpp"
 
 #include <fmt/core.h>
 

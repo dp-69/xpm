@@ -1,30 +1,31 @@
 /*
- * This file is part of Dmytro Petrovskyy Library (dpl).
+ * This file is part of Dmytro Petrovskyy Library (DPL).
  *
  * Copyright (c) 2024
  *   | Dmytro Petrovskyy, PhD
  *   | dmytro.petrovsky@gmail.com
  *   | https://www.linkedin.com/in/dmytro-petrovskyy/
  *
- * dpl is free software: you can redistribute it and/or modify              
+ * DPL is free software: you can redistribute it and/or modify              
  * it under the terms of the GNU General Public License as published by     
  * the Free Software Foundation, either version 3 of the License, or        
  * (at your option) any later version.                                      
  *                                                                         
- * dpl is distributed in the hope that it will be useful,                   
+ * DPL is distributed in the hope that it will be useful,                   
  * but WITHOUT ANY WARRANTY; without even the implied warranty of           
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the            
  * GNU General Public License for more details.                             
  *                                                                         
  * You should have received a copy of the GNU General Public License        
- * along with dpl. If not, see <http://www.gnu.org/licenses/>.
+ * along with RRM. If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
 #pragma once
 
-#include "static_vector.hpp"
 #include "units.hpp"
+// #include "static_vector.hpp"
+#include "curve2d.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -89,6 +90,10 @@ namespace dpl
     }
   }
 
+  inline void parse(const nlohmann::json& j, curve2d& v) {
+    parse(j, v.storage);
+  }
+
   // ---------------------------------
 
 
@@ -117,6 +122,29 @@ namespace dpl
       parse(j.at(k), v);
     } catch (...) {}
   }
+
+  template <json_parsable T, typename Key, int n>
+  void try_parse(const nlohmann::json& j, const Key& k, std::array<T, n>& v) {
+    try {
+      const auto& jk = j.at(k);
+
+      for (int i = 0; i < n; ++i)
+        parse(jk[i], v[i]);
+    } catch (...) {}
+  }
+
+  // template <not_json_parsable T, typename Key, int n>
+  // void try_parse(const nlohmann::json& j, const Key& k, std::array<std::optional<T>, n>& v) {
+  //   try {
+  //     const auto& jk = j.at(k);
+  //
+  //     for (int i = 0; i < n; ++i)
+  //       if (const auto& x = jk[i]; x.is_null())
+  //         v[i].reset();
+  //       else
+  //         v[i] = x;
+  //   } catch (...) {}
+  // }
 
   template <json_parsable T, typename Key>
   void try_parse(const nlohmann::json& j, const Key& k, T& v, bool ignore_comments) {

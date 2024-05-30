@@ -30,8 +30,8 @@
 #include <regex>
 
 #include <dpl/curve2d.hpp>
-#include <dpl/fmt-formatter.hpp>
-#include <dpl/json.hpp>
+#include <dpl/defs_fmt.hpp>
+#include <dpl/defs_json.hpp>
 #include <dpl/hypre/core.hpp>
 #include <dpl/qt/parse.hpp>
 

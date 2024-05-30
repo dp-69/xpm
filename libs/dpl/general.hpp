@@ -139,9 +139,32 @@ namespace dpl
 
   class default_map
   {
-    static inline auto true_ = [](auto) { return true; };
-    static inline auto unity_ = [](auto) { return 1; };
-    static inline auto nan_ = [](auto) { return std::numeric_limits<double>::quiet_NaN(); };
+    struct unity_multiplier
+    {
+      template <class T>
+      constexpr T&& operator*(T&& rhs) const noexcept {
+        return std::forward<T>(rhs);
+      }
+
+      template <class T>
+      friend T&& operator*(T&& lhs, unity_multiplier) {
+        return std::forward<T>(lhs);
+      }
+
+      // template <class T>
+      // constexpr auto operator*(const T& right) const noexcept {
+      //     return right;
+      // }
+
+      // template <class T>
+      // constexpr const T& operator*(const T& right) const noexcept {
+      //   return std::forward<T>(right);
+      // }    
+    };
+
+    static inline auto true_  = [](auto) { return true; };
+    static inline auto unity_ = [](auto) { return unity_multiplier{}; };
+    static inline auto nan_   = [](auto) { return std::numeric_limits<double>::quiet_NaN(); };
 
   public:
     using true_t = decltype(true_);
@@ -373,6 +396,25 @@ namespace dpl
   inline constexpr bool are_assignable_v = are_assignable<Args...>::value;
 
 
+  // template <int n, int i = 0> requires (n > 0)
+  // constexpr auto tail_aggregate(const auto& op, const auto& data) {
+  //   if constexpr (i == n - 1)
+  //     return data[i];
+  //   else
+  //     return op(data[i], tail_aggregate<n, i + 1>(op, data));
+  // }
+
+  template <int n, typename T = void, int i = 0> requires (n > 0)
+  constexpr auto tail_aggregate(const auto& op, const auto& data) {
+    if constexpr (i == n - 1) {
+      if constexpr (std::is_same_v<T, void>)
+        return data[i];
+      else
+        return static_cast<T>(data[i]);
+    }
+    else
+      return op(data[i], tail_aggregate<n, T, i + 1>(op, data));
+  }
   
   template <int n0, int n1, typename Func>
   constexpr void sfor(const Func& f) {
@@ -432,16 +474,16 @@ namespace dpl
 
   namespace lerp_base
   {
-    struct linear {};
-    struct log10 {};
+    static inline constexpr struct linear_t {} linear;
+    static inline constexpr struct log10_t {} log10;
   };
   
-  template <typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Base = lerp_base::linear_t, typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(const T& a, const T& b, double t) {
-    if constexpr (std::is_same_v<Extrapolant, extrapolant::linear_t> && std::is_same_v<Base, lerp_base::linear>)
+    if constexpr (std::is_same_v<Extrapolant, extrapolant::linear_t> && std::is_same_v<Base, lerp_base::linear_t>)
       return a + (b - a)*t;
-    else if constexpr (std::is_same_v<Base, lerp_base::log10>)
-      return std::pow(10., dpl::lerp<lerp_base::linear, Extrapolant>(std::log10(a), std::log10(b), t));
+    else if constexpr (std::is_same_v<Base, lerp_base::log10_t>)
+      return std::pow(10., dpl::lerp<lerp_base::linear_t, Extrapolant>(std::log10(a), std::log10(b), t));
     else if constexpr (std::is_same_v<Extrapolant, extrapolant::flat_t>)
       return
         t < 0 ? a :
@@ -451,7 +493,7 @@ namespace dpl
       static_assert(always_false<T>, "wrong extrapolant or base");
   }
 
-  template <typename Base = lerp_base::linear, typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Base = lerp_base::linear_t, typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(T* ptr, double t) {
     return dpl::lerp<Base, Extrapolant>(ptr[0], ptr[1], t);
   }
@@ -459,8 +501,8 @@ namespace dpl
   template <typename Extrapolant = extrapolant::linear_t, typename T>
   constexpr auto lerp(bool log10, const T& a, const T& b, double t) {
     return log10
-      ? dpl::lerp<lerp_base::log10, Extrapolant>(a, b, t)
-      : dpl::lerp<lerp_base::linear, Extrapolant>(a, b, t);
+      ? dpl::lerp<lerp_base::log10_t, Extrapolant>(a, b, t)
+      : dpl::lerp<lerp_base::linear_t, Extrapolant>(a, b, t);
   }
 
   template <typename Extrapolant = extrapolant::linear_t, typename T>
