@@ -119,9 +119,6 @@ namespace xpm
     QVTKWidgetRef* qvtk_widget_;
     dpl::vtk::TidyAxes tidy_axes_;
 
-    // vtkNew<vtkLookupTable> lut_velem_;
-    // vtkNew<vtkLookupTable> lut_pore_solid_micro_;
-    
 
     vtkNew<vtkAssembly> macro_network_;
     vtkFloatArray* macro_colors;
@@ -189,7 +186,7 @@ namespace xpm
       lut->SetAnnotation(vtkVariant(1), "Throat");
     }
 
-    static void initLutPhases(vtkLookupTable* lut, const parse::image_dict& d) {
+    static void initLutPhases(vtkLookupTable* lut, vtkIdType void_v, vtkIdType solid_v) {
       lut->IndexedLookupOn();  
       lut->SetNumberOfTableValues(256);
     
@@ -200,30 +197,37 @@ namespace xpm
     
       // lut->SetTableValue(d.pore, 0.784314, 0.467419, 0.657556);
       
-      lut->SetTableValue(d.pore, 194/255., 105/255., 158/255.);
-      lut->SetAnnotation(vtkVariant(d.pore), "Void");
-      lut->SetTableValue(d.solid, 0.5, 0.5, 0.5);
-      lut->SetAnnotation(vtkVariant(d.solid), "Solid");
+      lut->SetTableValue(void_v, 194/255., 105/255., 158/255.);
+      lut->SetAnnotation(vtkVariant(void_v), "Void");
+      lut->SetTableValue(solid_v, 0.5, 0.5, 0.5);
+      lut->SetAnnotation(vtkVariant(solid_v), "Solid");
     }
 
-    static void initLutPhases(vtkLookupTable* lut, const parse::image_dict& d,
-      const dpl::strong_array<voxel_prop::phase_t, poro_perm_t>& poro_perms) {
+    static void initLutPhases(
+      vtkLookupTable* lut,
+      const dpl::strong_vector<voxel_info::phase_t, poro_perm_t>& poro_perms,
+      voxel_info::phase_t darcy_count) { // TODO BUG
 
       // lut->IndexedLookupOn();  
       lut->SetNumberOfTableValues(256);
 
-      for (int i = 0; i < 256; ++i) {
-        if (auto& pp = poro_perms[voxel_prop::phase_t(i)]; pp.is_nan())  // NOLINT(clang-diagnostic-implicit-int-conversion)
-          lut->SetTableValue(i, 0.8, 0.8, 0.8);
-        else
-          lut->SetTableValue(i, pp.color.redF(), pp.color.greenF(), pp.color.blueF());
+      
+
+
+      for (voxel_info::phase_t i{0}; i < darcy_count; ++i) {
+        // if (auto& pp = poro_perms[voxel_info::phase_t(i)]; pp.is_nan())  // NOLINT(clang-diagnostic-implicit-int-conversion)
+        //   lut->SetTableValue(i, 0.8, 0.8, 0.8);
+        // else
+
+        auto& pp = poro_perms[voxel_info::phase_t(i)];
+        lut->SetTableValue(*i, pp.color.redF(), pp.color.greenF(), pp.color.blueF());
 
         // lut->SetAnnotation(vtkVariant(i), "Darcy");
       }
 
-      lut->SetTableValue(d.pore, 0.784314, 0.467419, 0.657556);
+      lut->SetTableValue(*darcy_count, 0.784314, 0.467419, 0.657556);
       // lut->SetAnnotation(vtkVariant(d.pore), "Void");
-      lut->SetTableValue(d.solid, 0.5, 0.5, 0.5);
+      lut->SetTableValue(*darcy_count + 1, 0.5, 0.5, 0.5);
       // lut->SetAnnotation(vtkVariant(d.solid), "Solid");
 
       lut->SetTableRange(0, 255);
@@ -798,9 +802,6 @@ namespace xpm
       
       initGUI();
 
-      
-
-      // dpl::vtk::PopulateLutRedWhiteBlue(generic_lut_);
       dpl::strong_vector<net_t, double> pressure;
 
       model_.prepare();
@@ -813,7 +814,7 @@ namespace xpm
         velem_map map{&img()};
 
         InitNetworkImage(
-          [this](voxel_t v) { return img().dict.is_darcy(img().phase[v]); },
+          [this](voxel_t v) { return img().is_darcy(v); },
           map,
           lut.Get(),
           lut.Get());
@@ -823,13 +824,16 @@ namespace xpm
       else if (name == "phases") {
         vtkNew<vtkLookupTable> lut_image, lut_network;
 
-        initLutPhases(lut_image, img().dict, model_.settings().darcy.poro_perm);
+        initLutPhases(
+          lut_image,
+          model_.settings().image.poro_perm,
+          model_.settings().image.darcy_count);
         initLutNodeThroat(lut_network);
 
         phases_map map{&img()};
 
         InitNetworkImage(
-          [this](voxel_t v) { return img().dict.is_darcy(img().phase[v]); },
+          [this](voxel_t v) { return img().is_darcy(v); },
           map,
           lut_image,
           lut_network.Get());
@@ -837,7 +841,9 @@ namespace xpm
       else if (name == "phases-triplet") {
         vtkNew<vtkLookupTable> lut_image, lut_network;
 
-        initLutPhases(lut_image, img().dict);
+        initLutPhases(lut_image,
+          model_.settings().image.darcy_count.value,
+          model_.settings().image.darcy_count.value + 1);
         initLutNodeThroat(lut_network);
 
         phases_map map{&img()};
@@ -854,25 +860,16 @@ namespace xpm
         dpl::vtk::PopulateLutRedWhiteBlue(lut);
         lut->SetTableRange(0, 1);
 
-        permeability_map map{img(), model_.settings().darcy.poro_perm};
+        permeability_map map{
+          img(),
+          model_.settings().image.poro_perm,
+          model_.settings().image.darcy_count};
 
         InitNetworkImage(
-          [this](voxel_t v) { return img().dict.is_darcy(img().phase[v]); },
+          [this](voxel_t v) { return img().is_darcy(v); },
           map,
           lut.Get(),
           lut.Get());
-        
-        //
-        // int k = 0;
-        // for (auto pp : model_.settings().darcy.poro_perm) {
-        //   if (!model_.settings().darcy.poro_perm[voxel_prop::phase_t(k)].is_nan()) 
-        //     fmt::print("value: {}, poro: {}, perm: {}\n", k, pp.poro, pp.perm/presets::mD_to_m2);
-        //   ++k;
-        // }
-
-        // std::span(ptr, 256)// TODO
-
-        // fmt::print("\n\nPERM MIN, MAX: ({} mD, {} mD)\n\n", minPERM.perm/presets::mD_to_m2, maxPERM.perm/presets::mD_to_m2);
       }
       else {
         vtkNew<vtkLookupTable> lut;
@@ -884,7 +881,7 @@ namespace xpm
         pressure_map map{&pni(), &pressure};
 
         InitNetworkImage(
-          [this](voxel_t v) { return img().dict.is_darcy(img().phase[v]); },
+          [this](voxel_t v) { return img().is_darcy(v); },
           map,
           lut.Get(),
           lut.Get());
@@ -1013,7 +1010,7 @@ namespace xpm
 
                 if (voxel_t voxel{idx1d}; pni.connected(voxel))
                   if (auto net = pni.net(voxel); state.config(net).phase() == phase_config::phase1())
-                    sw = 1.0 - pc_inv.solve(1/state.r_cap(net));
+                    sw = 1.0 - pc_inv(1/state.r_cap(net));
 
                 face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
               }
@@ -1173,23 +1170,23 @@ namespace xpm
     struct permeability_map
     {
     private:
+      using phase_t = voxel_info::phase_t;
+
       const image_data* img;
-      const dpl::strong_array<voxel_prop::phase_t, poro_perm_t>* poro_perm;
+      const dpl::strong_vector<phase_t, poro_perm_t>* poro_perm;
       double log10_min;
       double log10_diff; 
     
     public:
       permeability_map(
         const image_data& img,
-        const dpl::strong_array<voxel_prop::phase_t, poro_perm_t>& poro_perm)
+        const dpl::strong_vector<phase_t, poro_perm_t>& poro_perm, phase_t darcy_count)
         : img(&img),
           poro_perm(&poro_perm) {
-    
-        auto* ptr = poro_perm.data();
-            
+
         using namespace std::ranges;
-    
-        if (auto range = subrange(ptr, ptr + 256) | views::filter([](const poro_perm_t& pp) { return !pp.is_nan(); }); !empty(range)) {
+
+        if (auto range = poro_perm.span(darcy_count); !empty(range)) {
           auto [min, max] = minmax(range, {}, [](const poro_perm_t& x) { return x.perm; });
           log10_min = log10(min.perm);
           log10_diff = log10(max.perm) - log10_min;

@@ -580,6 +580,20 @@ namespace xpm
     idx3d_t dim_;
     dpl::idx1d_map<voxel_t> idx1d_mapper_;
 
+    void set_dim(const idx3d_t& dim) {
+      size_ = voxel_t(dim.prod());
+      dim_ = dim;
+      idx1d_mapper_ = dim_;
+    }
+
+    struct image_dict
+    {
+      voxel_info::phase_t darcy_count;
+
+      bool is_void(voxel_info::phase_t p) const noexcept { return p == darcy_count; }
+      bool is_darcy(voxel_info::phase_t p) const noexcept { return p < darcy_count; }
+    } dict;
+
   public:
     auto size() const {
       return size_;
@@ -594,36 +608,77 @@ namespace xpm
       return idx1d_mapper_(std::forward<Args>(arg)...);
     }
 
-    void set_dim(const idx3d_t& dim) {
-      dim_ = dim;
-      idx1d_mapper_ = dim_;
+    
+
+    
+    dpl::strong_vector<voxel_t, voxel_info::phase_t> phase;
+    dpl::strong_vector<voxel_t, voxel_info::velem_t> velem;
+
+    /*
+     *
+     */
+
+    bool is_void(voxel_t i) const {
+      return dict.is_void(phase[i]);
     }
 
-    parse::image_dict dict;
-    dpl::strong_vector<voxel_t, voxel_prop::phase_t> phase;
-    dpl::strong_vector<voxel_t, voxel_prop::velem_t> velem;
+    bool is_darcy(voxel_t i) const {
+      return dict.is_darcy(phase[i]);
+    }
 
-    void read_image(const auto& image_path) {
+    /*
+     *
+     */
+
+    double read_image(const runtime_settings::image_settings& settings) {
+      /*
+       * reads an image and compresses/normalizes phase values:
+       *   [0, n)  - darcy phases
+       *   {n}     - void phase
+       *   {n + 1} - solid phase
+       *
+       */
+
       using namespace std;
+      using namespace voxel_info;
 
-      ifstream is{image_path, std::ios::binary};
-      is.seekg(0, ios::end);
-      size_ = voxel_t(is.tellg());  // NOLINT(cppcoreguidelines-narrowing-conversions)
-      is.seekg(0, ios::beg);
-      phase.resize(voxel_t{size_});
-      is.read(reinterpret_cast<char*>(phase.data()), *size_);
+      set_dim(settings.size);
+
+      {
+        ifstream is{
+          "pnextract"/settings.pnextract_filename(),
+          ios::binary
+        };
+        phase.resize(size_);
+        is.read(reinterpret_cast<char*>(phase.data()), *size_);
+      }
 
       size_t void_count = 0;
       size_t solid_count = 0;
       size_t darcy_count = 0;
 
-      for (voxel_t i{0}; i < size_; ++i)
-        if (auto& value = phase[i]; *value == dict.pore)
+      dpl::strong_array<phase_t, idx1d_t> count_uncomp(0);
+
+      for (voxel_t i{0}; i < size_; ++i) {
+        auto& p = phase[i];
+        ++count_uncomp[p];
+
+        if (p == settings.void_v) {
           ++void_count;
-        else if (*value == dict.solid)
+
+          p = settings.darcy_count;
+        }
+        else if (p == settings.solid_v) {
           ++solid_count;
-        else
+
+          p.value = settings.darcy_count.value + 1;
+        }
+        else {
           ++darcy_count;
+
+          p = settings.darcy_compress[p];
+        }
+      }
 
       cout << fmt::format(
         "image voxels\n"
@@ -632,10 +687,66 @@ namespace xpm
         "  solid: {:L}\n"
         "  microprs: {:L}\n",
         size_, void_count, 100.*void_count/ *size_, solid_count, darcy_count);  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+
+      /*
+       *
+       */
+
+      std::list<phase_t> missing;
+      for (auto p : phases)
+        if (
+          p != settings.void_v &&
+          p != settings.solid_v &&
+          count_uncomp[p] &&
+          !settings.darcy_found[p]
+        )
+          missing.push_back(p);
+
+      if (!missing.empty()) {
+        std::cout << "\nunassigned porosity and permeability: [\n";
+
+        auto print = [](auto iter) {
+          fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
+        };
+
+        auto iter = missing.begin();
+        auto end = missing.end();
+
+        print(iter);
+        while (++iter != end) {
+          std::cout << ",\n";
+          print(iter);
+        }
+        std::cout << "\n]\n";
+
+        throw config_exception("missing microporosity values.");
+      }
+
+      dict = {settings.darcy_count};
+
+      double total_porosity = 0.0;
+
+      for (auto p_unc : phases)
+        if (count_uncomp[p_unc]) {
+          auto p = settings.darcy_compress[p_unc];                        // NOLINT(CppTooWideScopeInitStatement)
+
+          if (dict.is_void(p))                                            // NOLINTBEGIN(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+            total_porosity += count_uncomp[p_unc];                                   
+          else if (dict.is_darcy(p))                                      // NOLINT(clang-diagnostic-dangling-else)
+            total_porosity += count_uncomp[p_unc]*settings.poro_perm[p].poro;
+        }
+
+      total_porosity /= *size_;                                           // NOLINTEND(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+
+      fmt::print("  total porosity: {:.2f}%\n\n", total_porosity*100);
+
+      return total_porosity;
     }
 
     void read_icl_velems(const std::filesystem::path& path) {
-      velem.resize(voxel_t{dim_.prod()});
+      using voxel_info::velem_t;
+
+      velem.assign(size_, velem_t::invalid_value());
 
       /*
        * input file value description
@@ -662,7 +773,7 @@ namespace xpm
                 *velem[idx1d] = val - 2;
       }
 
-      // parse microporous adjacent to void voxels
+      // parse adjacent darcy to void voxels
       { 
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
@@ -672,7 +783,7 @@ namespace xpm
           for (j = 0; j < dim_.y(); ++j) 
             for (i = 0; i < dim_.x(); ++i, ++idx1d)
               if (dict.is_darcy(phase[idx1d])) {
-                voxel_prop::velem_t adj;
+                velem_t adj{velem_t::invalid_value()};
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] > 0)
@@ -790,13 +901,13 @@ namespace xpm
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
-              if (img_->dict.is_darcy(img_->phase[idx1d])) {
+              if (img_->is_darcy(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy
                   ds.union_set(*total(macro_t{img_->velem[idx1d]}), *total(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->dict.is_darcy(img_->phase[adj_idx1d])) // darcy-darcy
+                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d)) // darcy-darcy
                       ds.union_set(*total(idx1d), *total(adj_idx1d));
                 });
               }
@@ -817,10 +928,10 @@ namespace xpm
 
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j) {
-            if (voxel_t inlet_idx1d{img_->idx_map(0, j, k)}; img_->dict.is_darcy(img_->phase[inlet_idx1d])) // darcy-inlet
+            if (voxel_t inlet_idx1d{img_->idx_map(0, j, k)}; img_->is_darcy(inlet_idx1d)) // darcy-inlet
               inlet[ds.find_set(*total(inlet_idx1d))] = true;
 
-            if (voxel_t outlet_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; img_->dict.is_darcy(img_->phase[outlet_idx1d])) // darcy-outlet
+            if (voxel_t outlet_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; img_->is_darcy(outlet_idx1d)) // darcy-outlet
               outlet[ds.find_set(*total(outlet_idx1d))] = true;
           }
       }
@@ -836,7 +947,7 @@ namespace xpm
       connected_count_ = connected_macro_count_;
 
       for (voxel_t i{0}; i < img_->size(); ++i) {
-        if (auto total_idx = total(i); img_->dict.is_darcy(img_->phase[i])) {
+        if (auto total_idx = total(i); img_->is_darcy(i)) {
           auto rep = ds.find_set(*total_idx); 
           total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
         }
@@ -1049,7 +1160,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->dict.is_darcy(img_->phase[adj_idx1d])) // darcy-darcy
+                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d)) // darcy-darcy
                       gen.reserve(idx1d, adj_idx1d);
                 });
               }
@@ -1090,7 +1201,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->dict.is_darcy(img_->phase[adj_idx1d])) // darcy-darcy
+                    if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d)) // darcy-darcy
                       gen.set(idx1d, adj_idx1d);
                 });
               }
@@ -1127,7 +1238,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->dict.is_darcy(img_->phase[adj_idx1d]) && filter(adj_idx1d)) // darcy-darcy
+                    if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d) && filter(adj_idx1d)) // darcy-darcy
                       builder.reserve(idx1d, adj_idx1d);
                 });
               }
@@ -1197,7 +1308,7 @@ namespace xpm
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
-                    if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->dict.is_darcy(img_->phase[adj_idx1d]) && filter(adj_idx1d)) { // darcy-darcy
+                    if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d) && filter(adj_idx1d)) { // darcy-darcy
                       auto coef = -cell_size.x()*(2/(1/term(idx1d) + 1/term(adj_idx1d)));
                       builder.set(idx1d, adj_idx1d, coef);
                     }

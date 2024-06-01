@@ -42,13 +42,13 @@
 
 namespace dpl
 {
-  template <typename T>
+  template <typename T> requires (sizeof(T) < sizeof(int))
   struct full_range_iterator
   {
     int value;
 
     constexpr T operator*() const noexcept {
-      return T(value);
+      return T(value);  // NOLINT(clang-diagnostic-implicit-int-conversion)
     }
 
     constexpr auto& operator++() noexcept {
@@ -175,7 +175,7 @@ namespace dpl
     static bool invert(std::false_type, bool v) { return v; }
   };
 
-  template <std::integral T, typename Tag, bool Validable = false, T InvalidValue = std::numeric_limits<T>::max()>
+  template <std::integral T, typename Tag, bool test = false, T t0 = std::numeric_limits<T>::max()>
   struct strong_integer
   {
     using type = T;
@@ -212,12 +212,12 @@ namespace dpl
     constexpr auto operator+ (strong_integer rhs) const noexcept { return strong_integer{value + *rhs}; }
     constexpr auto operator- (strong_integer rhs) const noexcept { return strong_integer{value - *rhs}; }
 
-    explicit constexpr operator bool() const noexcept requires (Validable) {
-      return value != InvalidValue;
+    explicit constexpr operator bool() const noexcept requires (test) {
+      return value != t0;
     }
 
-    static constexpr auto invalid_value() noexcept requires (Validable) {
-      return strong_integer{InvalidValue};
+    static constexpr auto invalid_value() noexcept requires (test) {
+      return strong_integer{t0};
     }
   };
 
@@ -226,9 +226,11 @@ namespace dpl
   template <typename...> // template <typename Index, typename Value>
   class strong_vector {};
 
-  template <typename U, typename Tag, bool V, U W, typename Value>
-  class strong_vector<strong_integer<U, Tag, V, W>, Value>
+  template <typename T, typename Tag, bool test, T t0, typename Value>
+  class strong_vector<strong_integer<T, Tag, test, t0>, Value>
   {
+    using strong_integer = strong_integer<T, Tag, test, t0>;
+
   protected:
     std::unique_ptr<Value[]> uptr_;
 
@@ -244,10 +246,10 @@ namespace dpl
     explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
       : uptr_{std::make_unique<Value[]>(value)} {}
 
-    explicit strong_vector(strong_integer<U, Tag, V, W> size)
+    explicit strong_vector(strong_integer size)
       : uptr_{std::make_unique<Value[]>(*size)} {}
 
-    explicit strong_vector(strong_integer<U, Tag, V, W> size, Value value)
+    explicit strong_vector(strong_integer size, Value value)
       : strong_vector{size} {
       std::fill_n(uptr_.get(), *size, value);
     }
@@ -256,20 +258,20 @@ namespace dpl
       uptr_.reset();
     }
 
-    void resize(strong_integer<U, Tag, V, W> size) {
+    void resize(strong_integer size) {
       uptr_ = std::make_unique<Value[]>(*size);
     }
 
-    void assign(strong_integer<U, Tag, V, W> size, Value value) {
+    void assign(strong_integer size, Value value) {
       resize(size);
       std::fill_n(uptr_.get(), *size, value);
     }
 
-    auto& operator[](strong_integer<U, Tag, V, W> index) {
+    auto& operator[](strong_integer index) {
       return uptr_[*index];
     }
 
-    auto& operator[](strong_integer<U, Tag, V, W> index) const {
+    auto& operator[](strong_integer index) const {
       return uptr_[*index];
     }
 
@@ -281,14 +283,16 @@ namespace dpl
       return static_cast<bool>(uptr_);
     }
 
-    auto span(const strong_integer<U, Tag, V, W> size) const {
+    auto span(const strong_integer size) const {
       return std::span{data(), data() + *size};
     }
   };
 
-  template <typename U, typename Tag, bool V, U W>
-  class strong_vector<strong_integer<U, Tag, V, W>, bool>
+  template <typename T, typename Tag, bool test, T t0>
+  class strong_vector<strong_integer<T, Tag, test, t0>, bool>
   {
+    using strong_integer = strong_integer<T, Tag, test, t0>;
+
   protected:
     std::vector<bool> vec_;
 
@@ -304,14 +308,14 @@ namespace dpl
     explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
       : vec_(value) {}
 
-    explicit strong_vector(strong_integer<U, Tag, V, W> size)
+    explicit strong_vector(strong_integer size)
       : vec_(*size) {}
 
-    auto operator[](strong_integer<U, Tag, V, W> i) {
+    auto operator[](strong_integer i) {
       return vec_[*i];
     }
 
-    auto operator[](strong_integer<U, Tag, V, W> i) const {
+    auto operator[](strong_integer i) const {
       return vec_[*i];
     }
   };
@@ -322,12 +326,14 @@ namespace dpl
 
 
 
-  template <typename U, typename Tag, bool V, U W, typename Value, std::size_t size>
-  class strong_array<strong_integer<U, Tag, V, W>, Value, size> : public strong_vector<strong_integer<U, Tag, V, W>, Value>
+  template <typename T, typename Tag, bool test, T t0, typename Value, std::size_t size>
+  class strong_array<strong_integer<T, Tag, test, t0>, Value, size>
+    : public strong_vector<strong_integer<T, Tag, test, t0>, Value>
   {
   public:
     constexpr strong_array()
-      : strong_vector<strong_integer<U, Tag, V, W>, Value>(std::integral_constant<size_t, size>{}) {}
+      : strong_vector<strong_integer<T, Tag, test, t0>, Value>
+      (std::integral_constant<size_t, size>{}) {}
 
     explicit constexpr strong_array(Value v)
       : strong_array() {
@@ -347,12 +353,14 @@ namespace dpl
     // }
   };
 
-  template <typename U, typename Tag, bool V, U W, std::size_t size>
-  class strong_array<strong_integer<U, Tag, V, W>, bool, size> : public strong_vector<strong_integer<U, Tag, V, W>, bool>
+  template <typename T, typename Tag, bool test, T t0, std::size_t size>
+  class strong_array<strong_integer<T, Tag, test, t0>, bool, size>
+    : public strong_vector<strong_integer<T, Tag, test, t0>, bool>
   {
   public:
     constexpr strong_array()
-      : strong_vector<strong_integer<U, Tag, V, W>, bool>(std::integral_constant<size_t, size>{}) {}
+      : strong_vector<strong_integer<T, Tag, test, t0>, bool>
+      (std::integral_constant<size_t, size>{}) {}
     
     auto begin() const {
       return this->vec_.begin();

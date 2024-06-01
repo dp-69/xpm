@@ -38,8 +38,6 @@
 #include <boost/math/tools/roots.hpp>
 #include <boost/pending/disjoint_sets.hpp>
   
-  
-
 
 namespace xpm
 {
@@ -462,52 +460,33 @@ namespace xpm
   
   
 
-  namespace voxel_prop
+  namespace voxel_info
   {
     namespace helper
     {
       struct phase_tag {};
       struct velem_tag {};
     }
-
     
     using phase_t = dpl::strong_integer<std::uint8_t, helper::phase_tag>;
     static inline constexpr dpl::full_range_unsigned<phase_t> phases;
 
     /**
      * \brief
-     *   for a void voxel - a macro node it belongs
-     *   for a microporous voxel - an adjacent pore node
+     *   for a void voxel  - a macro node it belongs to
+     *   for a darcy voxel - an adjacent macro node or else <invalid> 
      */
     struct velem_t : dpl::strong_integer<std::int32_t, helper::velem_tag, true>
     {
-      constexpr velem_t() : strong_integer{invalid_value()} {}
-      constexpr explicit velem_t(type v) : strong_integer{v} {}
-
       explicit constexpr operator macro_t() const {
         return macro_t{value};
       }
-    };
-  }
 
-  namespace parse
-  {
-    struct image_dict
-    {
-      std::uint8_t pore;
-      std::uint8_t solid;
-
-      void load(const nlohmann::json& j) {
-        pore = j["void"];
-        solid = j["solid"];
+      static constexpr auto invalid_value() {
+        return velem_t{strong_integer::invalid_value()};
       }
-
-      bool is_void(const voxel_prop::phase_t p) const { return *p == pore; }
-      bool is_solid(const voxel_prop::phase_t p) const { return *p == solid; }
-      bool is_darcy(const voxel_prop::phase_t p) const { return !is_void(p) && !is_solid(p); }
     };
   }
-
 
   namespace presets {
     static constexpr auto darcy_to_m2 = 9.869233e-13;
@@ -619,46 +598,36 @@ namespace xpm
     double poro;
     double perm;
     QColor color;
-
-
-    static poro_perm_t nan() {
-      poro_perm_t pp;
-      pp.poro = std::numeric_limits<double>::quiet_NaN();
-      pp.perm = std::numeric_limits<double>::quiet_NaN();
-      return pp;
-      // return poro_perm_t{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
-    }
-
-    bool is_nan() const {
-      return std::isnan(poro);
-    }
   };
 
   struct runtime_settings
   {
     using wrap = wrapper<nlohmann::json>;
 
-    bool loaded = false;
     bool occupancy_images = false;
 
     double max_pc = std::numeric_limits<double>::max();
 
-    struct {
+    struct image_settings {
+      using phase_t = voxel_info::phase_t;
+
       std::filesystem::path path;
       dpl::vector3i size;
       double resolution;
-      parse::image_dict phases;
+
       // bool grey = false;
 
       void load(const nlohmann::json& j) {
         path = std::string{j["path"]};
         size = j["size"];
         resolution = j["resolution"];
-        phases.load(j["phase"]);
+        void_v  = j["phase"]["void"];
+        solid_v = j["phase"]["solid"];
+
         // wrap{j}.set(grey, "grey");
       }
 
-      auto pnextract_filename() {
+      auto pnextract_filename() const {
         auto stem = path.stem();
 
         if (std::regex_match(stem.string(), std::regex{R"(.+_(\d+)x(\d+)x(\d+)_(\d+)p(\d+)um$)"}))
@@ -672,52 +641,73 @@ namespace xpm
             stem, size.x(), size.y(), size.z(), resol, path.extension())
         };
       }
-    } image;
+
+      /*
+       * darcy
+       */
+
+      
 
 
-    double theta = 0;
+      /*
+       * uncompressed
+       */
+      phase_t void_v;
+      phase_t solid_v;
 
-    struct
-    {
-      // double perm_single = std::numeric_limits<double>::quiet_NaN();
+      dpl::strong_array<phase_t, bool> darcy_found;
+      dpl::strong_array<phase_t, phase_t> darcy_compress;
+      phase_t darcy_count;
 
-      // double A = std::numeric_limits<double>::quiet_NaN();
-      // double n1 = 1;
-      // double n2 = 1;
+      /*
+       * compressed
+       */
+      dpl::strong_vector<phase_t, poro_perm_t> poro_perm;
 
-      dpl::strong_array<voxel_prop::phase_t, poro_perm_t> poro_perm{poro_perm_t::nan()};
 
       void set_poro_perm(const nlohmann::json& list) {
-        using namespace voxel_prop;
+        auto s = list.size();
 
-        int i = 0;
+        if (s > ((1 << sizeof(phase_t)*8) - 2))
+          throw config_exception("reached maximum number of darcy values.");
 
-        auto mult = 255./(list.size() + 1);                 // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+        darcy_count = phase_t(s);  // NOLINT(clang-diagnostic-implicit-int-conversion)
+        poro_perm.resize(darcy_count);    
 
-        for (const auto& j : list) {
-          auto& ref = poro_perm[phase_t{j["value"].get<phase_t::type>()}];
+        auto mult = 255./(s + 1);  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+
+        for (phase_t i{0}; const auto& j : list) {
+          auto p = j["value"].get<phase_t>();
+
+          darcy_compress[p] = i;
+          darcy_found[p] = true;
+
+          auto& ref = poro_perm[i]; // NOLINT(CppUseStructuredBinding)
 
           ref.poro = j["porosity"];
           ref.perm = j["permeability"].get<double>()*presets::mD_to_m2;
-          ref.color = QColor::fromHsl(++i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          ref.color = QColor::fromHsl(*i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
           dpl::qt::try_parse(j, ref.color);
 
-          // poro_perm[phase_t{j["value"].get<phase_t::type>()}] =
-          //   {j["porosity"], j["permeability"].get<double>()*presets::mD_to_m2};
+          ++i;
         }
+
+        // darcy_compress[void_v] = i;
+        // darcy_compress[solid_v] = i + 1;
       }
 
-      auto poro(voxel_prop::phase_t p) const {
+      auto poro(voxel_info::phase_t p) const {
         return poro_perm[p].poro;
       }
 
-      auto perm(voxel_prop::phase_t p) const {
+      auto perm(voxel_info::phase_t p) const {
         return poro_perm[p].perm;
       }
-    } darcy;
+    } image;
 
-    
+    double theta = 0;
+
     struct input_curves {
       dpl::curve2d pc;  /* [Sw, Pc] */
       std::array<dpl::curve2d, 2> kr;
@@ -765,7 +755,7 @@ namespace xpm
         // darcy.perm_single = first_record["permeability"].get<double>()*0.001*presets::darcy_to_m2;
         // darcy.poro_single = first_record["porosity"];
 
-        darcy.set_poro_perm((*j_micro)["voxel"]);
+        image.set_poro_perm((*j_micro)["voxel"]);
 
         // j_micro.set(darcy.n1, "kozeny_carman", "n1");
         // j_micro.set(darcy.n2, "kozeny_carman", "n2");
@@ -796,7 +786,6 @@ namespace xpm
         theta = j_theta->get<double>()/180*std::numbers::pi;
 
       solver.load(*j("solver"));
-      loaded = true;
     }
   };
 

@@ -85,7 +85,7 @@ namespace xpm {
       using type = std::uint16_t;
       static constexpr auto max = std::numeric_limits<type>::max();
 
-      type darcy_value = pc_inv ? (1 - pc_inv.solve(1/r_cap_global))*max : 0;
+      type darcy_value = pc_inv ? (1 - pc_inv(1/r_cap_global))*max : 0;
 
       using namespace presets;
       using namespace attrib;
@@ -100,13 +100,13 @@ namespace xpm {
       for (k = 0; k < dim.z(); ++k)
         for (j = 0; j < dim.y(); ++j)
           for (i = 0; i < dim.x(); ++i, ++idx1d)
-            if (img.dict.is_void(img.phase[idx1d])) {
+            if (img.is_void(idx1d)) {
               if (auto velem = img.velem[idx1d]; velem)
                 if (macro_t macro{velem}; pni.connected(macro))
                   if (auto net = pni.net(macro); config(net).phase() == phase_config::phase1())
                     output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/eq_tr::area(r_ins(pn, macro)))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
             }
-            else if (img.dict.is_darcy(img.phase[idx1d]))
+            else if (img.is_darcy(idx1d))
               output[*idx1d] = darcy_value;
 
       std::ofstream{path, std::ios::binary}
@@ -274,7 +274,7 @@ namespace xpm {
       secondary_.kr.reserve(500);
 
       total_pore_volume_ = pni_->total_pore_volume(
-        [this](voxel_t i) { return settings_->darcy.poro(img_->phase[i]); });
+        [this](voxel_t i) { return settings_->image.poro(img_->phase[i]); });
 
 
       {
@@ -318,13 +318,13 @@ namespace xpm {
     double calc_relative(const runtime_settings::input_curves& curve, const dpl::curve2d& pc_to_sw, double theta, auto phase1) {
       using dpl::extrapolant::flat;
 
-      auto kr = pc_to_sw ? curve.kr[phase1].solve(pc_to_sw.solve(1/state_.r_cap_global)) : 0.0;
+      auto kr = pc_to_sw ? curve.kr[phase1](pc_to_sw(1/state_.r_cap_global)) : 0.0;
 
       // static constexpr auto kr_threshold = 1e-3;
       // bool darcy_filter = kr > kr_threshold;
 
       filter_phase<phase1> filter{pni_, &state_, kr > 1e-3/*darcy_filter*/};
-      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*settings_->darcy.perm(img_->phase[i]); }, phase1};
+      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*settings_->image.perm(img_->phase[i]); }, phase1};
 
       auto [nrows, mapping] = pni_->generate_mapping(*settings_->solver.decomposition, filter);
       auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), term, filter);
@@ -428,7 +428,7 @@ namespace xpm {
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (pni_->connected(idx1d)) { // TODO: Early primary termination
-                inv_total_porosity += settings_->darcy.poro(img_->phase[idx1d]);
+                inv_total_porosity += settings_->image.poro(img_->phase[idx1d]);
                 queue.insert(idx1d, darcy_r_cap);
               }
       }
@@ -437,7 +437,7 @@ namespace xpm {
       auto eval_inv_volume = [&](double r_cap_global) {
         auto macro = area_corner_mult*eq_tr::area_corners(theta, r_cap_global) + inv_volume_coef0;
         if (pc_to_sw)
-          macro += pc_to_sw.solve(1/r_cap_global)*cell_volume*inv_total_porosity;
+          macro += pc_to_sw(1/r_cap_global)*cell_volume*inv_total_porosity;
         return macro;
       };
 
@@ -471,9 +471,9 @@ namespace xpm {
               }
               else {
                 auto voxel = pni_->voxel(v_net);
-                auto poro = settings_->darcy.poro(img_->phase[voxel]);
+                auto poro = settings_->image.poro(img_->phase[voxel]);
                 inv_total_porosity -= poro;
-                inv_volume_coef0 += pc_to_sw.solve(1/state_.r_cap_global)*cell_volume*poro;  
+                inv_volume_coef0 += pc_to_sw(1/state_.r_cap_global)*cell_volume*poro;  
               }
             }
 
@@ -794,15 +794,15 @@ namespace xpm {
 
       using eq_tr = hydraulic_properties::equilateral_triangle;
       using namespace attrib;
-      
-      auto darcy_r_cap = std::numeric_limits<double>::quiet_NaN();
+
+      double darcy_r_cap = std::numeric_limits<double>::quiet_NaN();
 
       if (pc_to_sw) {
         darcy_r_cap = 1/pc_to_sw.front().x();
         pc_max_step_ = 0.075/darcy_r_cap;
       }
       else {
-        auto min_r_cap_throat = std::numeric_limits<double>::max();
+        double min_r_cap_throat = std::numeric_limits<double>::max();
 
         for (std::size_t i{0}; i < pn_->throat_count(); ++i)
           if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && pni_->connected(l))
@@ -833,16 +833,16 @@ namespace xpm {
 
       state_.r_cap_global = queue.front().r_cap;
 
-      last_pc_point_ = {2, -1};
+      last_pc_point_ = {std::numeric_limits<double>::max(), std::numeric_limits<double>::min()};
       double last_kr_sw = 1.0;
       primary_.kr.emplace_back(1, 1, 0);
 
-      auto cell_volume = (pn_->physical_size/img_->dim()).prod();
+      const double cell_volume = (pn_->physical_size/img_->dim()).prod();
 
       auto eval_inv_volume = [&](double r_cap_global) {
         auto macro = inv_volume_coefs[0] + inv_volume_coefs[2]*r_cap_global*r_cap_global;
         if (pc_to_sw)
-          macro += (1 - pc_to_sw.solve(1/r_cap_global))*cell_volume*inv_total_porosity;
+          macro += (1 - pc_to_sw(1/r_cap_global))*cell_volume*inv_total_porosity;
         return macro;
       };
 
@@ -944,7 +944,7 @@ namespace xpm {
           auto net = pni_->net(voxel);
 
           darcy_invaded_ = true;
-          inv_total_porosity += settings_->darcy.poro(img_->phase[voxel]);
+          inv_total_porosity += settings_->image.poro(img_->phase[voxel]);
 
           progress_percolation(net, r_cap); // TODO: phase_config::phase1_bulk_films(); of a voxel
 
@@ -998,14 +998,6 @@ namespace xpm {
 
           auto step = std::pow(10, (std::log10(max_darcy_pc) - std::log10(end_pc))/steps);
 
-          // auto i = 0;
-          // for (auto next_r_cap = state_.r_cap_global/step; 1/next_r_cap < settings_->max_pc; next_r_cap /= step) {  // NOLINT(cert-flp30-c)
-          //   state_.r_cap_global /= step;
-          //   primary_.add_pc(eval_pc_point());
-          //
-          //   if (i++%2 != 0)
-          //     write_occupancy_image(primary_.pc.back().x());
-          // }
 
           for (auto i = 0; i < steps; ++i) {
             auto next_r_cap = state_.r_cap_global/step;
@@ -1032,14 +1024,8 @@ namespace xpm {
         }
 
         
-
-        // if (!settings_->primary.kr[0].empty()) 
-         // if (last_kr_sw - pc_point.x() > settings_->report.sw_of_kr) {
-         //    last_kr_sw = pc_point.x();
-         //    rel_calc_report(pc_point.x());
-         //  }
        
-        {
+        { /* Relative permeabilty */
           for (auto [c_sw, c_pc] : std::ranges::reverse_view(settings_->primary.pc)) {
             if (c_pc <= end_pc)
               continue;
@@ -1057,22 +1043,6 @@ namespace xpm {
               ++progress_idx_;
             }
           }
-
-          // auto steps = 6;
-          //
-          // for (auto i = 0; i < steps; ++i) {
-          //   auto next_r_cap = 1/settings_->primary.pc.solve(1 - 1.*i/steps);
-          //
-          //   if (1/next_r_cap <= end_pc)
-          //     continue;
-          //
-          //   if (1/next_r_cap > settings_->max_pc)
-          //     break;
-          //
-          //   state_.r_cap_global = next_r_cap;
-          //   rel_calc_report(1 - eval_inv_volume()/total_pore_volume_);
-          //   ++progress_idx_;
-          // }
         }
       }
 

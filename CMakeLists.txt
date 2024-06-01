@@ -34,6 +34,7 @@ if(MSVC)
   string(REPLACE "/W3" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /MANIFEST:NO")
+
   #set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /MANIFEST:NO")
   #set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /MANIFEST:NO")
 endif()
@@ -94,6 +95,11 @@ add_subdirectory(libs/pnextract)
 if(MSVC)  
   target_compile_options(pnextract PRIVATE -w)
   target_compile_options(xpm PRIVATE -W4)
+
+  if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    target_compile_options(xpm PRIVATE -bigobj)
+  endif()
+
 else()
   #add_compile_options("-w")
 endif()

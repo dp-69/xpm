@@ -255,59 +255,11 @@ namespace xpm
 
       std::cout << '\n';
 
-      img_.dict = settings_.image.phases;
+      
 
-      img_.read_image("pnextract"/settings_.image.pnextract_filename());
-      img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
+      petrophysics_summary_.porosity = img_.read_image(settings_.image);
 
-      {
-        using namespace voxel_prop;
-
-        strong_array<phase_t, idx1d_t> count(0);
-        for (auto p : img_.phase.span(img_.size())) {
-          // occured[p] = true;
-          ++count[p];
-        }
-
-        std::list<phase_t> missing;
-        for (auto p : phases)
-          if (settings_.image.phases.is_darcy(p) && count[p] && settings_.darcy.poro_perm[p].is_nan())
-            missing.push_back(p);
-
-        if (!missing.empty()) {
-          std::cout << "\nunassigned porosity and permeability: [\n";
-
-          auto print = [](auto iter) {
-            fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
-          };
-
-          auto iter = missing.begin();
-          auto end = missing.end();
-
-          print(iter);
-          while (++iter != end) {
-            std::cout << ",\n";
-            print(iter);
-          }
-          std::cout << "\n]\n";
-
-          throw config_exception("missing microporosity values.");
-        }
-
-        double total_fractions = 0.0;
-
-        for (auto p : phases)
-          if (count[p])
-            if (settings_.image.phases.is_void(p))                              
-              total_fractions += count[p];                                    // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
-            else if (!settings_.image.phases.is_solid(p))
-              total_fractions += count[p]*settings_.darcy.poro_perm[p].poro;  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
-
-        petrophysics_summary_.porosity = total_fractions*(pn_.physical_size/img_.dim()).prod()/pn_.physical_size.prod();
-
-        fmt::print("  total porosity: {:.2f}%\n\n", petrophysics_summary_.porosity*100);
-      }
-
+      // petrophysics_summary_.porosity = img_.verify_darcy(settings_);
 
       img_.read_icl_velems(pnm_path);
 
@@ -443,7 +395,7 @@ namespace xpm
       system::print_memory("PRE input", hypre::hypre_print_level);
 
       auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), single_phase_conductance{&pn_,
-        [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
+        [this](voxel_t i) { return settings_.image.perm(img_.phase[i]); }
       });
 
       system::print_memory("POST input", hypre::hypre_print_level);
@@ -513,7 +465,7 @@ namespace xpm
 
       {
         auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, 
-          [this](voxel_t i) { return settings_.darcy.perm(img_.phase[i]); }
+          [this](voxel_t i) { return settings_.image.perm(img_.phase[i]); }
         });
 
         using namespace presets;

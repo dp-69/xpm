@@ -72,7 +72,6 @@ int main(int argc, char* argv[])
     
         modeller.init(j);
 
-
         modeller.prepare();
         modeller.compute_pressure();
 
