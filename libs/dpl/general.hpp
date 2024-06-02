@@ -222,12 +222,11 @@ namespace dpl
   };
 
 
-
   template <typename...> // template <typename Index, typename Value>
-  class strong_vector {};
+  class so_uptr {};
 
   template <typename T, typename Tag, bool test, T t0, typename Value>
-  class strong_vector<strong_integer<T, Tag, test, t0>, Value>
+  class so_uptr<strong_integer<T, Tag, test, t0>, Value>
   {
     using strong_integer = strong_integer<T, Tag, test, t0>;
 
@@ -235,22 +234,22 @@ namespace dpl
     std::unique_ptr<Value[]> uptr_;
 
   public:
-    strong_vector() = default;
-    strong_vector(const strong_vector& other) = delete;
-    strong_vector(strong_vector&& other) noexcept = default;
-    strong_vector& operator=(const strong_vector& other) = delete;
-    strong_vector& operator=(strong_vector&& other) noexcept = default;
-    ~strong_vector() = default;
+    so_uptr() = default;
+    so_uptr(const so_uptr& other) = delete;
+    so_uptr(so_uptr&& other) noexcept = default;
+    so_uptr& operator=(const so_uptr& other) = delete;
+    so_uptr& operator=(so_uptr&& other) noexcept = default;
+    ~so_uptr() = default;
 
     template <std::size_t value>
-    explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
+    explicit constexpr so_uptr(std::integral_constant<std::size_t, value>)
       : uptr_{std::make_unique<Value[]>(value)} {}
 
-    explicit strong_vector(strong_integer size)
+    explicit so_uptr(strong_integer size)
       : uptr_{std::make_unique<Value[]>(*size)} {}
 
-    explicit strong_vector(strong_integer size, Value value)
-      : strong_vector{size} {
+    explicit so_uptr(strong_integer size, Value value)
+      : so_uptr{size} {
       std::fill_n(uptr_.get(), *size, value);
     }
 
@@ -289,7 +288,7 @@ namespace dpl
   };
 
   template <typename T, typename Tag, bool test, T t0>
-  class strong_vector<strong_integer<T, Tag, test, t0>, bool>
+  class so_uptr<strong_integer<T, Tag, test, t0>, bool>
   {
     using strong_integer = strong_integer<T, Tag, test, t0>;
 
@@ -297,18 +296,18 @@ namespace dpl
     std::vector<bool> vec_;
 
   public:
-    strong_vector() = default;
-    strong_vector(const strong_vector& other) = delete;
-    strong_vector(strong_vector&& other) noexcept = default;
-    strong_vector& operator=(const strong_vector& other) = delete;
-    strong_vector& operator=(strong_vector&& other) noexcept = default;
-    ~strong_vector() = default;
+    so_uptr() = default;
+    so_uptr(const so_uptr& other) = delete;
+    so_uptr(so_uptr&& other) noexcept = default;
+    so_uptr& operator=(const so_uptr& other) = delete;
+    so_uptr& operator=(so_uptr&& other) noexcept = default;
+    ~so_uptr() = default;
 
     template <std::size_t value>
-    explicit constexpr strong_vector(std::integral_constant<std::size_t, value>)
+    explicit constexpr so_uptr(std::integral_constant<std::size_t, value>)
       : vec_(value) {}
 
-    explicit strong_vector(strong_integer size)
+    explicit so_uptr(strong_integer size)
       : vec_(*size) {}
 
     auto operator[](strong_integer i) {
@@ -322,21 +321,21 @@ namespace dpl
 
 
   template <typename Index, typename Value, std::size_t size = std::size_t{1} << 8*sizeof(Index)>
-  class strong_array {};
+  class so_array {};
 
 
 
   template <typename T, typename Tag, bool test, T t0, typename Value, std::size_t size>
-  class strong_array<strong_integer<T, Tag, test, t0>, Value, size>
-    : public strong_vector<strong_integer<T, Tag, test, t0>, Value>
+  class so_array<strong_integer<T, Tag, test, t0>, Value, size>
+    : public so_uptr<strong_integer<T, Tag, test, t0>, Value>
   {
   public:
-    constexpr strong_array()
-      : strong_vector<strong_integer<T, Tag, test, t0>, Value>
+    constexpr so_array()
+      : so_uptr<strong_integer<T, Tag, test, t0>, Value>
       (std::integral_constant<size_t, size>{}) {}
 
-    explicit constexpr strong_array(Value v)
-      : strong_array() {
+    explicit constexpr so_array(Value v)
+      : so_array() {
       std::fill_n(this->uptr_.get(), size, v);
     }
     
@@ -354,12 +353,12 @@ namespace dpl
   };
 
   template <typename T, typename Tag, bool test, T t0, std::size_t size>
-  class strong_array<strong_integer<T, Tag, test, t0>, bool, size>
-    : public strong_vector<strong_integer<T, Tag, test, t0>, bool>
+  class so_array<strong_integer<T, Tag, test, t0>, bool, size>
+    : public so_uptr<strong_integer<T, Tag, test, t0>, bool>
   {
   public:
-    constexpr strong_array()
-      : strong_vector<strong_integer<T, Tag, test, t0>, bool>
+    constexpr so_array()
+      : so_uptr<strong_integer<T, Tag, test, t0>, bool>
       (std::integral_constant<size_t, size>{}) {}
     
     auto begin() const {

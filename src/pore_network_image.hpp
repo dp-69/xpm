@@ -46,7 +46,7 @@ namespace xpm
   {
     static constexpr auto invalid_block = std::numeric_limits<int>::max();
 
-    dpl::strong_vector<net_t, idx1d_t> forward;
+    dpl::so_uptr<net_t, idx1d_t> forward;
     std::unique_ptr<net_t[]> backward;
     std::vector<dpl::hypre::index_range> block_rows;
 
@@ -586,13 +586,7 @@ namespace xpm
       idx1d_mapper_ = dim_;
     }
 
-    struct image_dict
-    {
-      voxel_info::phase_t darcy_count;
-
-      bool is_void(voxel_info::phase_t p) const noexcept { return p == darcy_count; }
-      bool is_darcy(voxel_info::phase_t p) const noexcept { return p < darcy_count; }
-    } dict;
+    voxel_info::phase_t darcy_count_;
 
   public:
     auto size() const {
@@ -611,28 +605,24 @@ namespace xpm
     
 
     
-    dpl::strong_vector<voxel_t, voxel_info::phase_t> phase;
-    dpl::strong_vector<voxel_t, voxel_info::velem_t> velem;
+    dpl::so_uptr<voxel_t, voxel_info::phase_t> phase;
+    dpl::so_uptr<voxel_t, voxel_info::velem_t> velem;
 
     /*
      *
      */
 
     bool is_void(voxel_t i) const {
-      return dict.is_void(phase[i]);
+      return phase[i] == darcy_count_;
     }
 
     bool is_darcy(voxel_t i) const {
-      return dict.is_darcy(phase[i]);
+      return phase[i] < darcy_count_;
     }
 
-    /*
-     *
-     */
-
-    double read_image(const runtime_settings::image_settings& settings) {
+    double read_image(const runtime_settings::image_settings& cfg) {
       /*
-       * reads an image and compresses/normalizes phase values:
+       * reads an image and narrow phase values:
        *   [0, n)  - darcy phases
        *   {n}     - void phase
        *   {n + 1} - solid phase
@@ -642,101 +632,84 @@ namespace xpm
       using namespace std;
       using namespace voxel_info;
 
-      set_dim(settings.size);
+      set_dim(cfg.size);
+      darcy_count_ = cfg.darcy.count;
 
       {
         ifstream is{
-          "pnextract"/settings.pnextract_filename(),
+          "pnextract"/cfg.pnextract_filename(),
           ios::binary
         };
         phase.resize(size_);
         is.read(reinterpret_cast<char*>(phase.data()), *size_);
       }
 
-      size_t void_count = 0;
-      size_t solid_count = 0;
-      size_t darcy_count = 0;
+      dpl::so_array<phase_t, idx1d_t> count(0); /* wide */
+      
+      for (auto& p : phase.span(size_)) {
+        ++count[p];
 
-      dpl::strong_array<phase_t, idx1d_t> count_uncomp(0);
-
-      for (voxel_t i{0}; i < size_; ++i) {
-        auto& p = phase[i];
-        ++count_uncomp[p];
-
-        if (p == settings.void_v) {
-          ++void_count;
-
-          p = settings.darcy_count;
-        }
-        else if (p == settings.solid_v) {
-          ++solid_count;
-
-          p.value = settings.darcy_count.value + 1;
-        }
-        else {
-          ++darcy_count;
-
-          p = settings.darcy_compress[p];
-        }
+        if (p == cfg.void_v)
+          p = darcy_count_;
+        else if (p == cfg.solid_v)
+          *p = *darcy_count_ + 1;
+        else
+          p = cfg.darcy.narrow[p];
       }
 
-      cout << fmt::format(
-        "image voxels\n"
+      fmt::print(
+        "image\n"
         "  total: {:L}\n"
-        "  void: {:L} | {:.1f}%\n"
+        "  void:  {:L}\n"
         "  solid: {:L}\n"
-        "  microprs: {:L}\n",
-        size_, void_count, 100.*void_count/ *size_, solid_count, darcy_count);  // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+        "  darcy: {:L}\n",
+        size_,
+        count[cfg.void_v],
+        count[cfg.solid_v],
+        size_ - count[cfg.void_v] - count[cfg.solid_v]
+      );  
 
-      /*
-       *
-       */
 
-      std::list<phase_t> missing;
-      for (auto p : phases)
-        if (
-          p != settings.void_v &&
-          p != settings.solid_v &&
-          count_uncomp[p] &&
-          !settings.darcy_found[p]
-        )
-          missing.push_back(p);
+      { /* verify missing */
+        std::list<phase_t> missing;
+        for (auto p : phases)
+          if (
+            p != cfg.void_v && p != cfg.solid_v &&
+            count[p] && !cfg.darcy.found[p]
+          )
+            missing.push_back(p);
 
-      if (!missing.empty()) {
-        std::cout << "\nunassigned porosity and permeability: [\n";
+        if (!missing.empty()) {
+          std::cout << "\nunassigned porosity and permeability: [\n";
 
-        auto print = [](auto iter) {
-          fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
-        };
+          auto print = [](auto iter) {
+            fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
+          };
 
-        auto iter = missing.begin();
-        auto end = missing.end();
+          auto iter = missing.begin();
+          auto end = missing.end();
 
-        print(iter);
-        while (++iter != end) {
-          std::cout << ",\n";
           print(iter);
+          while (++iter != end) {
+            std::cout << ",\n";
+            print(iter);
+          }
+          std::cout << "\n]\n";
+
+          throw config_exception("missing microporosity values.");
         }
-        std::cout << "\n]\n";
-
-        throw config_exception("missing microporosity values.");
       }
-
-      dict = {settings.darcy_count};
 
       double total_porosity = 0.0;
 
-      for (auto p_unc : phases)
-        if (count_uncomp[p_unc]) {
-          auto p = settings.darcy_compress[p_unc];                        // NOLINT(CppTooWideScopeInitStatement)
+      for (auto p : phases)
+        if (count[p])
+          if (p == cfg.void_v)                                       // NOLINTBEGIN(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+            total_porosity += count[p];                                   
+          else if (p != cfg.solid_v)                                 // NOLINT(clang-diagnostic-dangling-else)
+            total_porosity += count[p]*cfg.darcy.info[cfg.darcy.narrow[p]].poro;
 
-          if (dict.is_void(p))                                            // NOLINTBEGIN(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
-            total_porosity += count_uncomp[p_unc];                                   
-          else if (dict.is_darcy(p))                                      // NOLINT(clang-diagnostic-dangling-else)
-            total_porosity += count_uncomp[p_unc]*settings.poro_perm[p].poro;
-        }
-
-      total_porosity /= *size_;                                           // NOLINTEND(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
+      total_porosity /= *size_;                                      // NOLINTEND(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
 
       fmt::print("  total porosity: {:.2f}%\n\n", total_porosity*100);
 
@@ -782,17 +755,17 @@ namespace xpm
         for (k = 0; k < dim_.z(); ++k)
           for (j = 0; j < dim_.y(); ++j) 
             for (i = 0; i < dim_.x(); ++i, ++idx1d)
-              if (dict.is_darcy(phase[idx1d])) {
+              if (is_darcy(idx1d)) {
                 velem_t adj{velem_t::invalid_value()};
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] > 0)
-                    if (voxel_t adj_idx = idx1d - idx_map(d); dict.is_void(phase[adj_idx]))
+                    if (voxel_t adj_idx = idx1d - idx_map(d); is_void(adj_idx))
                       if (velem[adj_idx])
                         adj = velem[adj_idx];
 
                   if (ijk[d] < dim_[d] - 1)
-                    if (voxel_t adj_idx = idx1d + idx_map(d); dict.is_void(phase[adj_idx]))
+                    if (voxel_t adj_idx = idx1d + idx_map(d); is_void(adj_idx))
                       if (velem[adj_idx])
                         adj = velem[adj_idx];
                 });
@@ -820,8 +793,8 @@ namespace xpm
      *   .size() = pn_->node_count_ + img_->size
      *   maps total() index to compressed effective (flowing) index
      */
-    dpl::strong_vector<total_t, net_t> total_to_net_map_;
-    dpl::strong_vector<net_t, total_t> net_to_total_map_;
+    dpl::so_uptr<total_t, net_t> total_to_net_map_;
+    dpl::so_uptr<net_t, total_t> net_to_total_map_;
 
     /**
      * \brief connected/flowing
@@ -1213,7 +1186,7 @@ namespace xpm
 
     template <typename Filter = dpl::default_map::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
-      HYPRE_BigInt nrows, dpl::strong_vector<net_t, idx1d_t>&& forward, auto term, Filter filter = {}) const {
+      HYPRE_BigInt nrows, dpl::so_uptr<net_t, idx1d_t>&& forward, auto term, Filter filter = {}) const {
 
       using namespace attrib;
 
@@ -1324,7 +1297,7 @@ namespace xpm
 
     template <typename Filter = dpl::default_map::true_t>
     std::pair<double, double> flow_rates(
-      const dpl::strong_vector<net_t, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
+      const dpl::so_uptr<net_t, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
       auto inlet_flow = 0.0;
       auto outlet_flow = 0.0;
 

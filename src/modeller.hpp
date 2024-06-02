@@ -267,7 +267,7 @@ namespace xpm
 
       pni_.evaluate_isolated();
 
-      std::cout << fmt::format(" done\n  macro: {:L}\n  voxel: {:L}\n\n",
+      std::cout << fmt::format(" done\n  macro: {:L}\n  darcy: {:L}\n\n",
         pni_.connected_macro_count(),
         *pni_.connected_count() - *pni_.connected_macro_count());
     }
@@ -375,7 +375,7 @@ namespace xpm
           procs = {4, 4, 3};
       }
 
-      strong_vector<net_t, HYPRE_Real> pressure;
+      so_uptr<net_t, HYPRE_Real> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
       HYPRE_Int iters = 0;
 
@@ -496,7 +496,7 @@ namespace xpm
   struct saturation_map
   {
     pore_network_image* pni;
-    dpl::strong_vector<net_t, double>* data;
+    dpl::so_uptr<net_t, double>* data;
 
     auto operator()(voxel_t voxel) const {
 

@@ -33,10 +33,10 @@ namespace xpm {
 
   class phase_state
   {
-    dpl::strong_vector<net_t, phase_config> config_;
+    dpl::so_uptr<net_t, phase_config> config_;
     std::vector<phase_config> config_t_;
 
-    dpl::strong_vector<net_t, double> local_;
+    dpl::so_uptr<net_t, double> local_;
     std::vector<double> local_t_;
 
     static constexpr auto r_cap_mobile_ = std::numeric_limits<double>::min();
@@ -336,7 +336,7 @@ namespace xpm {
       auto found = pressure_cache::cache().find(hash);
 
       if (!settings_->solver.cache.use || found == pressure_cache::cache().end()) {
-        dpl::strong_vector<net_t, HYPRE_Real> pressure(pni_->connected_count());
+        dpl::so_uptr<net_t, HYPRE_Real> pressure(pni_->connected_count());
         auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
 
         {
@@ -380,7 +380,7 @@ namespace xpm {
       auto pc_to_sw = settings_->secondary.pc.inverse_unique();
       auto darcy_r_cap = pc_to_sw ? 1/settings_->secondary.pc.back().y() : std::numeric_limits<double>::quiet_NaN();
 
-      dpl::strong_vector<net_t, bool> explored(pni_->connected_count());
+      dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
 
       displ_queue<false> queue;
@@ -812,7 +812,7 @@ namespace xpm {
         pc_max_step_ = 0.075/min_r_cap_throat;
       }
 
-      dpl::strong_vector<net_t, bool> explored(pni_->connected_count());
+      dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
 
       displ_queue<true> queue;

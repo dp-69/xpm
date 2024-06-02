@@ -205,7 +205,7 @@ namespace xpm
 
     static void initLutPhases(
       vtkLookupTable* lut,
-      const dpl::strong_vector<voxel_info::phase_t, poro_perm_t>& poro_perms,
+      const dpl::so_uptr<voxel_info::phase_t, darcy_info>& poro_perms,
       voxel_info::phase_t darcy_count) { // TODO BUG
 
       // lut->IndexedLookupOn();  
@@ -802,7 +802,7 @@ namespace xpm
       
       initGUI();
 
-      dpl::strong_vector<net_t, double> pressure;
+      dpl::so_uptr<net_t, double> pressure;
 
       model_.prepare();
 
@@ -826,8 +826,8 @@ namespace xpm
 
         initLutPhases(
           lut_image,
-          model_.settings().image.poro_perm,
-          model_.settings().image.darcy_count);
+          model_.settings().image.darcy.info,
+          model_.settings().image.darcy.count);
         initLutNodeThroat(lut_network);
 
         phases_map map{&img()};
@@ -842,8 +842,8 @@ namespace xpm
         vtkNew<vtkLookupTable> lut_image, lut_network;
 
         initLutPhases(lut_image,
-          model_.settings().image.darcy_count.value,
-          model_.settings().image.darcy_count.value + 1);
+          model_.settings().image.darcy.count.value,
+          model_.settings().image.darcy.count.value + 1);
         initLutNodeThroat(lut_network);
 
         phases_map map{&img()};
@@ -862,8 +862,8 @@ namespace xpm
 
         permeability_map map{
           img(),
-          model_.settings().image.poro_perm,
-          model_.settings().image.darcy_count};
+          model_.settings().image.darcy.info,
+          model_.settings().image.darcy.count};
 
         InitNetworkImage(
           [this](voxel_t v) { return img().is_darcy(v); },
@@ -1136,7 +1136,7 @@ namespace xpm
     struct pressure_map
     {
       pore_network_image* pni;
-      dpl::strong_vector<net_t, HYPRE_Real>* data;
+      dpl::so_uptr<net_t, HYPRE_Real>* data;
 
       auto operator()(macro_voxel_t auto i) const {
         return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<HYPRE_Real>::quiet_NaN();
@@ -1173,23 +1173,25 @@ namespace xpm
       using phase_t = voxel_info::phase_t;
 
       const image_data* img;
-      const dpl::strong_vector<phase_t, poro_perm_t>* poro_perm;
+      const dpl::so_uptr<phase_t, darcy_info>* poro_perm;
       double log10_min;
       double log10_diff; 
     
     public:
       permeability_map(
         const image_data& img,
-        const dpl::strong_vector<phase_t, poro_perm_t>& poro_perm, phase_t darcy_count)
+        const dpl::so_uptr<phase_t, darcy_info>& poro_perm, phase_t darcy_count)
         : img(&img),
-          poro_perm(&poro_perm) {
+          poro_perm(&poro_perm)
+      {
+        using namespace std;
 
-        using namespace std::ranges;
+        if (*darcy_count) {
+          auto [min, max] = ranges::minmax(
+            poro_perm.span(darcy_count) | views::transform([](const darcy_info& x) { return x.perm; }));
 
-        if (auto range = poro_perm.span(darcy_count); !empty(range)) {
-          auto [min, max] = minmax(range, {}, [](const poro_perm_t& x) { return x.perm; });
-          log10_min = log10(min.perm);
-          log10_diff = log10(max.perm) - log10_min;
+          log10_min = log10(min);
+          log10_diff = log10(max) - log10_min;
         }
         // else {
         //   log10_min = std::numeric_limits<double>::quiet_NaN();
@@ -1233,7 +1235,7 @@ namespace xpm
 
 
         {
-          dpl::strong_vector<voxel_t, bool> filter_cache{img().size()};
+          dpl::so_uptr<voxel_t, bool> filter_cache{img().size()};
 
           {
             idx3d_t ijk;
