@@ -35,7 +35,7 @@ Download installer from https://www.microsoft.com/en-us/download/details.aspx?id
 > cd vcpkg
 > git clone -b xpm https://github.com/dp-69/vcpkg-ports ports-xpm
 > bootstrap-vcpkg.bat
-> vcpkg.exe install vtk[qt]:x64-windows qtcharts:x64-windows hypre:x64-windows boost-interprocess:x64-windows boost-intrusive:x64-windows boost-iostreams:x64-windows boost-graph:x64-windows fmt:x64-windows --overlay-ports=ports-xpm --clean-after-build
+> vcpkg.exe install vtk[qt]:x64-windows qtcharts:x64-windows hypre:x64-windows boost-intrusive:x64-windows boost-iostreams:x64-windows boost-graph:x64-windows fmt:x64-windows --overlay-ports=ports-xpm --clean-after-build
 ```
 
 - Step 2 - xpm compilation
@@ -79,7 +79,7 @@ openmpi-bin
 > cd vcpkg
 > git clone -b xpm https://github.com/dp-69/vcpkg-ports ports-xpm
 > ./bootstrap-vcpkg.sh
-> ./vcpkg install vtk[qt] qtcharts hypre boost-interprocess boost-intrusive boost-iostreams boost-graph fmt --overlay-ports=ports-xpm --clean-after-build
+> ./vcpkg install vtk[qt] qtcharts hypre boost-intrusive boost-iostreams boost-graph fmt --overlay-ports=ports-xpm --clean-after-build
 ```
 
 - Step 2 - xpm compilation

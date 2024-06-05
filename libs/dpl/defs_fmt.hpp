@@ -28,6 +28,8 @@
 
 #include <fmt/core.h>
 
+#include <filesystem>
+
 template <>
 struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
 {

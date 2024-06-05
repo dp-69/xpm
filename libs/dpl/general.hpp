@@ -228,8 +228,6 @@ namespace dpl
   template <typename T, typename Tag, bool test, T t0, typename Value>
   class so_uptr<strong_integer<T, Tag, test, t0>, Value>
   {
-    using strong_integer = strong_integer<T, Tag, test, t0>;
-
   protected:
     std::unique_ptr<Value[]> uptr_;
 
@@ -245,10 +243,10 @@ namespace dpl
     explicit constexpr so_uptr(std::integral_constant<std::size_t, value>)
       : uptr_{std::make_unique<Value[]>(value)} {}
 
-    explicit so_uptr(strong_integer size)
+    explicit so_uptr(strong_integer<T, Tag, test, t0> size)
       : uptr_{std::make_unique<Value[]>(*size)} {}
 
-    explicit so_uptr(strong_integer size, Value value)
+    explicit so_uptr(strong_integer<T, Tag, test, t0> size, Value value)
       : so_uptr{size} {
       std::fill_n(uptr_.get(), *size, value);
     }
@@ -257,20 +255,20 @@ namespace dpl
       uptr_.reset();
     }
 
-    void resize(strong_integer size) {
+    void resize(strong_integer<T, Tag, test, t0> size) {
       uptr_ = std::make_unique<Value[]>(*size);
     }
 
-    void assign(strong_integer size, Value value) {
+    void assign(strong_integer<T, Tag, test, t0> size, Value value) {
       resize(size);
       std::fill_n(uptr_.get(), *size, value);
     }
 
-    auto& operator[](strong_integer index) {
+    auto& operator[](strong_integer<T, Tag, test, t0> index) {
       return uptr_[*index];
     }
 
-    auto& operator[](strong_integer index) const {
+    auto& operator[](strong_integer<T, Tag, test, t0> index) const {
       return uptr_[*index];
     }
 
@@ -282,7 +280,7 @@ namespace dpl
       return static_cast<bool>(uptr_);
     }
 
-    auto span(const strong_integer size) const {
+    auto span(const strong_integer<T, Tag, test, t0> size) const {
       return std::span{data(), data() + *size};
     }
   };
@@ -290,8 +288,6 @@ namespace dpl
   template <typename T, typename Tag, bool test, T t0>
   class so_uptr<strong_integer<T, Tag, test, t0>, bool>
   {
-    using strong_integer = strong_integer<T, Tag, test, t0>;
-
   protected:
     std::vector<bool> vec_;
 
@@ -307,14 +303,14 @@ namespace dpl
     explicit constexpr so_uptr(std::integral_constant<std::size_t, value>)
       : vec_(value) {}
 
-    explicit so_uptr(strong_integer size)
+    explicit so_uptr(strong_integer<T, Tag, test, t0> size)
       : vec_(*size) {}
 
-    auto operator[](strong_integer i) {
+    auto operator[](strong_integer<T, Tag, test, t0> i) {
       return vec_[*i];
     }
 
-    auto operator[](strong_integer i) const {
+    auto operator[](strong_integer<T, Tag, test, t0> i) const {
       return vec_[*i];
     }
   };

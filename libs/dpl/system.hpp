@@ -53,6 +53,7 @@
 namespace dpl::system
 {
   inline void print_memory(const char* text, int print_level = 3, mpi::rank_t rank = mpi::rank_t::root()) {
+    #ifdef _WIN32
     if (print_level > 0) {
       MPI_Barrier(mpi::comm);
       if (rank) { /* root */
@@ -61,5 +62,6 @@ namespace dpl::system
       }
       MPI_Barrier(mpi::comm);
     }
+    #endif
   }
 }

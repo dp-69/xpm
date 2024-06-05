@@ -59,7 +59,7 @@ namespace dpl::vtk
   template<int face, typename idx1d_t>
   class GlyphMapperFaceGeneric : public GlyphMapperFace<idx1d_t>
   {
-    static constexpr sface<face> sface;
+    static constexpr sface_t<face> sface{};
     static constexpr cdims rel{sface};
 
     static vtkSmartPointer<vtkPolyData> Quad(double half_length = 0.5) {

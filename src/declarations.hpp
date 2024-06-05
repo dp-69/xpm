@@ -24,11 +24,6 @@
 
 #pragma once
 
-#include <filesystem>
-#include <fstream>
-#include <numbers>
-#include <regex>
-
 #include <dpl/curve2d.hpp>
 #include <dpl/defs_fmt.hpp>
 #include <dpl/defs_json.hpp>
@@ -37,6 +32,11 @@
 
 #include <boost/math/tools/roots.hpp>
 #include <boost/pending/disjoint_sets.hpp>
+
+#include <filesystem>
+#include <fstream>
+#include <numbers>
+#include <regex>
   
 
 namespace xpm

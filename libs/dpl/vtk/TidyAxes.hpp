@@ -56,7 +56,7 @@ namespace dpl::vtk
   {
     friend class TidyAxes;
     
-    static constexpr sface<face> sface;
+    static constexpr sface_t<face> sface{};
     static constexpr cdims rel{sface};
     
     vtkNew<vtkPoints> points_;
@@ -281,7 +281,7 @@ namespace dpl::vtk
     }
 
     template <int face0, int face1>
-    void RefreshAxis(sface<face0> f0 = {}, sface<face1> f1 = {}) {
+    void RefreshAxis(sface_t<face0> f0 = {}, sface_t<face1> f1 = {}) {
       if (!Face(f0).gridlines_actor_->GetVisibility() &&
           !Face(f1).gridlines_actor_->GetVisibility())
         return;

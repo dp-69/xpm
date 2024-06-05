@@ -27,6 +27,7 @@
 
 #include <ostream>
 #include <span>
+#include <algorithm>
 
 namespace dpl
 {
@@ -521,7 +522,7 @@ namespace dpl
    *   5 - z max\n
    */
   template <int face>
-  struct sface : std::integral_constant<int, face>
+  struct sface_t : std::integral_constant<int, face>
   {
     static constexpr auto dim = sdim<3, face/2>{};
     
@@ -539,7 +540,7 @@ namespace dpl
     cdims() = default;
 
     template<int face>
-    explicit constexpr cdims(sface<face>) {}
+    explicit constexpr cdims(sface_t<face>) {}
 
     static constexpr auto e0 = dpl::sdim<3, dim>{};
     static constexpr auto e1 = e0.next();
@@ -556,7 +557,7 @@ namespace dpl
   };
 
   template <int face>
-  cdims(sface<face>) -> cdims<sface<face>::dim>;
+  cdims(sface_t<face>) -> cdims<sface_t<face>::dim>;
 
 
   template <int dim0, int dim1> requires (dim0 != dim1 && dim0 < 3 && dim1 < 3)
