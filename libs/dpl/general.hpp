@@ -175,15 +175,16 @@ namespace dpl
     static bool invert(std::false_type, bool v) { return v; }
   };
 
-  template <std::integral T, typename Tag, bool test = false, T t0 = std::numeric_limits<T>::max()>
-  struct strong_integer
+
+  template <typename Tag> requires (std::integral<typename Tag::type>)
+  struct so_integer
   {
-    using type = T;
+    using type = typename Tag::type;
 
-    T value;
+    type value;
 
-    strong_integer() noexcept = default;
-    constexpr explicit strong_integer(T v) noexcept : value{v} {}
+    so_integer() noexcept = default;
+    constexpr explicit so_integer(type v) noexcept : value{v} {}
 
     constexpr auto& operator++() noexcept {
       ++value;
@@ -196,37 +197,37 @@ namespace dpl
       return temp;
     }
 
-    constexpr explicit operator T() const noexcept { return value; }
+    constexpr explicit operator type() const noexcept { return value; }
 
     constexpr auto& operator*() const noexcept { return value; }
               auto& operator*()       noexcept { return value; }
 
     constexpr bool operator< (std::integral auto rhs) const noexcept { return value <  rhs; }  // NOLINT(clang-diagnostic-sign-compare)
     constexpr bool operator==(std::integral auto rhs) const noexcept { return value == rhs; }
-    constexpr auto operator+ (std::integral auto rhs) const noexcept { return strong_integer{value + rhs}; }
-    constexpr auto operator- (std::integral auto rhs) const noexcept { return strong_integer{value - rhs}; }
-    constexpr auto operator* (std::integral auto rhs) const noexcept { return strong_integer{value * rhs}; }
+    constexpr auto operator+ (std::integral auto rhs) const noexcept { return so_integer{value + rhs}; }
+    constexpr auto operator- (std::integral auto rhs) const noexcept { return so_integer{value - rhs}; }
+    constexpr auto operator* (std::integral auto rhs) const noexcept { return so_integer{value * rhs}; }
 
-    constexpr bool operator< (strong_integer rhs) const noexcept { return value <  *rhs; }
-    constexpr bool operator==(strong_integer rhs) const noexcept { return value == *rhs; }
-    constexpr auto operator+ (strong_integer rhs) const noexcept { return strong_integer{value + *rhs}; }
-    constexpr auto operator- (strong_integer rhs) const noexcept { return strong_integer{value - *rhs}; }
+    constexpr bool operator< (so_integer rhs) const noexcept { return value <  *rhs; }
+    constexpr bool operator==(so_integer rhs) const noexcept { return value == *rhs; }
+    constexpr auto operator+ (so_integer rhs) const noexcept { return so_integer{value + *rhs}; }
+    constexpr auto operator- (so_integer rhs) const noexcept { return so_integer{value - *rhs}; }
 
-    explicit constexpr operator bool() const noexcept requires (test) {
-      return value != t0;
+    explicit constexpr operator bool() const noexcept requires requires { Tag::invalid_value; } {
+      return value != Tag::invalid_value;
     }
 
-    static constexpr auto invalid_value() noexcept requires (test) {
-      return strong_integer{t0};
-    }
+    // static constexpr auto invalid_value() noexcept requires requires { Tag::invalid_value; } {
+    //   return strong_integer{Tag::invalid_value};
+    // }
   };
 
 
   template <typename...> // template <typename Index, typename Value>
   class so_uptr {};
 
-  template <typename T, typename Tag, bool test, T t0, typename Value>
-  class so_uptr<strong_integer<T, Tag, test, t0>, Value>
+  template <typename Tag, typename Value>
+  class so_uptr<so_integer<Tag>, Value>
   {
   protected:
     std::unique_ptr<Value[]> uptr_;
@@ -243,10 +244,10 @@ namespace dpl
     explicit constexpr so_uptr(std::integral_constant<std::size_t, value>)
       : uptr_{std::make_unique<Value[]>(value)} {}
 
-    explicit so_uptr(strong_integer<T, Tag, test, t0> size)
+    explicit so_uptr(so_integer<Tag> size)
       : uptr_{std::make_unique<Value[]>(*size)} {}
 
-    explicit so_uptr(strong_integer<T, Tag, test, t0> size, Value value)
+    explicit so_uptr(so_integer<Tag> size, Value value)
       : so_uptr{size} {
       std::fill_n(uptr_.get(), *size, value);
     }
@@ -255,20 +256,20 @@ namespace dpl
       uptr_.reset();
     }
 
-    void resize(strong_integer<T, Tag, test, t0> size) {
+    void resize(so_integer<Tag> size) {
       uptr_ = std::make_unique<Value[]>(*size);
     }
 
-    void assign(strong_integer<T, Tag, test, t0> size, Value value) {
+    void assign(so_integer<Tag> size, Value value) {
       resize(size);
       std::fill_n(uptr_.get(), *size, value);
     }
 
-    auto& operator[](strong_integer<T, Tag, test, t0> index) {
+    auto& operator[](so_integer<Tag> index) {
       return uptr_[*index];
     }
 
-    auto& operator[](strong_integer<T, Tag, test, t0> index) const {
+    auto& operator[](so_integer<Tag> index) const {
       return uptr_[*index];
     }
 
@@ -280,13 +281,13 @@ namespace dpl
       return static_cast<bool>(uptr_);
     }
 
-    auto span(const strong_integer<T, Tag, test, t0> size) const {
+    auto span(const so_integer<Tag> size) const {
       return std::span{data(), data() + *size};
     }
   };
 
-  template <typename T, typename Tag, bool test, T t0>
-  class so_uptr<strong_integer<T, Tag, test, t0>, bool>
+  template <typename Tag>
+  class so_uptr<so_integer<Tag>, bool>
   {
   protected:
     std::vector<bool> vec_;
@@ -303,14 +304,14 @@ namespace dpl
     explicit constexpr so_uptr(std::integral_constant<std::size_t, value>)
       : vec_(value) {}
 
-    explicit so_uptr(strong_integer<T, Tag, test, t0> size)
+    explicit so_uptr(so_integer<Tag> size)
       : vec_(*size) {}
 
-    auto operator[](strong_integer<T, Tag, test, t0> i) {
+    auto operator[](so_integer<Tag> i) {
       return vec_[*i];
     }
 
-    auto operator[](strong_integer<T, Tag, test, t0> i) const {
+    auto operator[](so_integer<Tag> i) const {
       return vec_[*i];
     }
   };
@@ -319,19 +320,14 @@ namespace dpl
   template <typename Index, typename Value, std::size_t size = std::size_t{1} << 8*sizeof(Index)>
   class so_array {};
 
-
-
-  template <typename T, typename Tag, bool test, T t0, typename Value, std::size_t size>
-  class so_array<strong_integer<T, Tag, test, t0>, Value, size>
-    : public so_uptr<strong_integer<T, Tag, test, t0>, Value>
+  template <typename Tag, typename Value, std::size_t size>
+  class so_array<so_integer<Tag>, Value, size> : public so_uptr<so_integer<Tag>, Value>
   {
   public:
     constexpr so_array()
-      : so_uptr<strong_integer<T, Tag, test, t0>, Value>
-      (std::integral_constant<size_t, size>{}) {}
+      : so_uptr<so_integer<Tag>, Value>(std::integral_constant<size_t, size>{}) {}
 
-    explicit constexpr so_array(Value v)
-      : so_array() {
+    explicit constexpr so_array(Value v) : so_array() {
       std::fill_n(this->uptr_.get(), size, v);
     }
     
@@ -348,14 +344,12 @@ namespace dpl
     // }
   };
 
-  template <typename T, typename Tag, bool test, T t0, std::size_t size>
-  class so_array<strong_integer<T, Tag, test, t0>, bool, size>
-    : public so_uptr<strong_integer<T, Tag, test, t0>, bool>
+  template <typename Tag, std::size_t size>
+  class so_array<so_integer<Tag>, bool, size> : public so_uptr<so_integer<Tag>, bool>
   {
   public:
     constexpr so_array()
-      : so_uptr<strong_integer<T, Tag, test, t0>, bool>
-      (std::integral_constant<size_t, size>{}) {}
+      : so_uptr<so_integer<Tag>, bool>(std::integral_constant<size_t, size>{}) {}
     
     auto begin() const {
       return this->vec_.begin();
@@ -533,14 +527,14 @@ namespace dpl
 }
 
 
-template <std::integral U, typename Tag, bool V, U W>
-struct std::incrementable_traits<dpl::strong_integer<U, Tag, V, W>> : std::incrementable_traits<U> {};  // NOLINT(cert-dcl58-cpp)
+template <typename Tag>
+struct std::incrementable_traits<dpl::so_integer<Tag>> : std::incrementable_traits<typename Tag::type> {};  // NOLINT(cert-dcl58-cpp)
 
-template <std::integral U, typename Tag, bool V, U W>
-struct std::hash<dpl::strong_integer<U, Tag, V, W>>  // NOLINT(cert-dcl58-cpp)
+template <typename Tag>
+struct std::hash<dpl::so_integer<Tag>>  // NOLINT(cert-dcl58-cpp)
 {
-  std::size_t operator()(const dpl::strong_integer<U, Tag, V, W>& k) const {
-    return std::hash<U>()(*k);
+  std::size_t operator()(const dpl::so_integer<Tag>& k) const {
+    return std::hash<typename Tag::type>()(*k);
   }
 };
 

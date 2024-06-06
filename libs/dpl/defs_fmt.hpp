@@ -17,7 +17,7 @@
  * GNU General Public License for more details.                             
  *                                                                         
  * You should have received a copy of the GNU General Public License        
- * along with RRM. If not, see <http://www.gnu.org/licenses/>.
+ * along with DPL. If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -39,12 +39,12 @@ struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
   }
 };
 
-template <typename T, typename Tag>
-struct fmt::formatter<dpl::strong_integer<T, Tag>> : formatter<T>
+template <typename Tag>
+struct fmt::formatter<dpl::so_integer<Tag>> : formatter<typename Tag::type>
 {
   template <typename FormatContext>
-  auto format(dpl::strong_integer<T, Tag> si, FormatContext& ctx) {
-    return formatter<T>::format(*si, ctx);
+  auto format(dpl::so_integer<Tag> si, FormatContext& ctx) {
+    return formatter<typename Tag::type>::format(*si, ctx);
   }
 };
 

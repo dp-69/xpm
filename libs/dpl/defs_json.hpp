@@ -17,7 +17,7 @@
  * GNU General Public License for more details.                             
  *                                                                         
  * You should have received a copy of the GNU General Public License        
- * along with RRM. If not, see <http://www.gnu.org/licenses/>.
+ * along with DPL. If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -31,13 +31,13 @@
 
 namespace dpl
 {
-  template <typename U, typename Tag, bool V, U W>
-  void to_json(nlohmann::json& j, const strong_integer<U, Tag, V, W>& i) {
+  template <typename Tag>
+  void to_json(nlohmann::json& j, const so_integer<Tag>& i) {
     j = i.value;
   }
 
-  template <typename U, typename Tag, bool V, U W>
-  void from_json(const nlohmann::json& j, strong_integer<U, Tag, V, W>& i) {
+  template <typename Tag>
+  void from_json(const nlohmann::json& j, so_integer<Tag>& i) {
     i.value = j;
   }
 

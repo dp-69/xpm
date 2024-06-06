@@ -205,21 +205,19 @@ namespace xpm
 
     static void initLutPhases(
       vtkLookupTable* lut,
-      const dpl::so_uptr<voxel_info::phase_t, darcy_info>& poro_perms,
-      voxel_info::phase_t darcy_count) { // TODO BUG
+      const dpl::so_uptr<voxel_ns::phase_t, darcy_info>& poro_perms,
+      voxel_ns::phase_t darcy_count) {
 
       // lut->IndexedLookupOn();  
       lut->SetNumberOfTableValues(256);
 
-      
 
-
-      for (voxel_info::phase_t i{0}; i < darcy_count; ++i) {
+      for (voxel_ns::phase_t i{0}; i < darcy_count; ++i) {
         // if (auto& pp = poro_perms[voxel_info::phase_t(i)]; pp.is_nan())  // NOLINT(clang-diagnostic-implicit-int-conversion)
         //   lut->SetTableValue(i, 0.8, 0.8, 0.8);
         // else
 
-        auto& pp = poro_perms[voxel_info::phase_t(i)];
+        auto& pp = poro_perms[voxel_ns::phase_t(i)];
         lut->SetTableValue(*i, pp.color.redF(), pp.color.greenF(), pp.color.blueF());
 
         // lut->SetAnnotation(vtkVariant(i), "Darcy");
@@ -821,7 +819,7 @@ namespace xpm
 
         macro_network_->RemovePart(macro_network_->GetParts()->GetLastProp3D());
       }
-      else if (name == "phases") {
+      else if (name == "phase" || name == "phases") {
         vtkNew<vtkLookupTable> lut_image, lut_network;
 
         initLutPhases(
@@ -1170,7 +1168,7 @@ namespace xpm
     struct permeability_map
     {
     private:
-      using phase_t = voxel_info::phase_t;
+      using phase_t = voxel_ns::phase_t;
 
       const image_data* img;
       const dpl::so_uptr<phase_t, darcy_info>* poro_perm;

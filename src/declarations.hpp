@@ -437,38 +437,44 @@ namespace xpm
 
   namespace helper
   {
-    struct voxel_tag {};
-    struct macro_tag {};
-    struct net_tag {};
+    struct voxel_tag { using type = idx1d_t; };
+    struct macro_tag { using type = idx1d_t; };
+    struct net_tag   { using type = idx1d_t; };
   }
 
-  using voxel_t = dpl::strong_integer<idx1d_t, helper::voxel_tag>;
-  using macro_t = dpl::strong_integer<idx1d_t, helper::macro_tag>;
-  using net_t   = dpl::strong_integer<idx1d_t, helper::net_tag>;  
+  using voxel_t = dpl::so_integer<helper::voxel_tag>;
+  using macro_t = dpl::so_integer<helper::macro_tag>;
+  using net_t   = dpl::so_integer<helper::net_tag>;  
 
   using throat_t = std::size_t;
 
-  template<class T>
+  template<typename T>
   concept macro_voxel_t = std::is_same_v<T, macro_t> || std::is_same_v<T, voxel_t>;
 
-  template<class T>
+  template<typename T>
   concept macro_throat_t = std::is_same_v<T, macro_t> || std::is_same_v<T, throat_t>;
 
   
   
-
   
   
+  
 
-  namespace voxel_info
+  namespace voxel_ns
   {
     namespace helper
     {
-      struct phase_tag {};
-      struct velem_tag {};
+      struct phase_tag {
+        using type = std::uint8_t;
+      };
+
+      struct velem_tag {
+        using type = std::int32_t;
+        static constexpr auto invalid_value = std::numeric_limits<type>::max();
+      };
     }
     
-    using phase_t = dpl::strong_integer<std::uint8_t, helper::phase_tag>;
+    using phase_t = dpl::so_integer<helper::phase_tag>;
     static inline constexpr dpl::full_range_unsigned<phase_t> phases;
 
     /**
@@ -476,14 +482,17 @@ namespace xpm
      *   for a void voxel  - a macro node it belongs to
      *   for a darcy voxel - an adjacent macro node or else <invalid> 
      */
-    struct velem_t : dpl::strong_integer<std::int32_t, helper::velem_tag, true>
+    struct velem_t : dpl::so_integer<helper::velem_tag>
     {
+      velem_t() = default;
+      constexpr explicit velem_t(const type v) : so_integer(v) {}
+
       explicit constexpr operator macro_t() const {
         return macro_t{value};
       }
 
-      static constexpr auto invalid_value() {
-        return velem_t{strong_integer::invalid_value()};
+      static constexpr auto invalid() {
+        return velem_t{helper::velem_tag::invalid_value /*invalid_value()*/};
       }
     };
   }
@@ -616,7 +625,7 @@ namespace xpm
     double max_pc = std::numeric_limits<double>::max();
 
     struct image_settings {
-      using phase_t = voxel_info::phase_t;
+      using phase_t = voxel_ns::phase_t;
 
       std::filesystem::path path;
       dpl::vector3i size;
@@ -698,11 +707,11 @@ namespace xpm
         *darcy.narrow[solid_v] = *darcy.count + 1;
       }
 
-      auto poro(voxel_info::phase_t p) const {
+      auto poro(voxel_ns::phase_t p) const {
         return darcy.info[p].poro;
       }
 
-      auto perm(voxel_info::phase_t p) const {
+      auto perm(voxel_ns::phase_t p) const {
         return darcy.info[p].perm;
       }
     } image;

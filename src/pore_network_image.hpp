@@ -214,8 +214,8 @@ namespace xpm
     auto& operator()(const auto key, const macro_t i) { return node_[key][*i]; }
     auto& operator()(const auto key, const macro_t i) const { return node_[key][*i]; }
 
-    auto& operator()(const auto key, const std::size_t i) { return throat_[key][i]; }
-    auto& operator()(const auto key, const std::size_t i) const { return throat_[key][i]; }
+    auto& operator()(const auto key, const throat_t i) { return throat_[key][i]; }
+    auto& operator()(const auto key, const throat_t i) const { return throat_[key][i]; }
 
     enum class file_format
     {
@@ -587,7 +587,7 @@ namespace xpm
       idx1d_mapper_ = dim_;
     }
 
-    voxel_info::phase_t darcy_count_;
+    voxel_ns::phase_t darcy_count_;
 
   public:
     auto size() const {
@@ -606,8 +606,8 @@ namespace xpm
     
 
     
-    dpl::so_uptr<voxel_t, voxel_info::phase_t> phase;
-    dpl::so_uptr<voxel_t, voxel_info::velem_t> velem;
+    dpl::so_uptr<voxel_t, voxel_ns::phase_t> phase;
+    dpl::so_uptr<voxel_t, voxel_ns::velem_t> velem;
 
     /*
      *
@@ -631,7 +631,7 @@ namespace xpm
        */
 
       using namespace std;
-      using namespace voxel_info;
+      using namespace voxel_ns;
 
       set_dim(cfg.size);
       darcy_count_ = cfg.darcy.count;
@@ -718,9 +718,9 @@ namespace xpm
     }
 
     void read_icl_velems(const std::filesystem::path& path) {
-      using voxel_info::velem_t;
+      using voxel_ns::velem_t;
 
-      velem.assign(size_, velem_t::invalid_value());
+      velem.assign(size_, velem_t::invalid());
 
       /*
        * input file value description
@@ -757,7 +757,7 @@ namespace xpm
           for (j = 0; j < dim_.y(); ++j) 
             for (i = 0; i < dim_.x(); ++i, ++idx1d)
               if (is_darcy(idx1d)) {
-                velem_t adj{velem_t::invalid_value()};
+                velem_t adj{velem_t::invalid()};
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] > 0)
@@ -786,8 +786,8 @@ namespace xpm
 
     static constexpr net_t isolated_idx_{std::numeric_limits<idx1d_t>::max()};
 
-    struct total_tag {};
-    using total_t = dpl::strong_integer<idx1d_t, total_tag>;
+    struct total_tag { using type = idx1d_t; };
+    using total_t = dpl::so_integer<total_tag>;
 
     /**
      * \brief
@@ -1143,7 +1143,7 @@ namespace xpm
 
       gen.allocate();
 
-      for (std::size_t i{0} ; i < pn_->throat_count(); ++i)
+      for (std::size_t i{0}; i < pn_->throat_count(); ++i)
         if (auto [l, r] = attrib::adj(pn_, i); connected(l))
           if (pn_->inner_node(r)) { // macro-macro 
             auto [lr, rl] = gen.set(l, r);
