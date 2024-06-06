@@ -35,7 +35,7 @@ namespace xpm
     pore_network pn_;
     image_data img_;
     pore_network_image pni_{pn_, img_};
-    runtime_settings settings_;
+    runtime_settings cfg_;
 
 
     struct
@@ -48,7 +48,7 @@ namespace xpm
 
     double absolute_rate_;
 
-    invasion_task invasion_task_{pni_, settings_};
+    invasion_task invasion_task_{pni_, cfg_};
 
     auto pc_to_string(auto primary, fmt::format_string<const double&, const double&> f, auto sep, auto begin, auto end) const {
       using namespace std;
@@ -125,15 +125,15 @@ namespace xpm
     // auto& pn() { return pn_; }
     // auto& img() { return img_; }
     auto& pni() { return pni_; }
-    const auto& settings() { return settings_; }
+    const auto& cfg() { return cfg_; }
     auto absolute_rate() { return absolute_rate_; }
     
     auto extract_network() {
       namespace fs = std::filesystem;
 
-      auto filename = settings_.image.pnextract_filename();
+      auto filename = cfg_.image.pnextract_filename();
 
-      if (auto copy_path = "pnextract"/filename; absolute(copy_path) != absolute(settings_.image.path)) {
+      if (auto copy_path = "pnextract"/filename; absolute(copy_path) != absolute(cfg_.image.path)) {
         // if (settings_.image.grey) {
         //   throw std::exception("not implemented (grey scale).");
         //
@@ -149,14 +149,14 @@ namespace xpm
         //   // settings_.darcy.read_grey(settings_.image.path, settings_.image.size);
         // }
         // else
-          copy(settings_.image.path, copy_path, fs::copy_options::update_existing);
+          copy(cfg_.image.path, copy_path, fs::copy_options::update_existing);
       }
 
       auto files = {"_link1.dat", "_link2.dat", "_node1.dat", "_node2.dat", "_VElems.raw"};
 
       auto prev = fs::current_path();
       current_path(prev/"pnextract");
-      auto network_dir = settings_.image.path.stem();
+      auto network_dir = cfg_.image.path.stem();
 
       if (std::ranges::all_of(files, [&](std::string_view file) { return exists(network_dir/file); }))
         std::cout << "using cached network\n\n";
@@ -187,7 +187,7 @@ namespace xpm
     }
 
     void init(const nlohmann::json& j) {
-      settings_.load(j);
+      cfg_.load(j);
 
       std::filesystem::create_directories("cache");
 
@@ -213,7 +213,7 @@ namespace xpm
     void prepare() {
       using namespace dpl;
 
-      std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
+      std::cout << fmt::format("image path: {}\n\n", cfg_.image.path);
 
       auto pnm_path = extract_network()/"";
 
@@ -248,7 +248,7 @@ namespace xpm
         
       petrophysics_summary_.perm_macro = 
       #ifdef _WIN32
-        pn_.connectivity_flow_summary(settings_.solver.tolerance, settings_.solver.max_iterations);
+        pn_.connectivity_flow_summary(cfg_.solver.tolerance, cfg_.solver.max_iterations);
       #else
         pn_.connectivity_flow_summary_MPI(settings_.solver.tolerance, settings_.solver.max_iterations);
       #endif
@@ -257,7 +257,7 @@ namespace xpm
 
       
 
-      petrophysics_summary_.porosity = img_.read_image(settings_.image);
+      petrophysics_summary_.porosity = img_.read_image(cfg_.image);
 
       // petrophysics_summary_.porosity = img_.verify_darcy(settings_);
 
@@ -361,8 +361,8 @@ namespace xpm
 
       vector3i procs{1};
       
-      if (settings_.solver.decomposition)
-        procs = *settings_.solver.decomposition;
+      if (cfg_.solver.decomposition)
+        procs = *cfg_.solver.decomposition;
       else {
         if (auto proc_count = std::thread::hardware_concurrency();
           proc_count == 12)
@@ -395,7 +395,7 @@ namespace xpm
       system::print_memory("PRE input", hypre::hypre_print_level);
 
       auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), single_phase_conductance{&pn_,
-        [this](voxel_t i) { return settings_.image.perm(img_.phase[i]); }
+        [this](voxel_t i) { return cfg_.image.perm(img_.phase[i]); }
       });
 
       system::print_memory("POST input", hypre::hypre_print_level);
@@ -405,8 +405,8 @@ namespace xpm
       std::filesystem::create_directory("cache");
 
       if (
-        auto cache_path = fmt::format("cache/{}-pressure-{:x}.bin", settings_.image.path.stem(), pressure_cache::hash(nvalues, input));
-        settings_.solver.cache.use && std::filesystem::exists(cache_path))
+        auto cache_path = fmt::format("cache/{}-pressure-{:x}.bin", cfg_.image.path.stem(), pressure_cache::hash(nvalues, input));
+        cfg_.solver.cache.use && std::filesystem::exists(cache_path))
       {
         std::cout << "  using cache\n";
         pressure.resize(net_t(nrows));
@@ -423,7 +423,7 @@ namespace xpm
 
 
         save_input(std::move(input), nrows, nvalues, mapping.block_rows,
-          settings_.solver.tolerance, settings_.solver.max_iterations, settings_.solver.aggressive_levels, settings_.solver.print_level);
+          cfg_.solver.tolerance, cfg_.solver.max_iterations, cfg_.solver.aggressive_levels, cfg_.solver.print_level);
 
         system::print_memory("PRE xpm MPI", hypre::hypre_print_level);
 
@@ -454,7 +454,7 @@ namespace xpm
             pressure[mapping.backward[i]] = decomposed_pressure[i];
         }
 
-        if (settings_.solver.cache.save) {
+        if (cfg_.solver.cache.save) {
           std::ofstream{cache_path, std::ofstream::binary}
             .write(reinterpret_cast<const char*>(pressure.data()), sizeof(HYPRE_Complex)*nrows);
           std::cout << "  cached\n";
@@ -465,7 +465,7 @@ namespace xpm
 
       {
         auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, 
-          [this](voxel_t i) { return settings_.image.perm(img_.phase[i]); }
+          [this](voxel_t i) { return cfg_.image.perm(img_.phase[i]); }
         });
 
         using namespace presets;

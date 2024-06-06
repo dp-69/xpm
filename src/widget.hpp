@@ -804,7 +804,7 @@ namespace xpm
 
       model_.prepare();
 
-      if (const auto& name = model_.settings().report.display; name == "velem") {
+      if (const auto& name = model_.cfg().report.display; name == "velem") {
         vtkNew<vtkLookupTable> lut;
 
         InitLutVelems(lut, *pn().node_count() + 1);  // NOLINT(cppcoreguidelines-narrowing-conversions)
@@ -824,8 +824,8 @@ namespace xpm
 
         initLutPhases(
           lut_image,
-          model_.settings().image.darcy.info,
-          model_.settings().image.darcy.count);
+          model_.cfg().image.darcy.info,
+          model_.cfg().image.darcy.count);
         initLutNodeThroat(lut_network);
 
         phases_map map{&img()};
@@ -840,8 +840,8 @@ namespace xpm
         vtkNew<vtkLookupTable> lut_image, lut_network;
 
         initLutPhases(lut_image,
-          model_.settings().image.darcy.count.value,
-          model_.settings().image.darcy.count.value + 1);
+          model_.cfg().image.darcy.count.value,
+          model_.cfg().image.darcy.count.value + 1);
         initLutNodeThroat(lut_network);
 
         phases_map map{&img()};
@@ -860,8 +860,8 @@ namespace xpm
 
         permeability_map map{
           img(),
-          model_.settings().image.darcy.info,
-          model_.settings().image.darcy.count};
+          model_.cfg().image.darcy.info,
+          model_.cfg().image.darcy.count};
 
         InitNetworkImage(
           [this](voxel_t v) { return img().is_darcy(v); },
@@ -910,7 +910,7 @@ namespace xpm
       //     occupancy_arrays_.macro[i] = 0;
       // }
 
-      if (model_.settings().report.invasion_percolation) {
+      if (model_.cfg().report.invasion_percolation) {
         if (!pressure)
           model_.compute_pressure();
 
@@ -927,7 +927,7 @@ namespace xpm
         auto* darcy_pc_series = new QLineSeries;
         chart->addSeries(darcy_pc_series);
 
-        for (const auto& p : model_.settings().primary.pc)
+        for (const auto& p : model_.cfg().primary.pc)
           darcy_pc_series->append(p.x(), p.y());
         darcy_pc_series->setName("microporous");
         darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
@@ -952,7 +952,7 @@ namespace xpm
           pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(model_.pni().pn().node_.span(attrib::r_ins)))))),
           pow(10., ceil(log10(max(
             1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
-            model_.settings().primary.pc ? model_.settings().primary.pc.front().y() : 0))))*1.01
+            model_.cfg().primary.pc ? model_.cfg().primary.pc.front().y() : 0))))*1.01
         );
       }
 
@@ -970,8 +970,8 @@ namespace xpm
 
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &model_.get_invasion_task(),
           model_.absolute_rate(),
-          model_.settings().theta,
-          model_.settings().primary.pc.inverse_unique());
+          model_.cfg().theta,
+          model_.cfg().primary.pc.inverse_unique());
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
@@ -989,7 +989,7 @@ namespace xpm
 
           
 
-          if (model_.settings().report.display == "saturation") {
+          if (model_.cfg().report.display == "saturation") {
             const auto& state = model_.get_invasion_task().state();
             const auto& pni = model_.pni();
             
@@ -997,8 +997,8 @@ namespace xpm
 
             auto pc_inv = (
               model_.get_invasion_task().primary_finished()
-                ? model_.settings().secondary
-                : model_.settings().primary).pc.inverse_unique();
+                ? model_.cfg().secondary
+                : model_.cfg().primary).pc.inverse_unique();
 
             dpl::sfor<6>([&](auto face_idx) {
               dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
@@ -1023,7 +1023,7 @@ namespace xpm
 
               if (pni.connected(m))
                 if (auto net = pni.net(m); state.config(net).phase() == phase_config::phase1())
-                  sw = 1.0 - eq_tr::area_corners(model_.settings().theta, state.r_cap(pni.net(m)))/eq_tr::area(r_ins(pn, m));
+                  sw = 1.0 - eq_tr::area_corners(model_.cfg().theta, state.r_cap(pni.net(m)))/eq_tr::area(r_ins(pn, m));
 
               macro_colors->SetTypedComponent(*m, 0, map_satur(sw));
             }
@@ -1033,7 +1033,7 @@ namespace xpm
                 auto sw = 0.0;
 
                 if (pni.connected(l) && state.config(t).phase() == phase_config::phase1())
-                  sw = 1.0 - eq_tr::area_corners(model_.settings().theta, state.r_cap(t))/eq_tr::area(r_ins(pn, t));
+                  sw = 1.0 - eq_tr::area_corners(model_.cfg().theta, state.r_cap(t))/eq_tr::area(r_ins(pn, t));
 
                 throat_colors->SetTypedComponent(i++, 0, map_satur(sw));
               }

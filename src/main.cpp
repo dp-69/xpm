@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
 
         auto dir =
           std::filesystem::path(dpl::mpi::exec)
-            .replace_filename("results")/modeller.settings().image.path.stem();
+            .replace_filename("results")/modeller.cfg().image.path.stem();
 
         create_directories(dir);
 
@@ -90,13 +90,13 @@ int main(int argc, char* argv[])
           std::ofstream{dir/"petrophysics_summary.json"} << pp_j.dump(2);
         }
 
-        if (modeller.settings().report.invasion_percolation) {
+        if (modeller.cfg().report.invasion_percolation) {
           modeller.get_invasion_task().init();
       
           modeller.get_invasion_task().launch_primary(
             modeller.absolute_rate(),
-            modeller.settings().theta,
-            modeller.settings().primary.pc.inverse_unique());
+            modeller.cfg().theta,
+            modeller.cfg().primary.pc.inverse_unique());
 
           
 

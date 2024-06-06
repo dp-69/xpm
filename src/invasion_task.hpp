@@ -189,7 +189,7 @@ namespace xpm {
     pore_network_image* pni_;
     pore_network* pn_;
     image_data* img_;
-    const runtime_settings* settings_;
+    const runtime_settings* cfg_;
 
     double total_pore_volume_;
 
@@ -225,11 +225,11 @@ namespace xpm {
     
 
   public:
-    explicit invasion_task(pore_network_image& pni, const runtime_settings& settings) :
+    explicit invasion_task(pore_network_image& pni, const runtime_settings& cfg) :
       pni_{&pni},
       pn_{&pni.pn()},
       img_{&pni.img()},
-      settings_{&settings} {}
+      cfg_{&cfg} {}
 
     auto& graph() {
       return g_;
@@ -256,10 +256,10 @@ namespace xpm {
     }
 
     void init() {
-      if (settings_->occupancy_images) {
+      if (cfg_->occupancy_images) {
         image_dir_ =
           std::filesystem::path(dpl::mpi::exec)
-            .replace_filename("results")/settings_->image.path.stem()/"images";
+            .replace_filename("results")/cfg_->image.path.stem()/"images";
           // std::filesystem::path(dpl::mpi::exec).replace_filename("image")/settings_->image.path.stem();
 
         remove_all(image_dir_);
@@ -274,7 +274,7 @@ namespace xpm {
       secondary_.kr.reserve(500);
 
       total_pore_volume_ = pni_->total_pore_volume(
-        [this](voxel_t i) { return settings_->image.poro(img_->phase[i]); });
+        [this](voxel_t i) { return cfg_->image.poro(img_->phase[i]); });
 
 
       {
@@ -324,9 +324,9 @@ namespace xpm {
       // bool darcy_filter = kr > kr_threshold;
 
       filter_phase<phase1> filter{pni_, &state_, kr > 1e-3/*darcy_filter*/};
-      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*settings_->image.perm(img_->phase[i]); }, phase1};
+      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*cfg_->image.perm(img_->phase[i]); }, phase1};
 
-      auto [nrows, mapping] = pni_->generate_mapping(*settings_->solver.decomposition, filter);
+      auto [nrows, mapping] = pni_->generate_mapping(*cfg_->solver.decomposition, filter);
       auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), term, filter);
 
       auto hash = pressure_cache::hash(nvalues, input);
@@ -335,7 +335,7 @@ namespace xpm {
 
       auto found = pressure_cache::cache().find(hash);
 
-      if (!settings_->solver.cache.use || found == pressure_cache::cache().end()) {
+      if (!cfg_->solver.cache.use || found == pressure_cache::cache().end()) {
         dpl::so_uptr<net_t, HYPRE_Real> pressure(pni_->connected_count());
         auto decomposed_pressure = std::make_unique<HYPRE_Complex[]>(nrows);
 
@@ -345,9 +345,9 @@ namespace xpm {
           // solve(input, {0, nrows - 1}, decomposed_pressure.get(), settings_->solver.tolerance, settings_->solver.max_iterations);
 
           auto t0 = high_resolution_clock::now();
-          dpl::hypre::save_input(std::move(input), nrows, nvalues, mapping.block_rows, settings_->solver.tolerance, settings_->solver.max_iterations, 0, 0);
+          dpl::hypre::save_input(std::move(input), nrows, nvalues, mapping.block_rows, cfg_->solver.tolerance, cfg_->solver.max_iterations, 0, 0);
           auto t1 = high_resolution_clock::now();
-          std::system(fmt::format("mpiexec -np {} \"{}\" -s", settings_->solver.decomposition->prod(), dpl::mpi::exec).c_str()); // NOLINT(concurrency-mt-unsafe)
+          std::system(fmt::format("mpiexec -np {} \"{}\" -s", cfg_->solver.decomposition->prod(), dpl::mpi::exec).c_str()); // NOLINT(concurrency-mt-unsafe)
           auto t2 = high_resolution_clock::now();
           std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::load_values(nrows);
 
@@ -360,7 +360,7 @@ namespace xpm {
 
         auto inlet = pni_->flow_rates(pressure, term, filter).second;
 
-        if (settings_->solver.cache.save) {
+        if (cfg_->solver.cache.save) {
           pressure_cache::cache()[hash] = inlet;
           pressure_cache::save();
         }
@@ -377,8 +377,8 @@ namespace xpm {
       using namespace attrib;
 
       auto cell_volume = (pn_->physical_size/img_->dim()).prod();
-      auto pc_to_sw = settings_->secondary.pc.inverse_unique();
-      auto darcy_r_cap = pc_to_sw ? 1/settings_->secondary.pc.back().y() : std::numeric_limits<double>::quiet_NaN();
+      auto pc_to_sw = cfg_->secondary.pc.inverse_unique();
+      auto darcy_r_cap = pc_to_sw ? 1/cfg_->secondary.pc.back().y() : std::numeric_limits<double>::quiet_NaN();
 
       dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
       std::vector<bool> explored_throat(pn_->throat_count());
@@ -428,7 +428,7 @@ namespace xpm {
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (pni_->connected(idx1d)) { // TODO: Early primary termination
-                inv_total_porosity += settings_->image.poro(img_->phase[idx1d]);
+                inv_total_porosity += cfg_->image.poro(img_->phase[idx1d]);
                 queue.insert(idx1d, darcy_r_cap);
               }
       }
@@ -471,7 +471,7 @@ namespace xpm {
               }
               else {
                 auto voxel = pni_->voxel(v_net);
-                auto poro = settings_->image.poro(img_->phase[voxel]);
+                auto poro = cfg_->image.poro(img_->phase[voxel]);
                 inv_total_porosity -= poro;
                 inv_volume_coef0 += pc_to_sw(1/state_.r_cap_global)*cell_volume*poro;  
               }
@@ -531,8 +531,8 @@ namespace xpm {
           return false;
         };
 
-        auto ph0_rate = calc_relative(settings_->secondary, pc_to_sw, theta, std::false_type{});
-        auto ph1_rate = phase1_connected() ? calc_relative(settings_->secondary, pc_to_sw, theta, std::true_type{}) : 0;
+        auto ph0_rate = calc_relative(cfg_->secondary, pc_to_sw, theta, std::false_type{});
+        auto ph1_rate = phase1_connected() ? calc_relative(cfg_->secondary, pc_to_sw, theta, std::true_type{}) : 0;
       
         secondary_.kr.emplace_back(sw, ph0_rate/absolute_rate, ph1_rate/absolute_rate);
       };
@@ -540,7 +540,7 @@ namespace xpm {
 
 
       auto write_occupancy_image = [&](double sw) {
-        if (settings_->occupancy_images)
+        if (cfg_->occupancy_images)
           state_.write_occupancy_image(
             image_dir_/fmt::format("secondary-{:.4f}.raw", sw), *pni_, theta, pc_to_sw);
       };
@@ -574,8 +574,8 @@ namespace xpm {
 
         ++progress_idx_;
 
-        if (settings_->secondary.kr[0]) {
-          for (auto [c_sw, c_pc] : settings_->secondary.pc) {
+        if (cfg_->secondary.kr[0]) {
+          for (auto [c_sw, c_pc] : cfg_->secondary.pc) {
             // if (c_pc <= end_pc)
             //   continue;
 
@@ -583,7 +583,7 @@ namespace xpm {
               break;
 
             if (auto total_sw = eval_inv_volume(1/c_pc)/total_pore_volume_;
-              total_sw - last_kr_sw > settings_->report.sw_of_kr)
+              total_sw - last_kr_sw > cfg_->report.sw_of_kr)
             {
               state_.r_cap_global = 1/c_pc;
               last_kr_sw = total_sw;
@@ -624,7 +624,7 @@ namespace xpm {
       auto progress_percolation = [&](auto idx, double r_cap) {
         if (r_cap > state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
-            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ settings_->report.sw_of_pc ||
+            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ cfg_->report.sw_of_pc ||
             std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
             last_pc_point_ = pc_point;
             secondary_.pc.push_back(pc_point);
@@ -632,7 +632,7 @@ namespace xpm {
           }
 
           if (auto sw = eval_inv_volume(state_.r_cap_global)/total_pore_volume_;
-            sw - last_kr_sw > /*0.025*/ settings_->report.sw_of_kr)
+            sw - last_kr_sw > /*0.025*/ cfg_->report.sw_of_kr)
           {
             last_kr_sw = sw;
             rel_calc_report(sw);
@@ -851,12 +851,12 @@ namespace xpm {
       auto rel_calc_report = [this, /*t0, */theta, absolute_rate, &pc_to_sw](double sw) {
         // fmt::print("{}ms\n", duration_cast<milliseconds>(high_resolution_clock::now() - t0).count());
         primary_.kr.emplace_back(sw,
-          calc_relative(settings_->primary, pc_to_sw, theta, std::false_type{})/absolute_rate,
-          calc_relative(settings_->primary, pc_to_sw, theta, std::true_type{})/absolute_rate); // TODO: calculate when breakthrough
+          calc_relative(cfg_->primary, pc_to_sw, theta, std::false_type{})/absolute_rate,
+          calc_relative(cfg_->primary, pc_to_sw, theta, std::true_type{})/absolute_rate); // TODO: calculate when breakthrough
       };
 
       auto write_occupancy_image = [&](double sw) {
-        if (settings_->occupancy_images)
+        if (cfg_->occupancy_images)
           state_.write_occupancy_image(
             image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, theta, pc_to_sw);
       };
@@ -866,7 +866,7 @@ namespace xpm {
           auto pc_point = eval_pc_point();
 
           if (
-            std::abs(last_pc_point_.x() - pc_point.x()) > settings_->report.sw_of_pc ||
+            std::abs(last_pc_point_.x() - pc_point.x()) > cfg_->report.sw_of_pc ||
             std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_)
           {
             last_pc_point_ = pc_point;
@@ -874,7 +874,7 @@ namespace xpm {
             write_occupancy_image(pc_point.x());
           }
 
-          if (last_kr_sw - pc_point.x() > settings_->report.sw_of_kr) {
+          if (last_kr_sw - pc_point.x() > cfg_->report.sw_of_kr) {
             last_kr_sw = pc_point.x();
             rel_calc_report(pc_point.x());
           }
@@ -905,7 +905,7 @@ namespace xpm {
 
         auto [elem, local, r_cap] = queue.front();
 
-        if (1/r_cap > settings_->max_pc) {
+        if (1/r_cap > cfg_->max_pc) {
           last_pc_point_ = eval_pc_point();
           primary_.pc.push_back(last_pc_point_);
           write_occupancy_image(last_pc_point_.x());
@@ -944,7 +944,7 @@ namespace xpm {
           auto net = pni_->net(voxel);
 
           darcy_invaded_ = true;
-          inv_total_porosity += settings_->image.poro(img_->phase[voxel]);
+          inv_total_porosity += cfg_->image.poro(img_->phase[voxel]);
 
           progress_percolation(net, r_cap); // TODO: phase_config::phase1_bulk_films(); of a voxel
 
@@ -1001,8 +1001,8 @@ namespace xpm {
 
           for (auto i = 0; i < steps; ++i) {
             auto next_r_cap = state_.r_cap_global/step;
-            if (1/next_r_cap > settings_->max_pc) {
-              state_.r_cap_global = 1/settings_->max_pc;
+            if (1/next_r_cap > cfg_->max_pc) {
+              state_.r_cap_global = 1/cfg_->max_pc;
               primary_.pc.push_back(eval_pc_point());
             
               if (i%2 != 0)
@@ -1026,15 +1026,15 @@ namespace xpm {
         
        
         { /* Relative permeabilty */
-          for (auto [c_sw, c_pc] : std::ranges::reverse_view(settings_->primary.pc)) {
+          for (auto [c_sw, c_pc] : std::ranges::reverse_view(cfg_->primary.pc)) {
             if (c_pc <= end_pc)
               continue;
 
-            if (c_pc > settings_->max_pc)
+            if (c_pc > cfg_->max_pc)
               break;
 
             if (auto total_sw = 1 - eval_inv_volume(1/c_pc)/total_pore_volume_;
-              last_kr_sw - total_sw > settings_->report.sw_of_kr)
+              last_kr_sw - total_sw > cfg_->report.sw_of_kr)
             {
               state_.r_cap_global = 1/c_pc;
               last_kr_sw = total_sw;
