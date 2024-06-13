@@ -76,17 +76,20 @@ namespace dpl
       v.clear();
 
     if (j[0].is_array()) {
-
+      auto size = j.size();
+      v.resize(size);
+      for (std::size_t i = 0; i < size; ++i)
+        v[i] = j[i];
     }
     else {
       auto size = j.size()/n;
       v.resize(size);
-      for (size_t i = 0; i < size; ++i)
-        dpl::sfor<n>([&](auto d) {
+      for (std::size_t i = 0; i < size; ++i)
+        for (int d = 0; d < n; ++d)
           v[i][d] = j[i*n + d];
-        });
-        // for (auto d = 0; d < n; ++d)
+        // dpl::sfor<n>([&](auto d) {
         //   v[i][d] = j[i*n + d];
+        // });
     }
   }
 
@@ -95,7 +98,6 @@ namespace dpl
   }
 
   // ---------------------------------
-
 
   inline nlohmann::json parse_path(const nlohmann::json& j, bool ignore_comments = false) {
     return j.is_string() ? nlohmann::json::parse(std::ifstream{j.get<std::string>()}, nullptr, true, ignore_comments) : j;

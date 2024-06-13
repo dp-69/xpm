@@ -29,8 +29,11 @@
 
 namespace dpl
 {
-  /**
-   * \brief sequence of 2d points ordered by the first component
+  /*
+   * A sequence of 2D points
+   * ordered by the first component
+   * from low to high
+   *
    */
   struct curve2d
   {
@@ -40,28 +43,19 @@ namespace dpl
       return !storage.empty();
     }
 
-    // curve2d() = default;
-    //
-    // curve2d(std::vector<vector2d>&& vec) {
-    //   storage = std::move(vec);
-    // }
-
-    // auto inverse() const {
-    //   using namespace std::ranges;
-    //   auto vec = storage;
-    //   reverse(vec);
-    //   for_each(vec, [](vector2d& p) { std::swap(p.x(), p.y()); });
-    //   return curve2d{vec};
-    // }
-
-    auto inverse_unique() const {
-      using
-        std::ranges::reverse,
-        std::ranges::unique;
+    auto inverse() const {
+      if (storage.size() < 2)
+        return *this;
 
       auto vec = storage;
-      reverse(vec);
-      vec.resize(unique(vec, {}, [](const vector2d& p) { return p.y(); }).begin() - vec.begin());
+
+      if (vec.front().y() > vec.back().y())
+        std::ranges::reverse(vec);
+
+      vec.resize(
+        std::ranges::unique(vec, {}, [](const vector2d& p) { return p.y(); })
+        .begin() - vec.begin());
+
       for (auto& p : vec)
         std::swap(p.x(), p.y());
       return curve2d{std::move(vec)};
@@ -88,6 +82,14 @@ namespace dpl
     }
 
     auto end() const {
+      return storage.end();
+    }
+
+    auto begin() {
+      return storage.begin();
+    }
+    
+    auto end() {
       return storage.end();
     }
 

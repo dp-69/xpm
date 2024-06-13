@@ -179,6 +179,10 @@ namespace dpl
   template <typename Tag> requires (std::integral<typename Tag::type>)
   struct so_integer
   {
+  private:
+    static constexpr bool has_invalid = requires { Tag::invalid_value; };
+
+  public:
     using type = typename Tag::type;
 
     type value;
@@ -213,15 +217,65 @@ namespace dpl
     constexpr auto operator+ (so_integer rhs) const noexcept { return so_integer{value + *rhs}; }
     constexpr auto operator- (so_integer rhs) const noexcept { return so_integer{value - *rhs}; }
 
-    explicit constexpr operator bool() const noexcept requires requires { Tag::invalid_value; } {
+    explicit constexpr operator bool() const noexcept requires has_invalid {
       return value != Tag::invalid_value;
     }
 
-    // static constexpr auto invalid_value() noexcept requires requires { Tag::invalid_value; } {
-    //   return strong_integer{Tag::invalid_value};
-    // }
+    static constexpr auto invalid() noexcept requires has_invalid {
+      return so_integer{Tag::invalid_value};
+    }
   };
 
+  template <typename...> // template <typename Index, typename Value>
+  class so_span {};
+
+  template <typename Tag, typename Value>
+  class so_span<so_integer<Tag>, Value>// : std::ranges::view_interface<so_span<so_integer<Tag>, Value>>
+  {
+    Value* ptr_;
+    so_integer<Tag> size_;
+
+  public:
+    so_span() = default;
+
+    so_span(Value* ptr, so_integer<Tag> size)
+      : ptr_(ptr), size_(size) {}
+
+    auto begin() const {
+      return ptr_;
+    }
+
+    auto end() const {
+      return ptr_ + *size_;
+    }
+
+    auto& operator[](so_integer<Tag> index) const {
+      return ptr_[*index];
+    }
+
+    bool empty() const {
+      return size_ == 0;
+    }
+
+    auto size() const {
+      return size_;
+    }
+
+    explicit operator bool() const {
+      return !empty();
+    }
+
+    // so_span(Value* ptr, so_integer<Tag> size)
+    //   : ptr_(ptr), size_(size) {}
+
+    // auto begin()  {
+    //   return ptr_;
+    // }
+
+    // auto end() {
+    //   return ptr_ + *size_;
+    // }
+  };
 
   template <typename...> // template <typename Index, typename Value>
   class so_uptr {};
@@ -281,8 +335,14 @@ namespace dpl
       return static_cast<bool>(uptr_);
     }
 
-    auto span(const so_integer<Tag> size) const {
-      return std::span{data(), data() + *size};
+    auto span(so_integer<Tag> size) const {
+      // return std::span{data(), data() + *size};
+      return so_span<so_integer<Tag>, const Value>{data(), size};
+    }
+
+    auto span(so_integer<Tag> size) {
+      // return std::span{data(), data() + *size};
+      return so_span<so_integer<Tag>, Value>{data(), size};
     }
   };
 

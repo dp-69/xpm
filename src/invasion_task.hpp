@@ -44,6 +44,10 @@ namespace xpm {
   public:
     double r_cap_global;
 
+    auto pc_global() const {
+      return 1/r_cap_global;
+    }
+
     void resize(net_t net_count, std::size_t throat_count) {
       config_.resize(net_count);
       local_.assign(net_count, r_cap_mobile_);
@@ -77,19 +81,21 @@ namespace xpm {
       const std::filesystem::path& path,
       const pore_network_image& pni,
       const double theta,
-      const dpl::curve2d& pc_inv) const {
-
+      dpl::so_span<voxel_ns::phase_t, const darcy_info> darcy) const
+    {
       const auto& img = pni.img();
       const auto& dim = img.dim();
-      const auto& pn = pni.pn();
+
       using type = std::uint16_t;
-      static constexpr auto max = std::numeric_limits<type>::max();
+      static constexpr auto max{std::numeric_limits<type>::max()};
 
-      type darcy_value = pc_inv ? (1 - pc_inv(1/r_cap_global))*max : 0;
-
-      using namespace presets;
       using namespace attrib;
       using eq_tr = hydraulic_properties::equilateral_triangle;
+      using voxel_ns::phase_t;
+
+      dpl::so_uptr<phase_t, type> phase_output(darcy.size());
+      for (phase_t i{0}; i < darcy.size(); ++i)
+        phase_output[i] = (1 - darcy[i].pc_to_sw(pc_global()))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
       std::vector<type> output(*img.size());
 
@@ -102,25 +108,37 @@ namespace xpm {
           for (i = 0; i < dim.x(); ++i, ++idx1d)
             if (img.is_void(idx1d)) {
               if (auto velem = img.velem[idx1d]; velem)
-                if (macro_t macro{velem}; pni.connected(macro))
+                if (macro_t macro{*velem}; pni.connected(macro))
                   if (auto net = pni.net(macro); config(net).phase() == phase_config::phase1())
-                    output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/eq_tr::area(r_ins(pn, macro)))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
+                    output[*idx1d] = (1 - eq_tr::area_corners(theta, r_cap(net))/eq_tr::area(r_ins(pni.pn(), macro)))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
             }
             else if (img.is_darcy(idx1d))
-              output[*idx1d] = darcy_value;
+              output[*idx1d] = phase_output[img.phase[idx1d]];
 
       std::ofstream{path, std::ios::binary}
-        .write(reinterpret_cast<char*>(output.data()), sizeof(type)**img.size());
+        .write(reinterpret_cast<char*>(output.data()), sizeof(type)**img.size());  // NOLINT(cppcoreguidelines-narrowing-conversions)
     }
   };
 
   class invasion_task {
+    using phase_t = voxel_ns::phase_t;
+
     template <bool phase1>
-    struct filter_phase
+    struct filter_t
     {
       const pore_network_image* pni;
+      // const image_data* img;
+
+      
+      // const dpl::so_uptr<phase_t, darcy_info>* darcy_list;
+      const dpl::so_uptr<voxel_t, phase_t>* phase_map;
+      const dpl::so_uptr<phase_t, double>* kr_map;
+
       const phase_state* state;
-      bool darcy_filter;
+      
+      // bool darcy_filter;
+
+      static constexpr auto kr_threshold = 1e-3;
 
       bool operator()(macro_t i) const {
         if constexpr (phase1)
@@ -129,27 +147,34 @@ namespace xpm {
           return true; // for theta < Pi/3 in eq. tr.
       }
 
-      bool operator()(std::size_t i) const {
+      bool operator()(throat_t i) const {
         if constexpr (phase1)
           return state->config(i).phase() == phase_config::phase1();
         else
           return true;
       }
 
-      bool operator()(voxel_t) const {
-        return darcy_filter;
+      bool operator()(voxel_t i) const {
+        return (*kr_map)[(*phase_map)[i]] > kr_threshold; 
+
+        //
+        // (*darcy_list)[(*phase_map)[i]].kr
+        //
+        // pni->img().phase[i]
+
+        // return darcy_filter;
       }
     };
 
     template <bool phase1, typename Perm/* = dpl::default_map::nan_t*/>
-    struct coef_phase
+    struct coef_t
     {
       const pore_network_image* pni;
       const phase_state* state;
       double theta;
       Perm darcy_perm;
 
-      coef_phase(const pore_network_image* pni, const phase_state* state, double theta, Perm darcy_perm, std::bool_constant<phase1> = {})
+      coef_t(const pore_network_image* pni, const phase_state* state, double theta, Perm darcy_perm, std::bool_constant<phase1> = {})
         : pni(pni), state(state), theta(theta), darcy_perm(darcy_perm) {}
 
       auto operator()(macro_t i) const {
@@ -177,7 +202,7 @@ namespace xpm {
             : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni->pn(), i)));
       }
 
-      auto operator()(voxel_t i) const {
+      auto operator()(voxel_t i) const { // TODO: BUG: Use frozen r_cap when trapped!??? If it is trapped, it is not flowing?
         return darcy_perm(i);
       }
     };
@@ -204,7 +229,7 @@ namespace xpm {
 
 
     dpl::vector2d last_pc_point_;
-    double pc_max_step_;
+    double pc_max_log_step_;
 
     struct curves
     {
@@ -315,16 +340,24 @@ namespace xpm {
       std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t0).count());
     }
 
-    double calc_relative(const runtime_settings::input_curves& curve, const dpl::curve2d& pc_to_sw, double theta, auto phase1) {
-      using dpl::extrapolant::flat;
+    
 
-      auto kr = pc_to_sw ? curve.kr[phase1](pc_to_sw(1/state_.r_cap_global)) : 0.0;
+    double calc_relative(dpl::so_span<phase_t, const darcy_info> darcy, double theta, auto phase1) {
+      dpl::so_uptr<phase_t, double> kr(darcy.size());
+      for (phase_t i{0}; i < darcy.size(); ++i)
+        kr[i] = darcy[i].kr[phase1](darcy[i].pc_to_sw(state_.pc_global()));
 
-      // static constexpr auto kr_threshold = 1e-3;
-      // bool darcy_filter = kr > kr_threshold;
-
-      filter_phase<phase1> filter{pni_, &state_, kr > 1e-3/*darcy_filter*/};
-      coef_phase term{pni_, &state_, theta, [kr, this](voxel_t i) { return kr*cfg_->image.perm(img_->phase[i]); }, phase1};
+      filter_t<phase1> filter{pni_, &img_->phase, &kr, &state_};
+      coef_t term{
+        pni_,
+        &state_,
+        theta,
+        [&kr, this](voxel_t i) {
+          auto p = img_->phase[i];
+          return kr[p]*cfg_->image.perm(p);
+        },
+        phase1
+      };
 
       auto [nrows, mapping] = pni_->generate_mapping(*cfg_->solver.decomposition, filter);
       auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), term, filter);
@@ -377,7 +410,7 @@ namespace xpm {
       using namespace attrib;
 
       auto cell_volume = (pn_->physical_size/img_->dim()).prod();
-      auto pc_to_sw = cfg_->secondary.pc.inverse_unique();
+      auto pc_to_sw = cfg_->secondary.pc.inverse();
       auto darcy_r_cap = pc_to_sw ? 1/cfg_->secondary.pc.back().y() : std::numeric_limits<double>::quiet_NaN();
 
       dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
@@ -531,8 +564,8 @@ namespace xpm {
           return false;
         };
 
-        auto ph0_rate = calc_relative(cfg_->secondary, pc_to_sw, theta, std::false_type{});
-        auto ph1_rate = phase1_connected() ? calc_relative(cfg_->secondary, pc_to_sw, theta, std::true_type{}) : 0;
+        auto ph0_rate = 1; /*calc_relative(cfg_->secondary, pc_to_sw, theta, std::false_type{});*/ // TODO
+        auto ph1_rate = 1; /*phase1_connected() ? calc_relative(cfg_->secondary, pc_to_sw, theta, std::true_type{}) : 0;*/
       
         secondary_.kr.emplace_back(sw, ph0_rate/absolute_rate, ph1_rate/absolute_rate);
       };
@@ -540,9 +573,9 @@ namespace xpm {
 
 
       auto write_occupancy_image = [&](double sw) {
-        if (cfg_->occupancy_images)
-          state_.write_occupancy_image(
-            image_dir_/fmt::format("secondary-{:.4f}.raw", sw), *pni_, theta, pc_to_sw);
+        // if (cfg_->occupancy_images)
+        //   state_.write_occupancy_image(
+        //     image_dir_/fmt::format("secondary-{:.4f}.raw", sw), *pni_, theta, pc_to_sw); // TODO
       };
 
       if (pc_to_sw) {
@@ -625,7 +658,7 @@ namespace xpm {
         if (r_cap > state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
             std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ cfg_->report.sw_of_pc ||
-            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_) {
+            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_log_step_) { // TODO
             last_pc_point_ = pc_point;
             secondary_.pc.push_back(pc_point);
             write_occupancy_image(pc_point.x());
@@ -784,7 +817,9 @@ namespace xpm {
       ++progress_idx_;
     }
 
-    void launch_primary(double absolute_rate, double theta, const dpl::curve2d& pc_to_sw) {
+    void launch_primary(double absolute_rate, double theta/*, const dpl::curve2d& pc_to_sw*/) {
+      static constexpr bool to_sleep = false;
+
       // return;
 
       pressure_cache::load();
@@ -792,32 +827,33 @@ namespace xpm {
       // using namespace std::chrono;
       // auto t0 = high_resolution_clock::now();
 
-      using eq_tr = hydraulic_properties::equilateral_triangle;
+      using namespace std;
       using namespace attrib;
+      using eq_tr = hydraulic_properties::equilateral_triangle;
 
-      double darcy_r_cap = std::numeric_limits<double>::quiet_NaN();
+      const auto darcy_span = cfg_->image.darcy.info.span(cfg_->image.darcy.count);
+      
+      auto darcy_r_cap_entry = [this, darcy_span](voxel_t i) { return 1/darcy_span[img_->phase[i]].pc_to_sw.front().x(); };
 
-      if (pc_to_sw) {
-        darcy_r_cap = 1/pc_to_sw.front().x();
-        pc_max_step_ = 0.075/darcy_r_cap;
-      }
+      if (darcy_span)
+        pc_max_log_step_ = 0.25;
       else {
-        double min_r_cap_throat = std::numeric_limits<double>::max();
+        double min_r_cap_throat = numeric_limits<double>::max();
 
-        for (std::size_t i{0}; i < pn_->throat_count(); ++i)
+        for (size_t i{0}; i < pn_->throat_count(); ++i)
           if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && pni_->connected(l))
-            min_r_cap_throat = std::min(min_r_cap_throat, r_ins(pn_, i));
+            min_r_cap_throat = min(min_r_cap_throat, r_ins(pn_, i));
 
         min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films(theta, min_r_cap_throat);
-        pc_max_step_ = 0.075/min_r_cap_throat;
+        pc_max_log_step_ = std::log10(0.075/min_r_cap_throat);
       }
 
       dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
-      std::vector<bool> explored_throat(pn_->throat_count());
+      vector<bool> explored_throat(pn_->throat_count());
 
       displ_queue<true> queue;
 
-      for (std::size_t i{0}; i < pn_->throat_count(); ++i)
+      for (size_t i{0}; i < pn_->throat_count(); ++i)
         if (auto [l, r] = adj(pn_, i); pn_->inlet() == r) // inlet macro-macro TODO: voxels inlet needed
           if (pni_->connected(l)) {
             queue.insert(i, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, i)));
@@ -828,37 +864,47 @@ namespace xpm {
 
       net_t outlet_idx = pni_->connected_count();
 
-      dpl::vector3d inv_volume_coefs{0};
-      auto inv_total_porosity = 0.0;
+      dpl::vector3d inv_vol_coefs{0};
+      dpl::so_uptr<phase_t, double> inv_porosity(darcy_span.size(), 0);
 
       state_.r_cap_global = queue.front().r_cap;
 
-      last_pc_point_ = {std::numeric_limits<double>::max(), std::numeric_limits<double>::min()};
+      last_pc_point_ = {numeric_limits<double>::max(), numeric_limits<double>::min()};
       double last_kr_sw = 1.0;
       primary_.kr.emplace_back(1, 1, 0);
 
       const double cell_volume = (pn_->physical_size/img_->dim()).prod();
 
       auto eval_inv_volume = [&](double r_cap_global) {
-        auto macro = inv_volume_coefs[0] + inv_volume_coefs[2]*r_cap_global*r_cap_global;
-        if (pc_to_sw)
-          macro += (1 - pc_to_sw(1/r_cap_global))*cell_volume*inv_total_porosity;
-        return macro;
+        double vol = 0.0;
+
+        for (phase_t i{0}; i < darcy_span.size(); ++i)
+          vol += (1 - darcy_span[i].pc_to_sw(1/r_cap_global))*inv_porosity[i];
+        vol *= cell_volume;
+
+        vol += inv_vol_coefs[0] + inv_vol_coefs[2]*r_cap_global*r_cap_global;
+
+        return vol;
       };
 
-      auto eval_pc_point = [&] { return dpl::vector2d{1 - eval_inv_volume(state_.r_cap_global)/total_pore_volume_, 1/state_.r_cap_global}; };
+      auto eval_pc_point = [&] {
+        return dpl::vector2d{
+          1 - eval_inv_volume(state_.r_cap_global)/total_pore_volume_,
+          state_.pc_global()};
+      };
 
-      auto rel_calc_report = [this, /*t0, */theta, absolute_rate, &pc_to_sw](double sw) {
+      auto rel_calc_report = [this, /*t0, */theta, absolute_rate, darcy_span](double sw) {
         // fmt::print("{}ms\n", duration_cast<milliseconds>(high_resolution_clock::now() - t0).count());
         primary_.kr.emplace_back(sw,
-          calc_relative(cfg_->primary, pc_to_sw, theta, std::false_type{})/absolute_rate,
-          calc_relative(cfg_->primary, pc_to_sw, theta, std::true_type{})/absolute_rate); // TODO: calculate when breakthrough
+          calc_relative(darcy_span, theta, false_type{})/absolute_rate,
+          calc_relative(darcy_span, theta, true_type{})/absolute_rate
+        ); // TODO: calculate when breakthrough
       };
 
       auto write_occupancy_image = [&](double sw) {
         if (cfg_->occupancy_images)
           state_.write_occupancy_image(
-            image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, theta, pc_to_sw);
+            image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, theta, darcy_span);
       };
 
       auto progress_percolation = [&](auto idx, double r_cap) {
@@ -866,8 +912,8 @@ namespace xpm {
           auto pc_point = eval_pc_point();
 
           if (
-            std::abs(last_pc_point_.x() - pc_point.x()) > cfg_->report.sw_of_pc ||
-            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_step_)
+            abs(last_pc_point_.x() - pc_point.x()) > cfg_->report.sw_of_pc ||
+            abs(log10(last_pc_point_.y()) - log10(pc_point.y())) > pc_max_log_step_)
           {
             last_pc_point_ = pc_point;
             primary_.pc.push_back(pc_point);
@@ -890,22 +936,24 @@ namespace xpm {
 
       progress_idx_ = 0;
       // getchar();
+
+      dpl::so_uptr<phase_t, bool> slept{darcy_span.size()};
       for (/*progress_idx_ = 0*/; !queue.empty(); ++progress_idx_) {
-        // {
-        //   using namespace std::this_thread;
-        //   using namespace std::chrono;
-        //
-        //   if (progress_idx_ < 35)
-        //     sleep_for(milliseconds{150});
-        //   else if (progress_idx_ < 100)
-        //     sleep_for(milliseconds{50});
-        //   else if (progress_idx_ < 300 /*1000*/)
-        //     sleep_for(milliseconds{25});
-        // }
+        {
+          using namespace this_thread;
+          using namespace chrono;
+        
+          if (progress_idx_ < 500 && progress_idx_ % 25 == 0)
+            sleep_for(milliseconds{250});
+          // else if (progress_idx_ < 100)
+          //   sleep_for(milliseconds{50});
+          // else if (progress_idx_ < 300 /*1000*/)
+          //   sleep_for(milliseconds{25});
+        }
 
         auto [elem, local, r_cap] = queue.front();
 
-        if (1/r_cap > cfg_->max_pc) {
+        if (1/r_cap > cfg_->max_pc) { /* terminating as max pc reached */
           last_pc_point_ = eval_pc_point();
           primary_.pc.push_back(last_pc_point_);
           write_occupancy_image(last_pc_point_.x());
@@ -916,13 +964,17 @@ namespace xpm {
         queue.pop();
 
         if (elem == displ_elem::macro) {
-          auto macro = macro_t(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          macro_t macro(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
           auto net = pni_->net(macro);
+
+          // if (net == outlet_idx) {
+          //   std::cout << "_____OUTLET______";
+          // }
 
           progress_percolation(net, r_cap);
 
-          inv_volume_coefs[0] += volume(pn_, macro);
-          inv_volume_coefs[2] -= volume(pn_, macro)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, macro));
+          inv_vol_coefs[0] += volume(pn_, macro);
+          inv_vol_coefs[2] -= volume(pn_, macro)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, macro));
           
           for (edge_t vu : g_.edges(vertex_t(*net)))
             if (net_t u_net_idx{*target(vu, g_)}; u_net_idx == outlet_idx || pni_->is_macro(u_net_idx)) { // macro-macro
@@ -933,18 +985,33 @@ namespace xpm {
             }
             else { // macro-darcy
               if (!explored[u_net_idx]) {
-                auto b_voxel_idx = pni_->voxel(u_net_idx);
-                queue.insert(b_voxel_idx, darcy_r_cap);
+                auto voxel = pni_->voxel(u_net_idx);
+                queue.insert(voxel, darcy_r_cap_entry(voxel));
                 explored[u_net_idx] = true;
               }
             }
         }
         else if (elem == displ_elem::voxel) {
-          auto voxel = voxel_t(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          voxel_t voxel(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
           auto net = pni_->net(voxel);
 
           darcy_invaded_ = true;
-          inv_total_porosity += cfg_->image.poro(img_->phase[voxel]);
+
+          {
+            auto phase = img_->phase[voxel];
+
+            if (to_sleep && !slept[phase]) {
+              slept[phase] = true;
+
+              using namespace this_thread;
+              using namespace chrono;
+              
+              sleep_for(milliseconds{1000});
+            }
+
+
+            inv_porosity[phase] += cfg_->image.poro(phase); // TODO -- merge with cell volume or remove poro from here
+          }
 
           progress_percolation(net, r_cap); // TODO: phase_config::phase1_bulk_films(); of a voxel
 
@@ -956,7 +1023,8 @@ namespace xpm {
                 explored[u_net] = true;
               }
               else { // darcy
-                queue.insert(pni_->voxel(u_net), darcy_r_cap);
+                auto u_voxel = pni_->voxel(u_net);
+                queue.insert(u_voxel, darcy_r_cap_entry(u_voxel));
                 explored[u_net] = true;
               }
             }
@@ -967,8 +1035,8 @@ namespace xpm {
 
           progress_percolation(local, r_cap);
 
-          inv_volume_coefs[0] += volume(pn_, local);
-          inv_volume_coefs[2] -= volume(pn_, local)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, local));
+          inv_vol_coefs[0] += volume(pn_, local);
+          inv_vol_coefs[2] -= volume(pn_, local)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, local));
 
           if (pn_->inner_node(r))
             if (auto r_net = pni_->net(r); !explored[r_net]) {
@@ -984,9 +1052,8 @@ namespace xpm {
       }
 
 
-      if (pc_to_sw) {
-        auto end_pc = 1/state_.r_cap_global;
-        auto max_darcy_pc = pc_to_sw.back().x();
+      if (darcy_span) {
+        auto last_pc = state_.pc_global();
 
         if (auto pc_point = eval_pc_point(); primary_.pc.back().x() != pc_point.x()) {  // NOLINT(clang-diagnostic-float-equal)
           primary_.pc.push_back(pc_point);
@@ -994,13 +1061,27 @@ namespace xpm {
         }
 
         { /* Capillary pressure */
-          auto steps = 10;
+          constexpr auto steps = 10;
 
-          auto step = std::pow(10, (std::log10(max_darcy_pc) - std::log10(end_pc))/steps);
+          using views::transform;
 
+          // auto darcy_min_pc = ranges::min(darcy_infos.span(darcy_count) | transform([](const darcy_info& d) { return d.pc_to_sw.front().x(); }));
+          auto darcy_max_pc = ranges::max(darcy_span | transform([](const darcy_info& d) { return d.pc_to_sw.back().x();  }));
+
+          auto step = pow(10, (log10(darcy_max_pc) - log10(last_pc))/steps);
 
           for (auto i = 0; i < steps; ++i) {
+
+             if (to_sleep &&/*i%2 == 0*/true) {
+              ++progress_idx_;
+              using namespace this_thread;
+              using namespace chrono;
+              sleep_for(milliseconds{1500});
+              
+            }
+
             auto next_r_cap = state_.r_cap_global/step;
+
             if (1/next_r_cap > cfg_->max_pc) {
               state_.r_cap_global = 1/cfg_->max_pc;
               primary_.pc.push_back(eval_pc_point());
@@ -1014,29 +1095,40 @@ namespace xpm {
             state_.r_cap_global = next_r_cap;
             primary_.pc.push_back(eval_pc_point());
           
-            if (i%2 != 0)
+            if (i%2 != 0) {
               write_occupancy_image(primary_.pc.back().x());
+            }
+
+           
           }
 
           ++progress_idx_;
 
-          state_.r_cap_global = 1/end_pc;
+          state_.r_cap_global = 1/last_pc;
         }
 
         
-       
+        if (true)
         { /* Relative permeabilty */
-          for (auto [c_sw, c_pc] : std::ranges::reverse_view(cfg_->primary.pc)) {
-            if (c_pc <= end_pc)
+
+          std::set<double> pcs;
+          for (const auto& d : darcy_span)
+            for (auto pc : views::keys(d.pc_to_sw))
+              pcs.insert(pc);
+
+          // fmt::print("\n\nPCS COUNT {}\n\n", pcs.size());
+
+          for (auto pc : pcs /*ranges::reverse_view(cfg_->primary.pc)*/) {
+            if (pc <= last_pc)
               continue;
 
-            if (c_pc > cfg_->max_pc)
+            if (pc > cfg_->max_pc)
               break;
 
-            if (auto total_sw = 1 - eval_inv_volume(1/c_pc)/total_pore_volume_;
+            if (auto total_sw = 1 - eval_inv_volume(1/pc)/total_pore_volume_;
               last_kr_sw - total_sw > cfg_->report.sw_of_kr)
             {
-              state_.r_cap_global = 1/c_pc;
+              state_.r_cap_global = 1/pc;
               last_kr_sw = total_sw;
               rel_calc_report(total_sw);
 
@@ -1055,11 +1147,11 @@ namespace xpm {
 
       primary_finished_ = true;
 
-      {
-        std::cout << '\n';
-        generate_euler_tour();
-        launch_secondary(absolute_rate, theta);
-      }
+      // {
+      //   std::cout << '\n';
+      //   generate_euler_tour();
+      //   launch_secondary(absolute_rate, theta);
+      // }
     }
   };
 }

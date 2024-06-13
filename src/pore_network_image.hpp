@@ -863,9 +863,9 @@ namespace xpm
 
       for (auto [l, r] : pn_->throat_.span(attrib::adj))
         if (pn_->inner_node(r)) // macro-macro
-          ds.union_set(*l, *r);
-
-      using namespace presets;
+          ds.union_set(
+            *total(l),
+            *total(r));
 
       {
         idx3d_t ijk;
@@ -877,12 +877,16 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (img_->is_darcy(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy
-                  ds.union_set(*total(macro_t{img_->velem[idx1d]}), *total(idx1d));
+                  ds.union_set(
+                    *total(macro_t{*img_->velem[idx1d]}),
+                    *total(idx1d));
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
                     if (voxel_t adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d)) // darcy-darcy
-                      ds.union_set(*total(idx1d), *total(adj_idx1d));
+                      ds.union_set(
+                        *total(idx1d),
+                        *total(adj_idx1d));
                 });
               }
       }
@@ -1104,7 +1108,6 @@ namespace xpm
       std::unique_ptr<dpl::graph::dc_graph::edge_t[]>>
     generate_dc_graph() const {
       using namespace dpl::graph;
-      using namespace presets;
 
       graph_generator gen(*connected_count_ + 1, vertex_proj_t{this});
       std::unordered_map<dc_graph::edge_t, std::size_t> de_to_throat;
@@ -1130,7 +1133,7 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
-                  gen.reserve(macro_t{img_->velem[idx1d]}, idx1d);
+                  gen.reserve(macro_t{*img_->velem[idx1d]}, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -1171,7 +1174,7 @@ namespace xpm
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
-                  gen.set(macro_t{img_->velem[idx1d]}, idx1d);
+                  gen.set(macro_t{*img_->velem[idx1d]}, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -1207,8 +1210,8 @@ namespace xpm
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
-                if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{velem})) // macro-darcy
-                  builder.reserve(macro_t{velem}, idx1d);
+                if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{*velem})) // macro-darcy
+                  builder.reserve(macro_t{*velem}, idx1d);
 
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
@@ -1263,8 +1266,8 @@ namespace xpm
 
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
-                if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{velem})) { // macro-darcy
-                  macro_t adj_macro_idx{velem};
+                if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{*velem})) { // macro-darcy
+                  macro_t adj_macro_idx{*velem};
 
                   // auto li = cell_size.x()/2;
                   auto gi = term(idx1d);

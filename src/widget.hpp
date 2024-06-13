@@ -923,36 +923,81 @@ namespace xpm
 
     void LaunchInvasion() {
       {
-        auto* chart = pc_chart_view_->chart();
-        auto* darcy_pc_series = new QLineSeries;
-        chart->addSeries(darcy_pc_series);
+        auto* pc_chart = pc_chart_view_->chart();
+        auto* kr_chart = kr_chart_view_->chart();
+        const auto& darcy = model_.cfg().image.darcy;  // NOLINT(CppUseStructuredBinding, CppTooWideScopeInitStatement)
 
-        for (const auto& p : model_.cfg().primary.pc)
-          darcy_pc_series->append(p.x(), p.y());
-        darcy_pc_series->setName("microporous");
-        darcy_pc_series->attachAxis(chart->axes(Qt::Horizontal)[0]);
-        darcy_pc_series->attachAxis(pc_axis_y_);
-        chart->legend()->markers(darcy_pc_series)[0]->setVisible(false);
-        darcy_pc_series->setPen(QPen{Qt::gray, 1, Qt::DashLine});
+        
+
+        for (const auto& info : darcy.info.span(darcy.count) | std::views::reverse) {
+          {
+            auto* s = new QLineSeries;
+            pc_chart->addSeries(s);
+
+            for (auto [x, y] : info.pc_to_sw)
+              s->append(y, x);
+
+            s->attachAxis(pc_chart->axes(Qt::Horizontal)[0]);
+            s->attachAxis(pc_axis_y_);
+            s->setPen(QPen{info.color, 1, Qt::DashLine});
+            pc_chart->legend()->markers(s)[0]->setVisible(false);
+          }
+
+          {
+            auto* s = new QLineSeries;
+            kr_chart->addSeries(s);
+
+            for (auto [x, y] : info.kr[0])
+              s->append(x, y);
+
+            s->attachAxis(kr_chart->axes(Qt::Horizontal)[0]);
+            s->attachAxis(kr_axis_y_);
+            s->setPen(QPen{info.color, 1, Qt::DashLine});
+            kr_chart->legend()->markers(s)[0]->setVisible(false);
+          }
+
+          {
+            auto* s = new QLineSeries;
+            kr_chart->addSeries(s);
+
+            for (auto [x, y] : info.kr[1])
+              s->append(x, y);
+
+            s->attachAxis(kr_chart->axes(Qt::Horizontal)[0]);
+            s->attachAxis(kr_axis_y_);
+            s->setPen(QPen{info.color, 1, Qt::DashLine});
+            kr_chart->legend()->markers(s)[0]->setVisible(false);
+          }
+        }
       }
 
       using eq_tr = hydraulic_properties::equilateral_triangle;
 
       {
         using namespace std;
+        using namespace attrib;
+        using views::transform;
 
         auto min_r_cap_throat = numeric_limits<double>::max();
 
-        for (size_t i{0}; i < model_.pni().pn().throat_count(); ++i)
-          if (auto [l, r] = model_.pni().pn().throat_[attrib::adj][i]; model_.pni().pn().inner_node(r) && model_.pni().connected(l))
-            min_r_cap_throat = min(min_r_cap_throat, model_.pni().pn().throat_[attrib::r_ins][i]);
+        const auto& pn = model_.pni().pn();
+
+        for (throat_t i{0}; i < pn.throat_count(); ++i)
+          if (auto [l, r] = adj(pn, i); pn.inner_node(r) && model_.pni().connected(l))
+            min_r_cap_throat = min(min_r_cap_throat, r_ins(pn, i));
+
+        const auto& darcy = model_.cfg().image.darcy;
+
+        double max_pc = 1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat));
+        if (*darcy.count)
+          max_pc = max(max_pc,
+            ranges::max(transform(darcy.info.span(darcy.count), [](const darcy_info& d) { return d.pc_to_sw.back().x(); }))
+          );
 
         pc_axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
-          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(model_.pni().pn().node_.span(attrib::r_ins)))))),
-          pow(10., ceil(log10(max(
-            1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat)),
-            model_.cfg().primary.pc ? model_.cfg().primary.pc.front().y() : 0))))*1.01
+          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn.node_.span(r_ins)))))),
+          pow(10., ceil(log10(max_pc))*1.01)
         );
       }
 
@@ -962,43 +1007,42 @@ namespace xpm
       
 
       consumer_future_ = std::async(std::launch::async, [&] {
-        model_.get_invasion_task().init();
+        auto& task = model_.get_invasion_task();
+
+        task.init();
 
         auto start = std::chrono::system_clock::now();
 
         // auto pc_inv = model_.settings().primary.calc_pc_inv();
 
-        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary, &model_.get_invasion_task(),
+        auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary,
+          &task,
           model_.absolute_rate(),
-          model_.cfg().theta,
-          model_.cfg().primary.pc.inverse_unique());
+          model_.cfg().theta/*,
+          model_.cfg().primary.pc.inverse()*/);
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
-        auto update = [this, start, &last_progress_idx] {
+        auto update = [this, start, &task, &last_progress_idx] {
           // return;
 
-          if (last_progress_idx == model_.get_invasion_task().progress_idx())
+          if (last_progress_idx == task.progress_idx())
             return;
 
-          last_progress_idx = model_.get_invasion_task().progress_idx();
-
-          
-          
-          
-
-          
+          last_progress_idx = task.progress_idx();
 
           if (model_.cfg().report.display == "saturation") {
-            const auto& state = model_.get_invasion_task().state();
+            const auto& state = task.state();
             const auto& pni = model_.pni();
-            
-            static constexpr auto map_satur = [](double x) -> float { return x/2 + 0.25; };  // NOLINT(clang-diagnostic-implicit-float-conversion)
+            const auto& info = model_.cfg().image.darcy.info;
 
-            auto pc_inv = (
-              model_.get_invasion_task().primary_finished()
-                ? model_.cfg().secondary
-                : model_.cfg().primary).pc.inverse_unique();
+            static constexpr auto map_satur = [](double x) -> float { return x/2 + 0.25; };  // NOLINT(clang-diagnostic-implicit-float-conversion, cppcoreguidelines-narrowing-conversions)
+
+            // TODO!!!!
+            // auto pc = (
+            //   task.primary_finished()
+            //     ? model_.cfg().secondary
+            //     : model_.cfg().primary).pc.inverse();
 
             dpl::sfor<6>([&](auto face_idx) {
               dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
@@ -1006,9 +1050,10 @@ namespace xpm
               for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
                 auto sw = 0.0;
 
-                if (voxel_t voxel{idx1d}; pni.connected(voxel))
-                  if (auto net = pni.net(voxel); state.config(net).phase() == phase_config::phase1())
-                    sw = 1.0 - pc_inv(1/state.r_cap(net));
+                if (voxel_t voxel(idx1d); pni.connected(voxel))
+                  if (auto net = pni.net(voxel); state.config(net).phase() == phase_config::phase1()) {
+                    sw = 1.0 - info[img().phase[voxel]].pc_to_sw(1/state.r_cap(net)); // TODO BUG: pc corrects for secondary
+                  }
 
                 face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
               }
@@ -1046,7 +1091,7 @@ namespace xpm
           
           
           QMetaObject::invokeMethod(this,
-            [this, start] {
+            [this, start, &task] {
               using namespace std::chrono;
 
               // UpdateStatus(model_.invasion_task().finished()
@@ -1061,18 +1106,18 @@ namespace xpm
               secondary_.kr0->clear();
               secondary_.kr1->clear();
 
-              for (auto p : model_.get_invasion_task().primary().pc)
+              for (auto p : task.primary().pc)
                 primary_.pc->append(p.x(), p.y());
 
-              for (auto p : model_.get_invasion_task().secondary().pc)
+              for (auto p : task.secondary().pc)
                 secondary_.pc->append(p.x(), p.y());
 
-              for (auto [sw, kro, krg] : model_.get_invasion_task().primary().kr) {
+              for (auto [sw, kro, krg] : task.primary().kr) {
                 primary_.kr0->append(sw, kro);
                 primary_.kr1->append(sw, krg);                
               }
 
-              for (auto [sw, kro, krg] : model_.get_invasion_task().secondary().kr) {
+              for (auto [sw, kro, krg] : task.secondary().kr) {
                 secondary_.kr0->append(sw, kro);
                 secondary_.kr1->append(sw, krg);                
               }

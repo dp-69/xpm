@@ -122,11 +122,9 @@ namespace xpm
     }
 
 
-    // auto& pn() { return pn_; }
-    // auto& img() { return img_; }
     auto& pni() { return pni_; }
-    const auto& cfg() { return cfg_; }
-    auto absolute_rate() { return absolute_rate_; }
+    auto& cfg() const { return cfg_; }
+    auto absolute_rate() const { return absolute_rate_; }
     
     auto extract_network() {
       namespace fs = std::filesystem;
@@ -186,8 +184,23 @@ namespace xpm
       return invasion_task_;
     }
 
-    void init(const nlohmann::json& j) {
+    void init(nlohmann::json& j) {
       cfg_.load(j);
+
+
+      // auto pc_to_sw = cfg_.primary.pc.inverse();
+      for (voxel_ns::phase_t i{0}; i < cfg_.image.darcy.count; ++i) {
+        //  = pc_to_sw;
+        for (auto& p : cfg_.image.darcy.info[i].pc_to_sw /*cfg_.image.darcy.info[i].pc_to_sw*/)
+          for (int k = 0; k < *i; ++k)
+            // p.x() *= 1.0;
+            p.x() *= 1.2;
+
+
+
+        // cfg_.image.darcy.info[i].kr = cfg_.primary.kr;
+      }
+
 
       std::filesystem::create_directories("cache");
 
@@ -404,6 +417,8 @@ namespace xpm
 
       std::filesystem::create_directory("cache");
 
+      // fmt::print("\n\nHASH: {:x}\n\n", pressure_cache::hash(nvalues, input));
+
       if (
         auto cache_path = fmt::format("cache/{}-pressure-{:x}.bin", cfg_.image.path.stem(), pressure_cache::hash(nvalues, input));
         cfg_.solver.cache.use && std::filesystem::exists(cache_path))
@@ -469,7 +484,6 @@ namespace xpm
         });
 
         using namespace presets;
-
 
         petrophysics_summary_.perm_total = {
           inlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,

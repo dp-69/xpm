@@ -482,19 +482,21 @@ namespace xpm
      *   for a void voxel  - a macro node it belongs to
      *   for a darcy voxel - an adjacent macro node or else <invalid> 
      */
-    struct velem_t : dpl::so_integer<helper::velem_tag>
-    {
-      velem_t() = default;
-      constexpr explicit velem_t(const type v) : so_integer(v) {}
+    using velem_t = dpl::so_integer<helper::velem_tag>;
 
-      explicit constexpr operator macro_t() const {
-        return macro_t{value};
-      }
-
-      static constexpr auto invalid() {
-        return velem_t{helper::velem_tag::invalid_value /*invalid_value()*/};
-      }
-    };
+    // struct velem_t : dpl::so_integer<helper::velem_tag>
+    // {
+    //   velem_t() = default;
+    //   constexpr explicit velem_t(const type v) : so_integer(v) {}
+    //
+    //   // explicit constexpr operator macro_t() const {
+    //   //   return macro_t{value};
+    //   // }
+    //
+    //   static constexpr auto invalid() {
+    //     return velem_t{helper::velem_tag::invalid_value /*invalid_value()*/};
+    //   }
+    // };
   }
 
   namespace presets {
@@ -540,14 +542,14 @@ namespace xpm
   template <typename>
   struct wrapper {};
 
-  template <>
-  struct wrapper<nlohmann::json>
+  template <typename T> requires (std::is_same_v<std::remove_const_t<T>, nlohmann::json>)
+  struct wrapper<T> 
   {
-    const nlohmann::json* json = nullptr;
+    T* json = nullptr;
 
     wrapper() = default;
-    wrapper(const nlohmann::json* j) : json(j) {}
-    wrapper(const nlohmann::json& j) : json(&j) {}
+    wrapper(T* j) : json(j) {}   // NOLINT(CppNonExplicitConvertingConstructor)
+    wrapper(T& j) : json(&j) {}  // NOLINT(CppNonExplicitConvertingConstructor)
 
     wrapper operator()(const auto& key, const auto&... rest) const {
       if (auto jj = (*this)(key); jj)
@@ -592,21 +594,15 @@ namespace xpm
     }
   };
 
-  // void operator<<(auto& value, const wrapper<nlohmann::json>& arg) {
-  //   if (arg)
-  //     value = *arg;
-  // }
-
-  // void operator<<(auto& value, const wrapper<nlohmann::json>& arg) {
-  //   if (arg)
-  //     value = *arg;
-  // }
-
   struct darcy_info
   {
     double poro;
     double perm;
     QColor color;
+
+    dpl::curve2d pc_to_sw;
+    std::array<dpl::curve2d, 2> kr;
+
 
     darcy_info() = default;
 
@@ -616,9 +612,62 @@ namespace xpm
     darcy_info& operator=(darcy_info&& other) noexcept = delete;
   };
 
-  struct runtime_settings
+  class runtime_settings
   {
-    using wrap = wrapper<nlohmann::json>;
+    using json = nlohmann::json;
+
+    static json load(const std::filesystem::path& filename, bool ignore_comments) {
+      return json::parse(std::ifstream{filename}, nullptr, true, ignore_comments);
+    }
+
+    static const json& try_var(json& vars, const json& j, bool ignore_comments = false) {
+      if (j.is_string()) {
+        if (auto iter = vars.find(j); iter != vars.end())
+          return *iter;
+
+        return vars[j] = load(j, ignore_comments);
+      }
+
+      if (j.is_array() && j.size() == 2 && j[0].is_string() && j[1].is_string())
+        return vars[j.dump()] = load(j[0], ignore_comments).at(j[1]);
+
+      return j;
+    }
+
+    static json get_vars(wrapper<json> j, bool ignore_comments = false) {
+      auto vars = j("variables");
+
+      if (!vars)
+        return json{};
+
+      for (auto& v : *vars)
+        if (v.is_string())
+          v = load(v, ignore_comments);
+        else if (v.is_array() && v.size() == 2 && v[0].is_string() && v[1].is_string())
+          v = load(v[0], ignore_comments).at(v[1]);
+
+      return std::move(*vars);
+    }
+
+  public:
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     bool occupancy_images = false;
 
@@ -631,7 +680,7 @@ namespace xpm
       dpl::vector3i size;
       double resolution;
 
-      void load(const nlohmann::json& j) {
+      void load(const json& j) {
         path = std::string{j["path"]};
         size = j["size"];
         resolution = j["resolution"];
@@ -672,10 +721,14 @@ namespace xpm
          */
         phase_t count;
         dpl::so_uptr<phase_t, darcy_info> info;
+
+        // auto span() {
+        //   return info.span(count);
+        // }
       } darcy;
 
 
-      void set_poro_perm(const nlohmann::json& list) {
+      void set_poro_perm(const json& list, json& vars) {
         auto s = list.size();
 
         if (s > ((1 << sizeof(phase_t)*8) - 2))
@@ -686,19 +739,34 @@ namespace xpm
 
         auto mult = 255./(s + 1);                          // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
 
+        using namespace dpl;
+
         for (phase_t i{0}; const auto& j : list) {
           auto p = j["value"].get<phase_t>();
 
           darcy.narrow[p] = i;
           darcy.found[p] = true;
 
-          auto& ref = darcy.info[i];                        // NOLINT(CppUseStructuredBinding)
+          auto& ref = darcy.info[i];                       // NOLINT(CppUseStructuredBinding)
 
-          ref.poro = j["porosity"];
-          ref.perm = j["permeability"].get<double>()*presets::mD_to_m2;
-          ref.color = QColor::fromHsl(*i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          ref.poro = j["poro"];
+          ref.perm = j["perm"].get<double>()*presets::mD_to_m2;
 
-          dpl::qt::try_parse(j, ref.color);
+          {
+            parse(try_var(vars, j["cap_press"][0]), ref.pc_to_sw);
+            ref.pc_to_sw = ref.pc_to_sw.inverse();
+          }
+
+          {
+            const auto& rel_perm = try_var(vars, j["rel_perm"][0]);
+            parse(rel_perm[0], ref.kr[0]);
+            parse(rel_perm[1], ref.kr[1]);
+          }
+
+          {
+            ref.color = QColor::fromHsl(*i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+            qt::try_parse(j, ref.color);
+          }
 
           ++i;
         }
@@ -721,7 +789,7 @@ namespace xpm
     struct input_curves {
       dpl::curve2d pc;  /* [Sw, Pc] */
       std::array<dpl::curve2d, 2> kr;
-    } primary,
+    } /*primary,*/
       secondary;
     
 
@@ -737,7 +805,7 @@ namespace xpm
         bool save = true;
       } cache;
 
-      void load(wrap j) {
+      void load(wrapper<const json> j) {
         tolerance = (*j)["tolerance"];
         max_iterations = (*j)["max_iterations"];
         j.set(aggressive_levels, "aggressive_number_of_levels");
@@ -755,34 +823,37 @@ namespace xpm
       double sw_of_pc = 0.05;
       double sw_of_kr = 0.075;
     } report;
-    
 
-    void load(wrap j) {
+
+    void load(wrapper<json> j) {
       image.load(*j("image"));
 
-      if (auto j_micro = j("microporosity"); j_micro) {
+      auto vars = get_vars(j);
+
+      if (auto j_darcy = j("darcy"); j_darcy) {
+        image.set_poro_perm(*j_darcy, vars);
+
         // const auto& first_record = (*j_micro)["voxel"][0];
         // darcy.perm_single = first_record["permeability"].get<double>()*0.001*presets::darcy_to_m2;
         // darcy.poro_single = first_record["porosity"];
 
-        image.set_poro_perm((*j_micro)["voxel"]);
+        
 
         // j_micro.set(darcy.n1, "kozeny_carman", "n1");
         // j_micro.set(darcy.n2, "kozeny_carman", "n2");
         // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
 
+        // if (auto jj = j_micro("primary"); jj) {
+        //   parse((*jj)["capillary_pressure"],       primary.pc);
+        //   parse((*jj)["relative_permeability"][0], primary.kr[0]);
+        //   parse((*jj)["relative_permeability"][1], primary.kr[1]);
+        // }
 
-        if (auto j_primary = j_micro("primary"); j_primary) {
-          primary.pc = {(*j_primary)["capillary_pressure"]}; // parse((*j_primary)["capillary_pressure"], primary.pc);
-          primary.kr[0] = {(*j_primary)["relative_permeability"][0]};
-          primary.kr[1] = {(*j_primary)["relative_permeability"][1]};  
-        }
-
-        if (auto j_secondary = j_micro("secondary"); j_secondary) {
-          secondary.pc = {(*j_secondary)["capillary_pressure"]};
-          secondary.kr[0] = {(*j_secondary)["relative_permeability"][0]};
-          secondary.kr[1] = {(*j_secondary)["relative_permeability"][1]};  
-        }
+        // if (auto jj = j_micro("secondary"); jj) { // TODO: secondary
+        //   parse((*jj)["capillary_pressure"],       secondary.pc);
+        //   parse((*jj)["relative_permeability"][0], secondary.kr[0]);
+        //   parse((*jj)["relative_permeability"][1], secondary.kr[1]);
+        // }
       }
 
       j.set(occupancy_images, "report", "occupancy_images");

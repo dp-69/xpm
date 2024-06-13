@@ -488,6 +488,11 @@ namespace std
   struct tuple_element<i, dpl::vector_n_map<Type, n>> {
     using type = Type;
   };
+
+  template <size_t i, typename Type, int n>
+  auto& get(const dpl::vector_n<Type, n>& v) {
+    return v.template get<i>();
+  }
 }
 // NOLINTEND(cert-dcl58-cpp)
 
