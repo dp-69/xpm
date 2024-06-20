@@ -180,7 +180,7 @@ namespace dpl::graph
       // TODO: release vertex?
     }
 
-    void non_tree_edge_remove(edge_t ab) {
+    void non_tree_edge_remove(edge_t ab) {  // NOLINT(CppMemberFunctionMayBeConst)
       set_null_entry(ab, *g_);
       set_null_entry(opposite(ab, *g_), *g_);
     }    

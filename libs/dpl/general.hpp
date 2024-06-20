@@ -179,10 +179,10 @@ namespace dpl
   template <typename Tag> requires (std::integral<typename Tag::type>)
   struct so_integer
   {
-  private:
-    static constexpr bool has_invalid = requires { Tag::invalid_value; };
+  // private:
+  // static constexpr bool has_invalid = requires { Tag::invalid_value; };
 
-  public:
+  // public:
     using type = typename Tag::type;
 
     type value;
@@ -217,11 +217,11 @@ namespace dpl
     constexpr auto operator+ (so_integer rhs) const noexcept { return so_integer{value + *rhs}; }
     constexpr auto operator- (so_integer rhs) const noexcept { return so_integer{value - *rhs}; }
 
-    explicit constexpr operator bool() const noexcept requires has_invalid {
+    explicit constexpr operator bool() const noexcept /* requires has_invalid */ {
       return value != Tag::invalid_value;
     }
 
-    static constexpr auto invalid() noexcept requires has_invalid {
+    static constexpr auto invalid() noexcept /* requires has_invalid */ {
       return so_integer{Tag::invalid_value};
     }
   };
@@ -327,7 +327,7 @@ namespace dpl
       return uptr_[*index];
     }
 
-    auto data() const {
+    auto* data() const {
       return uptr_.get();
     }
 

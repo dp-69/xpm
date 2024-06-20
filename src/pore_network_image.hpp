@@ -423,7 +423,7 @@ namespace xpm
       return ds.find_set(*inlet()) == ds.find_set(*outlet());
     }
 
-    std::pair<dpl::hypre::ls_known_storage, size_t> generate_pressure_input() const {
+    std::pair<dpl::hypre::ls_known_storage, std::size_t> generate_pressure_input() const {
       dpl::hypre::ls_known_storage_builder builder{
         static_cast<HYPRE_BigInt>(*node_count())
       };

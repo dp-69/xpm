@@ -930,44 +930,47 @@ namespace xpm
         
 
         for (const auto& info : darcy.info.span(darcy.count) | std::views::reverse) {
+          for (int c = 0; c < 2; ++c)   
           {
             auto* s = new QLineSeries;
             pc_chart->addSeries(s);
 
-            for (auto [x, y] : info.pc_to_sw)
+            for (auto [x, y] : info.pc_to_sw[c])
               s->append(y, x);
 
             s->attachAxis(pc_chart->axes(Qt::Horizontal)[0]);
             s->attachAxis(pc_axis_y_);
-            s->setPen(QPen{info.color, 1, Qt::DashLine});
+            s->setPen(QPen{c == 1 ? info.color.darker(150) : info.color, 1, Qt::DashLine});
             pc_chart->legend()->markers(s)[0]->setVisible(false);
           }
 
-          {
-            auto* s = new QLineSeries;
-            kr_chart->addSeries(s);
+          for (int c = 0; c < 2; ++c)
+            for (int p = 0; p < 2; ++p)
+            {
+              auto* s = new QLineSeries;
+              kr_chart->addSeries(s);
 
-            for (auto [x, y] : info.kr[0])
-              s->append(x, y);
+              for (auto [x, y] : info.kr[c][p])
+                s->append(x, y);
 
-            s->attachAxis(kr_chart->axes(Qt::Horizontal)[0]);
-            s->attachAxis(kr_axis_y_);
-            s->setPen(QPen{info.color, 1, Qt::DashLine});
-            kr_chart->legend()->markers(s)[0]->setVisible(false);
-          }
+              s->attachAxis(kr_chart->axes(Qt::Horizontal)[0]);
+              s->attachAxis(kr_axis_y_);
+              s->setPen(QPen{c == 1 ? info.color.darker(150) : info.color, 1, Qt::DashLine});
+              kr_chart->legend()->markers(s)[0]->setVisible(false);
+            }
 
-          {
-            auto* s = new QLineSeries;
-            kr_chart->addSeries(s);
-
-            for (auto [x, y] : info.kr[1])
-              s->append(x, y);
-
-            s->attachAxis(kr_chart->axes(Qt::Horizontal)[0]);
-            s->attachAxis(kr_axis_y_);
-            s->setPen(QPen{info.color, 1, Qt::DashLine});
-            kr_chart->legend()->markers(s)[0]->setVisible(false);
-          }
+          // {
+          //   auto* s = new QLineSeries;
+          //   kr_chart->addSeries(s);
+          //
+          //   for (auto [x, y] : info.kr[0][1])
+          //     s->append(x, y);
+          //
+          //   s->attachAxis(kr_chart->axes(Qt::Horizontal)[0]);
+          //   s->attachAxis(kr_axis_y_);
+          //   s->setPen(QPen{info.color, 1, Qt::DashLine});
+          //   kr_chart->legend()->markers(s)[0]->setVisible(false);
+          // }
         }
       }
 
@@ -988,15 +991,15 @@ namespace xpm
 
         const auto& darcy = model_.cfg().image.darcy;
 
-        double max_pc = 1/(0.7*eq_tr::r_cap_piston_with_films(0, min_r_cap_throat));
+        double max_pc = 1/(0.7*eq_tr::r_cap_piston_with_films_valvatne(0, min_r_cap_throat));
         if (*darcy.count)
           max_pc = max(max_pc,
-            ranges::max(transform(darcy.info.span(darcy.count), [](const darcy_info& d) { return d.pc_to_sw.back().x(); }))
+            ranges::max(transform(darcy.info.span(darcy.count), [](const darcy_info& d) { return d.pc_to_sw[0].back().x(); }))
           );
 
         pc_axis_y_->setRange(
           // 1e4/*axis_y->min()*/,
-          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films(0, ranges::max(pn.node_.span(r_ins)))))),
+          pow(10., floor(log10(1./eq_tr::r_cap_piston_with_films_valvatne(0, ranges::max(pn.node_.span(r_ins)))))),
           pow(10., ceil(log10(max_pc))*1.01)
         );
       }
@@ -1018,8 +1021,7 @@ namespace xpm
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary,
           &task,
           model_.absolute_rate(),
-          model_.cfg().theta/*,
-          model_.cfg().primary.pc.inverse()*/);
+          model_.cfg().theta);
 
         auto last_progress_idx = std::numeric_limits<idx1d_t>::max();
 
@@ -1036,24 +1038,21 @@ namespace xpm
             const auto& pni = model_.pni();
             const auto& info = model_.cfg().image.darcy.info;
 
-            static constexpr auto map_satur = [](double x) -> float { return x/2 + 0.25; };  // NOLINT(clang-diagnostic-implicit-float-conversion, cppcoreguidelines-narrowing-conversions)
-
-            // TODO!!!!
-            // auto pc = (
-            //   task.primary_finished()
-            //     ? model_.cfg().secondary
-            //     : model_.cfg().primary).pc.inverse();
+            static constexpr auto map_satur =
+              [](double x) -> float { return x/2 + 0.25; };  // NOLINT(clang-diagnostic-implicit-float-conversion, cppcoreguidelines-narrowing-conversions)
 
             dpl::sfor<6>([&](auto face_idx) {
               dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
-            
-              for (vtkIdType i = 0; auto idx1d : face.GetIndices()) {
+
+              const int cycle = task.primary_finished();
+
+              for (vtkIdType i{0}; auto idx1d : face.GetIndices()) {
                 auto sw = 0.0;
 
-                if (voxel_t voxel(idx1d); pni.connected(voxel))
-                  if (auto net = pni.net(voxel); state.config(net).phase() == phase_config::phase1()) {
-                    sw = 1.0 - info[img().phase[voxel]].pc_to_sw(1/state.r_cap(net)); // TODO BUG: pc corrects for secondary
-                  }
+                if (voxel_t v{idx1d}; pni.connected(v))
+                  sw = 1.0 - info[img().phase[v]].pc_to_sw[cycle](1/state.r_cap(pni.net(v)));
+                // if (auto net = pni.net(v); state.config(net).phase() == phase_config::phase1())
+                  //   sw = 1.0 - info[img().phase[v]].pc_to_sw[cycle](1/state.r_cap(net));
 
                 face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
               }

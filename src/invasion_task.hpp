@@ -29,6 +29,8 @@
 
 #include <dpl/graph/dc_context.hpp>
 
+// #include <unordered_set>
+
 namespace xpm {
 
   class phase_state
@@ -72,11 +74,12 @@ namespace xpm {
       return this->local(i) == r_cap_mobile_;  // NOLINT(clang-diagnostic-float-equal)
     }
 
-    auto r_cap(auto i) const {
+    double r_cap(auto i) const {
       auto l = this->local(i);
       return l == r_cap_mobile_ ? r_cap_global : l;  // NOLINT(clang-diagnostic-float-equal)
     }
 
+    template<int cycle>
     void write_occupancy_image(
       const std::filesystem::path& path,
       const pore_network_image& pni,
@@ -95,7 +98,7 @@ namespace xpm {
 
       dpl::so_uptr<phase_t, type> phase_output(darcy.size());
       for (phase_t i{0}; i < darcy.size(); ++i)
-        phase_output[i] = (1 - darcy[i].pc_to_sw(pc_global()))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
+        phase_output[i] = (1 - darcy[i].pc_to_sw[cycle](pc_global()))*max;  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
       std::vector<type> output(*img.size());
 
@@ -174,7 +177,7 @@ namespace xpm {
       double theta;
       Perm darcy_perm;
 
-      coef_t(const pore_network_image* pni, const phase_state* state, double theta, Perm darcy_perm, std::bool_constant<phase1> = {})
+      explicit coef_t(std::bool_constant<phase1>, const pore_network_image* pni, const phase_state* state, double theta, Perm darcy_perm)
         : pni(pni), state(state), theta(theta), darcy_perm(darcy_perm) {}
 
       auto operator()(macro_t i) const {
@@ -219,7 +222,7 @@ namespace xpm {
     double total_pore_volume_;
 
     dpl::graph::dc_graph g_;
-    std::unordered_map<edge_t, std::size_t> de_to_throat_;
+    std::unordered_map<edge_t, throat_t> de_to_throat_;
     std::unique_ptr<edge_t[]> throat_to_de_;
 
     dpl::graph::dc_context context_;
@@ -340,23 +343,27 @@ namespace xpm {
       std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t0).count());
     }
 
-    
 
-    double calc_relative(dpl::so_span<phase_t, const darcy_info> darcy, double theta, auto phase1) {
+    template <int cycle, int phase>
+    double calc_relative(dpl::so_span<phase_t, const darcy_info> darcy, double theta/*, auto phase1*/) {
       dpl::so_uptr<phase_t, double> kr(darcy.size());
-      for (phase_t i{0}; i < darcy.size(); ++i)
-        kr[i] = darcy[i].kr[phase1](darcy[i].pc_to_sw(state_.pc_global()));
 
-      filter_t<phase1> filter{pni_, &img_->phase, &kr, &state_};
+      for (auto* ptr = kr.data(); const auto& d : darcy)
+        *ptr++ = d.kr[cycle][phase](d.pc_to_sw[cycle](state_.pc_global()));
+
+      // for (phase_t i{0}; i < darcy.size(); ++i)
+      //   kr[i] = darcy[i].kr[cycle][phase1](darcy[i].pc_to_sw[cycle](state_.pc_global()));
+
+      filter_t<phase> filter{pni_, &img_->phase, &kr, &state_};
       coef_t term{
+        std::bool_constant<phase>{},
         pni_,
         &state_,
         theta,
         [&kr, this](voxel_t i) {
           auto p = img_->phase[i];
           return kr[p]*cfg_->image.perm(p);
-        },
-        phase1
+        }
       };
 
       auto [nrows, mapping] = pni_->generate_mapping(*cfg_->solver.decomposition, filter);
@@ -364,7 +371,7 @@ namespace xpm {
 
       auto hash = pressure_cache::hash(nvalues, input);
 
-      fmt::print("ph{} | hash: {:x}", int{phase1}, hash);
+      fmt::print("ph{} | hash: {:016x}", phase, hash);
 
       auto found = pressure_cache::cache().find(hash);
 
@@ -406,38 +413,39 @@ namespace xpm {
     }
 
     void launch_secondary(double absolute_rate, double theta) {
-      using eq_tr = hydraulic_properties::equilateral_triangle;
+      using namespace std;
       using namespace attrib;
+      using namespace dpl;
+      using eq_tr = hydraulic_properties::equilateral_triangle;
 
-      auto cell_volume = (pn_->physical_size/img_->dim()).prod();
-      auto pc_to_sw = cfg_->secondary.pc.inverse();
-      auto darcy_r_cap = pc_to_sw ? 1/cfg_->secondary.pc.back().y() : std::numeric_limits<double>::quiet_NaN();
+      auto darcy_span = cfg_->image.darcy.info.span(cfg_->image.darcy.count);
+      auto darcy_r_cap = [this, darcy_span](phase_t p) { return 1/darcy_span[p].pc_to_sw[1].front().x(); };
 
-      dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
-      std::vector<bool> explored_throat(pn_->throat_count());
+      so_uptr<net_t, bool> explored(pni_->connected_count());
+      vector<bool> explored_throat(pn_->throat_count());
 
       displ_queue<false> queue;
 
-      auto area_corner_mult = 0.0;
-      auto inv_volume_coef0 = 0.0;
+      auto length_sum = 0.0;
+      auto length_term = [this](auto i) { return volume(pn_, i)/eq_tr::area(r_ins(pn_, i)); };
+      auto inv_vol0 = 0.0;
 
-
-      auto bulk_films_filter = [this](auto i) { return state_.config(i).layout() == phase_config::bulk_films(); };
+      auto has_films = [this](auto i) { return state_.config(i).layout() == phase_config::bulk_films(); };
 
       for (macro_t i{0}; i < pn_->node_count(); ++i)
         if (pni_->connected(i)) {
-          if (bulk_films_filter(pni_->net(i))) {
-            area_corner_mult += volume(pn_, i)/eq_tr::area(r_ins(pn_, i));
+          if (has_films(pni_->net(i))) {
+            length_sum += length_term(i);
             queue.insert(i, eq_tr::r_cap_snap_off(theta, r_ins(pn_, i)));
           }
           else
-            inv_volume_coef0 += volume(pn_, i);
+            inv_vol0 += volume(pn_, i);
         }
       
-      for (std::size_t i{0}; i < pn_->throat_count(); ++i)
+      for (throat_t i{0}; i < pn_->throat_count(); ++i)
         if (auto [l, r] = adj(pn_, i); pni_->connected(l)) {
-          if (bulk_films_filter(i)) {
-            area_corner_mult += volume(pn_, i)/eq_tr::area(r_ins(pn_, i));
+          if (has_films(i)) {
+            length_sum += length_term(i);
 
             if (pn_->inlet() == r) {
               queue.insert(i, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, i)));
@@ -447,10 +455,10 @@ namespace xpm {
               queue.insert(i, eq_tr::r_cap_snap_off(theta, r_ins(pn_, i)));
           }
           else
-            inv_volume_coef0 += volume(pn_, i);
+            inv_vol0 += volume(pn_, i);
         }
 
-      auto inv_total_porosity = 0.0;
+      so_uptr<phase_t, double> inv_porosity(darcy_span.size(), 0);
 
       {
         idx3d_t ijk;
@@ -460,21 +468,32 @@ namespace xpm {
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
-              if (pni_->connected(idx1d)) { // TODO: Early primary termination
-                inv_total_porosity += cfg_->image.poro(img_->phase[idx1d]);
-                queue.insert(idx1d, darcy_r_cap);
+              if (pni_->connected(idx1d)) { // TODO BUG: Early primary termination
+                phase_t p = img_->phase[idx1d];
+                inv_porosity[p] += cfg_->image.poro(p);
+                queue.insert(idx1d, darcy_r_cap(p));
               }
       }
 
 
+      const double cell_volume = (pn_->physical_size/img_->dim()).prod();
       auto eval_inv_volume = [&](double r_cap_global) {
-        auto macro = area_corner_mult*eq_tr::area_corners(theta, r_cap_global) + inv_volume_coef0;
-        if (pc_to_sw)
-          macro += pc_to_sw(1/r_cap_global)*cell_volume*inv_total_porosity;
-        return macro;
+        double vol = 0.0;
+        for (phase_t i{0}; i < darcy_span.size(); ++i)
+          vol += darcy_span[i].pc_to_sw[1](1/r_cap_global)*inv_porosity[i];
+        vol *= cell_volume;
+
+        vol += inv_vol0 + length_sum*eq_tr::area_corners(theta, r_cap_global);
+
+        return vol;
       };
 
-      auto eval_pc_point = [&] { return dpl::vector2d{eval_inv_volume(state_.r_cap_global)/total_pore_volume_, 1/state_.r_cap_global}; };
+      auto eval_pc_point = [&] {
+        return vector2d{
+          eval_inv_volume(state_.r_cap_global)/total_pore_volume_,
+          state_.pc_global()
+        };
+      };
 
       using namespace dpl::graph;
 
@@ -490,44 +509,44 @@ namespace xpm {
 
             set_entry(v, nullptr, g_);
 
-            net_t v_net{*v}; 
+            net_t net{*v}; 
 
-            if (bulk_films_filter(v_net)) {  // NOLINT(clang-diagnostic-float-equal)
-              state_.local(v_net) = state_.r_cap_global;
+            if (has_films(net)) {  // NOLINT(clang-diagnostic-float-equal)
+              state_.local(net) = state_.r_cap_global;
 
-              if (pni_->is_macro(v_net)) {
-                auto macro_idx = pni_->macro(v_net);
-
-                auto mult = volume(pn_, macro_idx)/eq_tr::area(r_ins(pn_, macro_idx));
-                area_corner_mult -= mult;
-                inv_volume_coef0 += area_corners*mult;  
+              if (pni_->is_macro(net)) {
+                auto term = length_term(pni_->macro(net));
+                length_sum -= term;
+                inv_vol0 += area_corners*term;  
               }
               else {
-                auto voxel = pni_->voxel(v_net);
-                auto poro = cfg_->image.poro(img_->phase[voxel]);
-                inv_total_porosity -= poro;
-                inv_volume_coef0 += pc_to_sw(1/state_.r_cap_global)*cell_volume*poro;  
+                auto p = img_->phase[pni_->voxel(net)];
+                auto poro = cfg_->image.poro(p);
+
+                inv_porosity[p] -= poro;
+                inv_vol0 += darcy_span[p].pc_to_sw[1](state_.pc_global())*cell_volume*poro;  
               }
             }
 
-            if (pni_->is_macro(v_net))
-              for (edge_t vu : g_.edges(v))
-                if (pni_->is_macro(net_t{*target(vu, g_)})) {
-                  auto t_idx = de_to_throat_[vu];
+            if (pni_->is_macro(net)) {
+              for (edge_t vw : g_.edges(v))
+                if (pni_->is_macro(net_t{*target(vw, g_)})) {
+                  if (throat_t t = de_to_throat_[vw];
+                    has_films(t) && state_.mobile(t))
+                  {
+                    set_null_entry(vw, g_);
+                    set_null_entry(opposite(vw, g_), g_);
 
-                  if (bulk_films_filter(t_idx) && state_.mobile(t_idx)) {
-                    set_null_entry(vu, g_);
-                    set_null_entry(opposite(vu, g_), g_);  
-
-                    state_.local(t_idx) = state_.r_cap_global;
-
-                    auto mult = volume(pn_, t_idx)/eq_tr::area(r_ins(pn_, t_idx));
-                    area_corner_mult -= mult;
-                    inv_volume_coef0 += area_corners*mult;
+                    state_.local(t) = state_.r_cap_global;
+                    
+                    auto term = length_term(t);
+                    length_sum -= term;
+                    inv_vol0 += area_corners*term;
                   }
-                } 
+                }
                 else
-                  set_null_entry(vu, g_);
+                  set_null_entry(vw, g_);
+            }
             else
               for (edge_t vu : g_.edges(v))
                 set_null_entry(vu, g_);
@@ -541,10 +560,8 @@ namespace xpm {
       // secondary_.add_pc_point(last_pc_point_); // TODO
 
 
-
-
       auto rel_calc_report = [&](double sw) {
-        auto phase1_connected = [&] {
+        auto ph1_connected = [&] {
           for (auto [l, r] : pn_->throat_.span(adj))
             if (r == pn_->inlet() && pni_->connected(l)) // macro-inlet
               if (get_entry(vertex_t(*pni_->net(l)), g_))
@@ -556,16 +573,16 @@ namespace xpm {
           
             for (k = 0; k < img_->dim().z(); ++k)
               for (j = 0; j < img_->dim().y(); ++j)
-                if (voxel_t idx1d{img_->idx_map(0, j, k)}; pni_->connected(idx1d)/*img_->phase[idx1d] == presets::microporous*/) // darcy-inlet
-                  if (get_entry(vertex_t(*pni_->net(idx1d)), g_))
+                if (voxel_t v{img_->idx_map(0, j, k)}; pni_->connected(v)) // darcy-inlet
+                  if (get_entry(vertex_t(*pni_->net(v)), g_))
                     return true;
           }
 
           return false;
         };
 
-        auto ph0_rate = 1; /*calc_relative(cfg_->secondary, pc_to_sw, theta, std::false_type{});*/ // TODO
-        auto ph1_rate = 1; /*phase1_connected() ? calc_relative(cfg_->secondary, pc_to_sw, theta, std::true_type{}) : 0;*/
+        auto ph0_rate = calc_relative<1, 0>(darcy_span, theta);
+        auto ph1_rate = ph1_connected() ? calc_relative<1, 1>(darcy_span, theta) : 0;
       
         secondary_.kr.emplace_back(sw, ph0_rate/absolute_rate, ph1_rate/absolute_rate);
       };
@@ -578,8 +595,8 @@ namespace xpm {
         //     image_dir_/fmt::format("secondary-{:.4f}.raw", sw), *pni_, theta, pc_to_sw); // TODO
       };
 
-      if (pc_to_sw) {
-        auto max_pc = primary_.pc.back().y();
+      if (darcy_span) {
+        const double max_pc = primary_.pc.back().y();
 
         state_.r_cap_global = 1/max_pc;
         secondary_.pc.push_back(eval_pc_point());
@@ -590,13 +607,17 @@ namespace xpm {
         //   1/darcy_r_cap);
 
         {
-          auto steps = 10;
+          int steps = 10;
 
-          auto step = std::pow(10, (
-            std::log10(max_pc) -
-            std::log10(1/std::min(darcy_r_cap, queue.front().r_cap)))/steps);
+          const double closest_darcy_pc = max(
+            1/queue.front().r_cap,
+            ranges::max(darcy_span |
+              views::transform([](const darcy_info& d) { return d.pc_to_sw[1].front().x(); }))
+          );
 
-          for (auto i = 0; i < steps; ++i) {
+          const double step = pow(10, (log10(max_pc) - log10(closest_darcy_pc))/steps);
+
+          for (int i = 0; i < steps; ++i) {
             state_.r_cap_global *= step;
             last_pc_point_ = eval_pc_point();
             secondary_.pc.push_back(last_pc_point_);
@@ -607,7 +628,7 @@ namespace xpm {
 
         ++progress_idx_;
 
-        if (cfg_->secondary.kr[0]) {
+        if (cfg_->secondary.kr[0]) { // TODO
           for (auto [c_sw, c_pc] : cfg_->secondary.pc) {
             // if (c_pc <= end_pc)
             //   continue;
@@ -625,10 +646,6 @@ namespace xpm {
               ++progress_idx_;
             }
           }
-
-
-
-
 
           // auto steps = 6;
           //
@@ -651,14 +668,14 @@ namespace xpm {
         secondary_.pc.push_back(last_pc_point_); // TODO: simplify with else
       }
 
+      // unordered_set<net_t> net_items;
+      // unordered_set<throat_t> throat_items;
 
-      
-
-      auto progress_percolation = [&](auto idx, double r_cap) {
+      auto progress_percolation = [&]<typename Index>(Index i, double r_cap) {
         if (r_cap > state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
-            std::abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ cfg_->report.sw_of_pc ||
-            std::abs(last_pc_point_.y() - pc_point.y()) > pc_max_log_step_) { // TODO
+            abs(last_pc_point_.x() - pc_point.x()) > /*0.025*/ cfg_->report.sw_of_pc ||
+            abs(log10(last_pc_point_.y()) - log10(pc_point.y())) > pc_max_log_step_) {
             last_pc_point_ = pc_point;
             secondary_.pc.push_back(pc_point);
             write_occupancy_image(pc_point.x());
@@ -671,10 +688,99 @@ namespace xpm {
             rel_calc_report(sw);
           }
 
+          // state_.r_cap_global = r_cap;
+
           state_.r_cap_global = r_cap;
         }
 
-        state_.config(idx) = phase_config{phase_config::phase0()};
+
+        {
+          state_.config(i) = phase_config{phase_config::phase0()};
+
+          if constexpr (is_same_v<Index, net_t>) {
+            // net_items.insert(i);
+
+            vertex_t v(*i); 
+
+            for (edge_t vw : g_.edges(v))
+              if (!is_null_entry(vw, g_) && !is_tree_edge(vw, g_))
+                context_.non_tree_edge_remove(vw);
+
+            for (edge_t vw : g_.edges(v))
+              if (!is_null_entry(vw, g_) && !context_.tree_edge_split_and_reconnect(vw))  // remove remaining tree edges
+                if (et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_));      // header of the target vertex
+                  hdr != et_algo::get_header(outlet_entry))
+                  freeze_cluster(hdr);
+
+            set_entry(v, nullptr, g_);
+          }
+          else {
+            // throat_items.insert(i);
+
+            if (edge_t vw = throat_to_de_[i]; !is_null_entry(vw, g_))
+              if (is_tree_edge(vw, g_)) {
+                if (!context_.tree_edge_split_and_reconnect(vw)) {
+                  et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_));
+                  if (hdr == et_algo::get_header(outlet_entry))
+                    hdr = et_algo::get_header(get_entry(target(opposite(vw, g_), g_), g_));
+
+                  freeze_cluster(hdr);
+                }
+              }
+              else  // NOLINT(clang-diagnostic-dangling-else)
+                context_.non_tree_edge_remove(vw);
+          }
+
+          // {
+          //   for (auto t : throat_items) {
+          //     if (edge_t vw = throat_to_de_[t]; !is_null_entry(vw, g_)) // TODO: check if it is always true
+          //       if (!is_tree_edge(vw, g_))
+          //         context_.non_tree_edge_remove(vw);
+          //   }
+          //   
+          //   for (auto net : net_items) {
+          //     for (vertex_t v(*net); edge_t vw : g_.edges(v))
+          //       if (!is_null_entry(vw, g_))  // TODO: check if it is always true
+          //         if (!is_tree_edge(vw, g_))
+          //           context_.non_tree_edge_remove(vw);
+          //   }
+          //   
+          //   for (auto t : throat_items) {
+          //     if (edge_t vw = throat_to_de_[t]; !is_null_entry(vw, g_)) {
+          //       if (!context_.tree_edge_split_and_reconnect(vw)) {
+          //         et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_));
+          //         if (hdr == et_algo::get_header(outlet_entry))
+          //           hdr = et_algo::get_header(get_entry(target(opposite(vw, g_), g_), g_));
+          //       
+          //         freeze_cluster(hdr);
+          //       }
+          //     }
+          //   }
+          //   
+          //   for (auto net : net_items) {
+          //     if (vertex_t v(*net); get_entry(v, g_)) {
+          //       for (edge_t vw : g_.edges(v)) {
+          //         if (!is_null_entry(vw, g_)) {
+          //           if (!context_.tree_edge_split_and_reconnect(vw))                       // remove remaining tree edges
+          //             if (et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_)); // header of the target vertex
+          //               hdr != et_algo::get_header(outlet_entry))
+          //               freeze_cluster(hdr);  
+          //         }
+          //       }
+          //   
+          //       set_entry(v, nullptr, g_);
+          //     }
+          //   }
+          //   
+          //   throat_items.clear();
+          //   net_items.clear();
+          // }
+        }
+
+
+        
+
+        
       };
 
 
@@ -704,42 +810,40 @@ namespace xpm {
 
         if (elem == displ_elem::macro) {
           macro_t macro(local);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-          auto net = pni_->net(macro);
+          net_t net = pni_->net(macro);
 
           if (state_.config(net).phase() == phase_config::phase0())
             continue;
 
-          if (get_entry(vertex_t(*net), g_)) {
+          if (vertex_t v(*net); get_entry(v, g_)) {
             progress_percolation(net, r_cap);
 
-            area_corner_mult -= volume(pn_, macro)/eq_tr::area(r_ins(pn_, macro));
-            inv_volume_coef0 += volume(pn_, macro);
+            length_sum -= length_term(macro);
+            inv_vol0 += volume(pn_, macro);
 
             {
-              vertex_t v(*net);
+                // for (edge_t vw : g_.edges(v))
+                //   if (!is_null_entry(vw, g_) && !is_tree_edge(vw, g_))
+                //     context_.non_tree_edge_remove(vw);
 
-              for (edge_t vu : g_.edges(v))
-                if (!is_null_entry(vu, g_) && !is_tree_edge(vu, g_))
-                  context_.non_tree_edge_remove(vu);
-
-              for (edge_t vu : g_.edges(v)) {
-                if (net_t u_net_idx{*target(vu, g_)}; u_net_idx == outlet_idx || pni_->is_macro(u_net_idx)) { // macro-macro
-                  if (auto t_idx = de_to_throat_[vu]; !explored_throat[t_idx]) {
-                    queue.insert(t_idx, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, t_idx)));
-                    explored_throat[t_idx] = true;
+              for (edge_t vw : g_.edges(v)) {
+                if (net_t w_net{*target(vw, g_)}; w_net == outlet_idx || pni_->is_macro(w_net)) { // macro-macro
+                  if (throat_t t = de_to_throat_[vw]; !explored_throat[t]) {
+                    queue.insert(t, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, t)));
+                    explored_throat[t] = true;
                   }
                 }
                 // else { // macro-darcy
                 // }
 
-                if (!is_null_entry(vu, g_))
-                  if (!context_.tree_edge_split_and_reconnect(vu))
-                    if (et_ptr hdr = et_algo::get_header(get_entry(target(vu, g_), g_));
-                      hdr != et_algo::get_header(outlet_entry))
-                      freeze_cluster(hdr);
+                  // if (!is_null_entry(vw, g_))
+                  //   if (!context_.tree_edge_split_and_reconnect(vw))                       // remove remaining tree edges
+                  //     if (et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_)); // header of the target vertex
+                  //       hdr != et_algo::get_header(outlet_entry))
+                  //       freeze_cluster(hdr);
               }
 
-              set_entry(v, nullptr, g_);
+                // set_entry(v, nullptr, g_);
             }
           }
         }
@@ -757,6 +861,7 @@ namespace xpm {
             r == pn_->outlet() ? outlet_entry :
             get_entry(vertex_t(*pni_->net(r)), g_);
 
+
           if (l_entry || r_entry) {
             if (l_entry && !explored[l_net]) {
               queue.insert(l, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, l)));
@@ -771,42 +876,46 @@ namespace xpm {
 
             progress_percolation(local, r_cap);
 
-            area_corner_mult -= volume(pn_, local)/eq_tr::area(r_ins(pn_, local));
-            inv_volume_coef0 += volume(pn_, local);
+            length_sum -= length_term(local);
+            inv_vol0 += volume(pn_, local);
 
-            if (edge_t de = throat_to_de_[local]; !is_null_entry(de, g_))
-              if (is_tree_edge(de, g_)) {
-                if (!context_.tree_edge_split_and_reconnect(de)) {
-                  et_ptr hdr = et_algo::get_header(get_entry(target(de, g_), g_));
-                  if (hdr == et_algo::get_header(outlet_entry))
-                    hdr = et_algo::get_header(get_entry(target(opposite(de, g_), g_), g_));
-
-                  freeze_cluster(hdr);
-                }
-              }
-              else
-                context_.non_tree_edge_remove(de);
+              // if (edge_t vw = throat_to_de_[local]; !is_null_entry(vw, g_)) {
+              //   if (is_tree_edge(vw, g_)) {
+              //     if (!context_.tree_edge_split_and_reconnect(vw)) {
+              //       et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_));
+              //       if (hdr == et_algo::get_header(outlet_entry))
+              //         hdr = et_algo::get_header(get_entry(target(opposite(vw, g_), g_), g_));
+              //
+              //       freeze_cluster(hdr);
+              //     }
+              //   }
+              //   else
+              //     context_.non_tree_edge_remove(vw);
+              // }
           }
         }
         else { // voxel
-          auto net = pni_->net(voxel_t(local));  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          auto net = pni_->net(voxel_t(local));  // NOLINT(cppcoreguidelines-narrowing-conversions, CppTooWideScope, CppTooWideScopeInitStatement)
           
-          // if (traits.get_entry(vertex_t(*net_idx))) 
+          if (state_.r_cap_global == r_cap || get_entry(vertex_t(*net), g_))  // NOLINT(clang-diagnostic-float-equal)
           {
             progress_percolation(net, r_cap);
 
-            vertex_t v(*net);
-              
-            for (edge_t vu : g_.edges(v))
-              if (!is_null_entry(vu, g_) && !is_tree_edge(vu, g_))
-                context_.non_tree_edge_remove(vu);
-              
-            for (edge_t vu : g_.edges(v))
-              if (!is_null_entry(vu, g_) && !context_.tree_edge_split_and_reconnect(vu))
-                if (et_ptr hdr = et_algo::get_header(get_entry(target(vu, g_), g_)); hdr != et_algo::get_header(outlet_entry))
-                  freeze_cluster(hdr);
-            
-            set_entry(v, nullptr, g_);
+              // vertex_t v(*net);
+              //   
+              // for (edge_t vw : g_.edges(v))
+              //   if (!is_null_entry(vw, g_) && !is_tree_edge(vw, g_))
+              //     context_.non_tree_edge_remove(vw);
+              //   
+              // for (edge_t vw : g_.edges(v))
+              //   if (!is_null_entry(vw, g_) && !context_.tree_edge_split_and_reconnect(vw))
+              //     if (et_ptr hdr = et_algo::get_header(get_entry(target(vw, g_), g_));
+              //       hdr != et_algo::get_header(outlet_entry))
+              //     {
+              //       freeze_cluster(hdr);
+              //     }
+              //
+              // set_entry(v, nullptr, g_);
           }
         }
       }
@@ -814,26 +923,23 @@ namespace xpm {
 
       secondary_.pc.push_back(eval_pc_point());
       rel_calc_report(eval_inv_volume(state_.r_cap_global)/total_pore_volume_);
+
+
       ++progress_idx_;
     }
 
-    void launch_primary(double absolute_rate, double theta/*, const dpl::curve2d& pc_to_sw*/) {
+    void launch_primary(double absolute_rate, double theta) {
       static constexpr bool to_sleep = false;
-
-      // return;
 
       pressure_cache::load();
 
-      // using namespace std::chrono;
-      // auto t0 = high_resolution_clock::now();
-
       using namespace std;
       using namespace attrib;
+      using namespace dpl;
       using eq_tr = hydraulic_properties::equilateral_triangle;
 
-      const auto darcy_span = cfg_->image.darcy.info.span(cfg_->image.darcy.count);
-      
-      auto darcy_r_cap_entry = [this, darcy_span](voxel_t i) { return 1/darcy_span[img_->phase[i]].pc_to_sw.front().x(); };
+      auto darcy_span = cfg_->image.darcy.info.span(cfg_->image.darcy.count);
+      auto darcy_r_cap = [this, darcy_span](voxel_t i) { return 1/darcy_span[img_->phase[i]].pc_to_sw[0].front().x(); };
 
       if (darcy_span)
         pc_max_log_step_ = 0.25;
@@ -844,11 +950,11 @@ namespace xpm {
           if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && pni_->connected(l))
             min_r_cap_throat = min(min_r_cap_throat, r_ins(pn_, i));
 
-        min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films(theta, min_r_cap_throat);
+        min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films_valvatne(theta, min_r_cap_throat);
         pc_max_log_step_ = std::log10(0.075/min_r_cap_throat);
       }
 
-      dpl::so_uptr<net_t, bool> explored(pni_->connected_count());
+      so_uptr<net_t, bool> explored(pni_->connected_count());
       vector<bool> explored_throat(pn_->throat_count());
 
       displ_queue<true> queue;
@@ -856,7 +962,7 @@ namespace xpm {
       for (size_t i{0}; i < pn_->throat_count(); ++i)
         if (auto [l, r] = adj(pn_, i); pn_->inlet() == r) // inlet macro-macro TODO: voxels inlet needed
           if (pni_->connected(l)) {
-            queue.insert(i, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, i)));
+            queue.insert(i, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, i)));
             explored_throat[i] = true;
           }
 
@@ -864,8 +970,8 @@ namespace xpm {
 
       net_t outlet_idx = pni_->connected_count();
 
-      dpl::vector3d inv_vol_coefs{0};
-      dpl::so_uptr<phase_t, double> inv_porosity(darcy_span.size(), 0);
+      vector3d inv_vol_coefs{0};
+      so_uptr<phase_t, double> inv_porosity(darcy_span.size(), 0);
 
       state_.r_cap_global = queue.front().r_cap;
 
@@ -874,12 +980,11 @@ namespace xpm {
       primary_.kr.emplace_back(1, 1, 0);
 
       const double cell_volume = (pn_->physical_size/img_->dim()).prod();
-
       auto eval_inv_volume = [&](double r_cap_global) {
         double vol = 0.0;
 
         for (phase_t i{0}; i < darcy_span.size(); ++i)
-          vol += (1 - darcy_span[i].pc_to_sw(1/r_cap_global))*inv_porosity[i];
+          vol += (1 - darcy_span[i].pc_to_sw[0](1/r_cap_global))*inv_porosity[i];
         vol *= cell_volume;
 
         vol += inv_vol_coefs[0] + inv_vol_coefs[2]*r_cap_global*r_cap_global;
@@ -888,22 +993,23 @@ namespace xpm {
       };
 
       auto eval_pc_point = [&] {
-        return dpl::vector2d{
+        return vector2d{
           1 - eval_inv_volume(state_.r_cap_global)/total_pore_volume_,
-          state_.pc_global()};
+          state_.pc_global()
+        };
       };
 
       auto rel_calc_report = [this, /*t0, */theta, absolute_rate, darcy_span](double sw) {
         // fmt::print("{}ms\n", duration_cast<milliseconds>(high_resolution_clock::now() - t0).count());
         primary_.kr.emplace_back(sw,
-          calc_relative(darcy_span, theta, false_type{})/absolute_rate,
-          calc_relative(darcy_span, theta, true_type{})/absolute_rate
+          calc_relative<0, 0>(darcy_span, theta)/absolute_rate,
+          calc_relative<0, 1>(darcy_span, theta)/absolute_rate
         ); // TODO: calculate when breakthrough
       };
 
       auto write_occupancy_image = [&](double sw) {
         if (cfg_->occupancy_images)
-          state_.write_occupancy_image(
+          state_.write_occupancy_image<0>(
             image_dir_/fmt::format("primary-{:.4f}.raw", sw), *pni_, theta, darcy_span);
       };
 
@@ -937,19 +1043,22 @@ namespace xpm {
       progress_idx_ = 0;
       // getchar();
 
-      dpl::so_uptr<phase_t, bool> slept{darcy_span.size()};
+      so_uptr<phase_t, bool> slept{darcy_span.size()};
       for (/*progress_idx_ = 0*/; !queue.empty(); ++progress_idx_) {
-        {
-          using namespace this_thread;
-          using namespace chrono;
-        
-          if (progress_idx_ < 500 && progress_idx_ % 25 == 0)
-            sleep_for(milliseconds{250});
-          // else if (progress_idx_ < 100)
-          //   sleep_for(milliseconds{50});
-          // else if (progress_idx_ < 300 /*1000*/)
-          //   sleep_for(milliseconds{25});
-        }
+
+        // {
+        //   using namespace this_thread;
+        //   using namespace chrono;
+        //
+        //   if (progress_idx_ < 500 && progress_idx_ % 25 == 0)
+        //     sleep_for(milliseconds{250});
+        //   // else if (progress_idx_ < 100)
+        //   //   sleep_for(milliseconds{50});
+        //   // else if (progress_idx_ < 300 /*1000*/)
+        //   //   sleep_for(milliseconds{25});
+        // }
+
+
 
         auto [elem, local, r_cap] = queue.front();
 
@@ -979,14 +1088,14 @@ namespace xpm {
           for (edge_t vu : g_.edges(vertex_t(*net)))
             if (net_t u_net_idx{*target(vu, g_)}; u_net_idx == outlet_idx || pni_->is_macro(u_net_idx)) { // macro-macro
               if (auto t_idx = de_to_throat_[vu]; !explored_throat[t_idx]) {
-                queue.insert(t_idx, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, t_idx)));
+                queue.insert(t_idx, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, t_idx)));
                 explored_throat[t_idx] = true;
               }
             }
             else { // macro-darcy
               if (!explored[u_net_idx]) {
                 auto voxel = pni_->voxel(u_net_idx);
-                queue.insert(voxel, darcy_r_cap_entry(voxel));
+                queue.insert(voxel, darcy_r_cap(voxel));
                 explored[u_net_idx] = true;
               }
             }
@@ -1019,12 +1128,12 @@ namespace xpm {
             if (net_t u_net{*target(vu, g_)}; u_net != outlet_idx && !explored[u_net]) {
               if (pni_->is_macro(u_net)) { // macro
                 auto u_macro = pni_->macro(u_net);
-                queue.insert(u_macro, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, u_macro)));
+                queue.insert(u_macro, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, u_macro)));
                 explored[u_net] = true;
               }
               else { // darcy
                 auto u_voxel = pni_->voxel(u_net);
-                queue.insert(u_voxel, darcy_r_cap_entry(u_voxel));
+                queue.insert(u_voxel, darcy_r_cap(u_voxel));
                 explored[u_net] = true;
               }
             }
@@ -1040,12 +1149,12 @@ namespace xpm {
 
           if (pn_->inner_node(r))
             if (auto r_net = pni_->net(r); !explored[r_net]) {
-              queue.insert(r, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, r)));
+              queue.insert(r, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, r)));
               explored[r_net] = true;
             }
 
           if (auto l_net = pni_->net(l); !explored[l_net]) {
-            queue.insert(l, eq_tr::r_cap_piston_with_films(theta, r_ins(pn_, l)));
+            queue.insert(l, eq_tr::r_cap_piston_with_films_valvatne(theta, r_ins(pn_, l)));
             explored[l_net] = true;
           }
         }
@@ -1066,7 +1175,7 @@ namespace xpm {
           using views::transform;
 
           // auto darcy_min_pc = ranges::min(darcy_infos.span(darcy_count) | transform([](const darcy_info& d) { return d.pc_to_sw.front().x(); }));
-          auto darcy_max_pc = ranges::max(darcy_span | transform([](const darcy_info& d) { return d.pc_to_sw.back().x();  }));
+          auto darcy_max_pc = ranges::max(darcy_span | transform([](const darcy_info& d) { return d.pc_to_sw[0].back().x();  }));
 
           auto step = pow(10, (log10(darcy_max_pc) - log10(last_pc))/steps);
 
@@ -1111,14 +1220,12 @@ namespace xpm {
         if (true)
         { /* Relative permeabilty */
 
-          std::set<double> pcs;
+          set<double> pcs;
           for (const auto& d : darcy_span)
-            for (auto pc : views::keys(d.pc_to_sw))
+            for (auto pc : views::keys(d.pc_to_sw[0]))
               pcs.insert(pc);
 
-          // fmt::print("\n\nPCS COUNT {}\n\n", pcs.size());
-
-          for (auto pc : pcs /*ranges::reverse_view(cfg_->primary.pc)*/) {
+          for (auto pc : pcs) {
             if (pc <= last_pc)
               continue;
 
@@ -1147,11 +1254,11 @@ namespace xpm {
 
       primary_finished_ = true;
 
-      // {
-      //   std::cout << '\n';
-      //   generate_euler_tour();
-      //   launch_secondary(absolute_rate, theta);
-      // }
+      {
+        std::cout << '\n';
+        generate_euler_tour();
+        launch_secondary(absolute_rate, theta);
+      }
     }
   };
 }

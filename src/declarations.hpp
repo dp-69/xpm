@@ -92,7 +92,7 @@ namespace xpm
       return std::hash<std::string_view>{}(
         std::string_view{
           reinterpret_cast<char*>(lks.values.get()),
-          nvalues * sizeof(HYPRE_Complex)
+          nvalues*sizeof(HYPRE_Complex)
         });
     }
   };
@@ -188,16 +188,16 @@ namespace xpm
   {
     struct equilateral_triangle
     {
-      static constexpr auto sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
-      static constexpr auto beta = std::numbers::pi/3/2;
-      static constexpr auto sin_beta = 0.5;
-      static constexpr auto corners = 3;
+      static constexpr double sqrt_3 = 1.732050807568877293527446341505872366942805253810380628055806; // std::sqrt(3)
+      static constexpr double beta = std::numbers::pi/3/2;
+      static constexpr double sin_beta = 0.5;
+      static constexpr    int corners = 3;
 
       static constexpr double sqr(double x) { return x*x; }
 
       static constexpr double area(double r_ins = 1) { return 3*sqrt_3*sqr(r_ins); }
       static constexpr double perimeter(double r_ins = 1) { return 6*sqrt_3*r_ins; }
-      static constexpr auto shape_factor() { return area()/sqr(perimeter()); }
+      static constexpr double shape_factor() { return area()/sqr(perimeter()); }
 
       // k*G, k - coefficient, G - shape factor
       static double conductance_single(double area = 1, double viscosity = 1) {
@@ -232,30 +232,28 @@ namespace xpm
         );
       }
 
-      static double r_cap_piston_with_films(double theta, double r_ins = 1) {  // TODO: replace with Valvatne
-        return r_ins/(std::cos(theta) + 0.759835685652*std::sqrt(1.04719755120 - theta + std::cos(theta)*std::sin(theta)));          
-      }
+      // static double r_cap_piston_with_films(double theta, double r_ins = 1) {  // TODO: replace with Valvatne
+      //   return r_ins/(std::cos(theta) + 0.759835685652*std::sqrt(1.04719755120 - theta + std::cos(theta)*std::sin(theta)));          
+      // }
 
-      static double r_cap_piston_with_films_valvatne_full(double theta, double r_ins = 1) {
-        using namespace std;
-
-        auto cos_theta = cos(theta);
-
-        auto S1 = corners*(cos_theta*cos(theta + beta)/sin_beta + theta + beta - numbers::pi/2);
-        auto S2 = corners*(cos(theta + beta)/sin_beta);
-        auto S3 = 2*corners*(numbers::pi/2 - theta - beta);
-
-        auto D = S1 - 2*S2*cos_theta + S3;
-
-        return r_ins/(1 + sqrt(1 + 4*shape_factor()*D/sqr(cos_theta)))/cos_theta;
-        // return r_ins*cos_theta*(-1 + sqrt(1 + 4*G*D/sqr(cos_theta)))/(4*D*G);
-      }
+      // static double r_cap_piston_with_films_valvatne_full(double theta, double r_ins = 1) {
+      //   using namespace std;
+      //
+      //   auto cos_theta = cos(theta);
+      //
+      //   auto S1 = corners*(cos_theta*cos(theta + beta)/sin_beta + theta + beta - numbers::pi/2);
+      //   auto S2 = corners*(cos(theta + beta)/sin_beta);
+      //   auto S3 = 2*corners*(numbers::pi/2 - theta - beta);
+      //
+      //   auto D = S1 - 2*S2*cos_theta + S3;
+      //
+      //   return r_ins/(1 + sqrt(1 + 4*shape_factor()*D/sqr(cos_theta)))/cos_theta;
+      //   // return r_ins*cos_theta*(-1 + sqrt(1 + 4*G*D/sqr(cos_theta)))/(4*D*G);
+      // }
 
       static double r_cap_piston_with_films_valvatne(double theta, double r_ins = 1) {
-        using namespace std;
-
         auto cos_theta = cos(theta);
-        auto D = corners*(numbers::pi/2 - cos_theta*cos(theta + beta)/sin_beta - theta - beta);
+        auto D = corners*(std::numbers::pi/2 - cos_theta*cos(theta + beta)/sin_beta - theta - beta);
 
         return r_ins/(1 + sqrt(1 + 4*shape_factor()*D/sqr(cos_theta)))/cos_theta;
       }
@@ -600,9 +598,8 @@ namespace xpm
     double perm;
     QColor color;
 
-    dpl::curve2d pc_to_sw;
-    std::array<dpl::curve2d, 2> kr;
-
+    std::array<dpl::curve2d, 2> pc_to_sw;
+    std::array<std::array<dpl::curve2d, 2>, 2> kr;
 
     darcy_info() = default;
 
@@ -752,16 +749,18 @@ namespace xpm
           ref.poro = j["poro"];
           ref.perm = j["perm"].get<double>()*presets::mD_to_m2;
 
-          {
-            parse(try_var(vars, j["cap_press"][0]), ref.pc_to_sw);
-            ref.pc_to_sw = ref.pc_to_sw.inverse();
-          }
+          if (auto iter = j.find("cap_press"); iter != j.end())
+            for (int c = 0; c < 2; ++c){
+              parse(try_var(vars, (*iter)[c]), ref.pc_to_sw[c]);
+              ref.pc_to_sw[c] = ref.pc_to_sw[c].inverse();
+            }
 
-          {
-            const auto& rel_perm = try_var(vars, j["rel_perm"][0]);
-            parse(rel_perm[0], ref.kr[0]);
-            parse(rel_perm[1], ref.kr[1]);
-          }
+          if (auto iter = j.find("rel_perm"); iter != j.end())
+            for (int c = 0; c < 2; ++c) {
+              const auto& rel_perm = try_var(vars, (*iter)[c]);
+              parse(rel_perm.at(0), ref.kr[c][0]);
+              parse(rel_perm.at(1), ref.kr[c][1]);
+            }
 
           {
             ref.color = QColor::fromHsl(*i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)

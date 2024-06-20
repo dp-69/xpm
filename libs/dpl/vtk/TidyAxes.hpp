@@ -287,11 +287,10 @@ namespace dpl::vtk
         return;
 
       #ifdef __cpp_lib_format
-        auto std_format = "{:" + format_ + "}";
-        // const auto* std_format_ptr = std_format.c_str();
+        auto format = "{:" + format_ + "}";
       #else
-        auto boost_format = "%" + format_;
-        const auto* boost_format_ptr = boost_format.c_str();
+        std::string format = "%" + format_;
+        const char* format_ptr = format.c_str();
       #endif
 
       
@@ -395,12 +394,12 @@ namespace dpl::vtk
           
           
           #ifdef __cpp_lib_format
-            mapper->SetInput(
-              std::vformat(std_format, 
-                std::make_format_args((min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim])).c_str()
-            );
+          {
+            double value = (min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim];
+            mapper->SetInput(std::vformat(format, std::make_format_args(value)).c_str());
+          }
           #else
-            mapper->SetInput((boost::format(boost_format_ptr) %
+            mapper->SetInput((boost::format(format_ptr) %
               ((min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim])).str().c_str());
           #endif
 
@@ -426,12 +425,12 @@ namespace dpl::vtk
             auto* mapper = static_cast<vtkTextMapper*>(text_actor->GetMapper());
 
             #ifdef __cpp_lib_format
-              mapper->SetInput(
-                std::vformat(std_format, 
-                  std::make_format_args(r[run_dim]/scale_[run_dim])).c_str()
-              );
+            {
+              double value = r[run_dim]/scale_[run_dim];
+              mapper->SetInput(std::vformat(format, std::make_format_args(value)).c_str());
+            }
             #else
-              mapper->SetInput((boost::format(boost_format_ptr) % (r[run_dim]/scale_[run_dim])).str().c_str());
+              mapper->SetInput((boost::format(format_ptr) % (r[run_dim]/scale_[run_dim])).str().c_str());
             #endif
             
             mapper->GetTextProperty()->SetJustification(alignment.x());

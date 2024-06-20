@@ -95,8 +95,7 @@ int main(int argc, char* argv[])
       
           modeller.get_invasion_task().launch_primary(
             modeller.absolute_rate(),
-            modeller.cfg().theta/*,
-            modeller.cfg().primary.pc.inverse()*/);
+            modeller.cfg().theta);
 
           
 
