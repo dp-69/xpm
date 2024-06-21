@@ -401,7 +401,7 @@ namespace xpm
 
     
 
-    double macro_macro_coef(std::size_t i, macro_t l, macro_t r, auto cond_term) const {
+    double macro_macro_coef(throat_t i, macro_t l, macro_t r, auto cond_term) const {
       using namespace attrib;
       
       return -1.0/(
@@ -410,7 +410,7 @@ namespace xpm
       + (inner_node(r) ? throat_[length1][i]/cond_term(r) : 0.0));
     }
 
-    double macro_macro_coef(std::size_t i, macro_t l, macro_t r) const;
+    double macro_macro_coef(throat_t i, macro_t l, macro_t r) const;
 
 
     bool eval_inlet_outlet_connectivity() const {
@@ -425,7 +425,8 @@ namespace xpm
 
     std::pair<dpl::hypre::ls_known_storage, std::size_t> generate_pressure_input() const {
       dpl::hypre::ls_known_storage_builder builder{
-        static_cast<HYPRE_BigInt>(*node_count())
+        static_cast<HYPRE_BigInt>(*node_count()),
+        std::identity{}                                   /* msvc IntelliSense false positive */
       };
 
       for (std::size_t i = 0; i < throat_count(); ++i)
@@ -456,7 +457,7 @@ namespace xpm
 
 
      
-    std::array<double, 2> connectivity_flow_summary(const dpl::hypre::solve_result& solve) const {
+    std::array<double, 2> connectivity_flow_summary(const dpl::hypre::solve_result& solve, double macro_mult) const {
       const auto& [pressure, residual, iter] = solve; 
 
       auto [rank, parent] = init_rank_parent(*node_count());
@@ -503,10 +504,9 @@ namespace xpm
             outlet_flow += macro_macro_coef(i, l, r)*(0 - pressure[*l]);
       }
 
-
       std::array perm = {
-        inlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
-        outlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000
+        macro_mult*inlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
+        macro_mult*outlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000
       };
 
       std::cout << fmt::format(
@@ -522,7 +522,7 @@ namespace xpm
       return perm;
     }
 
-    std::array<double, 2> connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations) const {
+    std::array<double, 2> connectivity_flow_summary_MPI(HYPRE_Real tolerance, HYPRE_Int max_iterations, double macro_mult) const {
       auto [input, nvalues] = generate_pressure_input();
       HYPRE_BigInt nrows = *node_count();  // NOLINT(cppcoreguidelines-narrowing-conversions)
 
@@ -531,16 +531,16 @@ namespace xpm
       std::system(fmt::format("mpiexec -np 1 \"{}\" -s",  // NOLINT(concurrency-mt-unsafe)
         dpl::mpi::exec).c_str());
 
-      return connectivity_flow_summary(dpl::hypre::load_values(nrows));
+      return connectivity_flow_summary(dpl::hypre::load_values(nrows), macro_mult);
     }
 
 
-    std::array<double, 2> connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations) const {
-      // gross solve (with isolated)
+    std::array<double, 2> connectivity_flow_summary(HYPRE_Real tolerace, HYPRE_Int max_iterations, double macro_mult) const {
       return connectivity_flow_summary(
         solve( 
-          generate_pressure_input().first, dpl::hypre::index_range(0, *node_count() - 1),
-          tolerace, max_iterations)
+          generate_pressure_input().first, dpl::hypre::index_range(0, *node_count() - 1),  // NOLINT(cppcoreguidelines-narrowing-conversions)
+          tolerace, max_iterations),
+        macro_mult
       );
     }
   };
@@ -552,10 +552,10 @@ namespace xpm
     const pore_network* pn;
     Perm darcy_perm;
 
-    explicit single_phase_conductance(const pore_network* const pn, Perm darcy_perm = {})
+    explicit single_phase_conductance(const pore_network* pn, Perm darcy_perm = {})
       : pn(pn), darcy_perm(darcy_perm) {}
 
-    double operator()(std::size_t i) const {
+    double operator()(throat_t i) const {
       using props = hydraulic_properties::equilateral_triangle;
       return props::conductance_single(props::area(attrib::r_ins(pn, i)));
     }
@@ -570,7 +570,7 @@ namespace xpm
     }
   };
 
-  inline double pore_network::macro_macro_coef(std::size_t i, macro_t l, macro_t r) const {
+  inline double pore_network::macro_macro_coef(throat_t i, macro_t l, macro_t r) const {
     return macro_macro_coef(i, l, r, single_phase_conductance{this});
   }
 
@@ -1190,7 +1190,7 @@ namespace xpm
 
     template <typename Filter = dpl::default_map::true_t>
     std::tuple<std::size_t, dpl::hypre::ls_known_storage> generate_pressure_input(
-      HYPRE_BigInt nrows, dpl::so_uptr<net_t, idx1d_t>&& forward, auto term, Filter filter = {}) const {
+      HYPRE_BigInt nrows, dpl::so_uptr<net_t, idx1d_t>&& forward, double macro_term, auto term, Filter filter = {}) const {
 
       using namespace attrib;
 
@@ -1225,7 +1225,7 @@ namespace xpm
 
       for (std::size_t i = 0; i < pn_->throat_count(); ++i)
         if (auto [l, r] = adj(pn_, i); connected(l) && filter(l)) {
-          auto coef = pn_->macro_macro_coef(i, l, r, term);
+          auto coef = macro_term*pn_->macro_macro_coef(i, l, r, term);
 
           if (pn_->inner_node(r)) {// macro-macro
             if (filter(i) && filter(r))
@@ -1273,7 +1273,7 @@ namespace xpm
                   auto gi = term(idx1d);
 
                   auto lj = r_ins(pn_, adj_macro_idx);
-                  auto gj = term(adj_macro_idx);
+                  auto gj = macro_term*term(adj_macro_idx);
 
                   auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - cell_size.x()/2 - lj);
                   auto gt = gj;
@@ -1301,7 +1301,7 @@ namespace xpm
 
     template <typename Filter = dpl::default_map::true_t>
     std::pair<double, double> flow_rates(
-      const dpl::so_uptr<net_t, HYPRE_Complex>& pressure, auto term, Filter filter = {}) const {
+      const dpl::so_uptr<net_t, HYPRE_Complex>& pressure, double macro_mult, auto term, Filter filter = {}) const {
       auto inlet_flow = 0.0;
       auto outlet_flow = 0.0;
 
@@ -1326,11 +1326,11 @@ namespace xpm
 
         if (r == pn_->inlet()) { // macro-inlet
           if (connected(l) && filter(l) && filter(i))
-            inlet_flow += pn_->macro_macro_coef(i, l, r, term)*(pressure[net(l)] - 1);
+            inlet_flow += macro_mult*pn_->macro_macro_coef(i, l, r, term)*(pressure[net(l)] - 1);
         }
         else if (r == pn_->outlet()) { // macro-outlet
           if (connected(l) && filter(l) && filter(i))
-            outlet_flow += pn_->macro_macro_coef(i, l, r, term)*(0 - pressure[net(l)]);
+            outlet_flow += macro_mult*pn_->macro_macro_coef(i, l, r, term)*(0 - pressure[net(l)]);
         }
       }
 

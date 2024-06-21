@@ -598,6 +598,9 @@ struct std::hash<dpl::so_integer<Tag>>  // NOLINT(cert-dcl58-cpp)
   }
 };
 
+template <typename Tag, typename Value>
+constexpr bool std::ranges::enable_borrowed_range<dpl::so_span<dpl::so_integer<Tag>, Value>> = true;
+
 // namespace std
 // {
 //   // template <integral T, typename Tag>

@@ -586,7 +586,7 @@ namespace xpm
     //   return (*this)(path);
     // }
 
-    auto set(auto& value, const auto&... keys) {
+    auto try_set(auto& value, const auto&... keys) {
       if (auto jj = (*this)(keys...); jj)
         value = *jj;
     }
@@ -647,28 +647,10 @@ namespace xpm
     }
 
   public:
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     bool occupancy_images = false;
 
     double max_pc = std::numeric_limits<double>::max();
+    double macro_mult = 1.0;
 
     struct image_settings {
       using phase_t = voxel_ns::phase_t;
@@ -807,11 +789,11 @@ namespace xpm
       void load(wrapper<const json> j) {
         tolerance = (*j)["tolerance"];
         max_iterations = (*j)["max_iterations"];
-        j.set(aggressive_levels, "aggressive_number_of_levels");
-        j.set(print_level, "print_level");
-        j.set(decomposition, "decomposition");
-        j.set(cache.use, "cache", "use");
-        j.set(cache.save, "cache", "save");
+        j.try_set(aggressive_levels, "aggressive_number_of_levels");
+        j.try_set(print_level, "print_level");
+        j.try_set(decomposition, "decomposition");
+        j.try_set(cache.use, "cache", "use");
+        j.try_set(cache.save, "cache", "save");
       }
     } solver;
 
@@ -855,12 +837,13 @@ namespace xpm
         // }
       }
 
-      j.set(occupancy_images, "report", "occupancy_images");
-      j.set(report.sw_of_pc, "report", "capillary_pressure_sw_step");
-      j.set(report.sw_of_kr, "report", "relative_permeability_sw_step");
-      j.set(report.display, "report", "display");
-      j.set(report.invasion_percolation, "report", "invasion_percolation");
-      j.set(max_pc, "max_capillary_pressure");
+      j.try_set(occupancy_images, "report", "occupancy_images");
+      j.try_set(report.sw_of_pc, "report", "capillary_pressure_sw_step");
+      j.try_set(report.sw_of_kr, "report", "relative_permeability_sw_step");
+      j.try_set(report.display, "report", "display");
+      j.try_set(report.invasion_percolation, "report", "invasion_percolation");
+      j.try_set(max_pc, "max_capillary_pressure");
+      j.try_set(macro_mult, "macro", "trans_multiplier");
 
       if (auto j_theta = j("macro_contact_angle"); j_theta)
         theta = j_theta->get<double>()/180*std::numbers::pi;

@@ -261,9 +261,9 @@ namespace xpm
         
       petrophysics_summary_.perm_macro = 
       #ifdef _WIN32
-        pn_.connectivity_flow_summary(cfg_.solver.tolerance, cfg_.solver.max_iterations);
+        pn_.connectivity_flow_summary(cfg_.solver.tolerance, cfg_.solver.max_iterations, cfg_.macro_mult);
       #else
-        pn_.connectivity_flow_summary_MPI(settings_.solver.tolerance, settings_.solver.max_iterations);
+        pn_.connectivity_flow_summary_MPI(cfg_.solver.tolerance, cfg_.solver.max_iterations, cfg_.macro_mult);
       #endif
 
       std::cout << '\n';
@@ -407,7 +407,7 @@ namespace xpm
 
       system::print_memory("PRE input", hypre::hypre_print_level);
 
-      auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), single_phase_conductance{&pn_,
+      auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), cfg_.macro_mult, single_phase_conductance{&pn_,
         [this](voxel_t i) { return cfg_.image.perm(img_.phase[i]); }
       });
 
@@ -479,7 +479,7 @@ namespace xpm
       // std::cout << '\n';
 
       {
-        auto [inlet, outlet] = pni_.flow_rates(pressure, single_phase_conductance{&pn_, 
+        auto [inlet, outlet] = pni_.flow_rates(pressure, cfg_.macro_mult, single_phase_conductance{&pn_, 
           [this](voxel_t i) { return cfg_.image.perm(img_.phase[i]); }
         });
 
@@ -507,49 +507,49 @@ namespace xpm
     }
   };
 
-  struct saturation_map
-  {
-    pore_network_image* pni;
-    dpl::so_uptr<net_t, double>* data;
-
-    auto operator()(voxel_t voxel) const {
-
-      auto sw = 0.0;
-
-      // if (pni->connected(voxel))
-      //   if (auto net = pni->net(voxel); state.config(net).phase() == phase_config::phase1())
-      //     sw = 1.0 - solve(pc_inv, 1/state.r_cap(net), dpl::extrapolant::flat);
-      //
-      // face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
-
-      // return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
-    }
-
-    auto operator()(macro_t i) const {
-      // return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
-    }
-
-    auto operator()(throat_t i) const {
-      auto [l, r] = attrib::adj(pni->pn(), i);
-
-      return pni->connected(l)
-        ? ((*data)[pni->net(l)] + (*data)[pni->net(r)])/2
-        : std::numeric_limits<double>::quiet_NaN();
-    }
-
-    // auto operator()(voxel_t i) const {
-    //   return pni->connected(i) ? (*pressure)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
-    //
-    //   pni().connected(voxel_t{idx1d})
-    //         ?
-    //           /*0*/
-    //           pressure[pni().net(voxel_t{idx1d})]
-    //           
-    //           // (log10(model_.settings().darcy.perm(img().phase[voxel_t{idx1d}])) - log10(minPERM.perm))/(
-    //           //   
-    //           //   log10(maxPERM.perm) - log10(minPERM.perm))/1.25+0.1  /*/2+0.25*/
-    //
-    //         : std::numeric_limits<double>::quiet_NaN()
-    // }
-  };
+  // struct saturation_map
+  // {
+  //   pore_network_image* pni;
+  //   dpl::so_uptr<net_t, double>* data;
+  //
+  //   auto operator()(voxel_t voxel) const {
+  //
+  //     auto sw = 0.0;
+  //
+  //     // if (pni->connected(voxel))
+  //     //   if (auto net = pni->net(voxel); state.config(net).phase() == phase_config::phase1())
+  //     //     sw = 1.0 - solve(pc_inv, 1/state.r_cap(net), dpl::extrapolant::flat);
+  //     //
+  //     // face.GetColorArray()->SetTypedComponent(i++, 0, map_satur(sw));
+  //
+  //     // return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+  //   }
+  //
+  //   auto operator()(macro_t i) const {
+  //     // return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+  //   }
+  //
+  //   auto operator()(throat_t i) const {
+  //     auto [l, r] = attrib::adj(pni->pn(), i);
+  //
+  //     return pni->connected(l)
+  //       ? ((*data)[pni->net(l)] + (*data)[pni->net(r)])/2
+  //       : std::numeric_limits<double>::quiet_NaN();
+  //   }
+  //
+  //   // auto operator()(voxel_t i) const {
+  //   //   return pni->connected(i) ? (*pressure)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
+  //   //
+  //   //   pni().connected(voxel_t{idx1d})
+  //   //         ?
+  //   //           /*0*/
+  //   //           pressure[pni().net(voxel_t{idx1d})]
+  //   //           
+  //   //           // (log10(model_.settings().darcy.perm(img().phase[voxel_t{idx1d}])) - log10(minPERM.perm))/(
+  //   //           //   
+  //   //           //   log10(maxPERM.perm) - log10(minPERM.perm))/1.25+0.1  /*/2+0.25*/
+  //   //
+  //   //         : std::numeric_limits<double>::quiet_NaN()
+  //   // }
+  // };
 }

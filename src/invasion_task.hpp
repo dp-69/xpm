@@ -169,44 +169,45 @@ namespace xpm {
       }
     };
 
-    template <bool phase1, typename Perm/* = dpl::default_map::nan_t*/>
-    struct coef_t
+    template <bool phase1, typename Perm>
+    class term_multi_t
     {
-      const pore_network_image* pni;
-      const phase_state* state;
-      double theta;
-      Perm darcy_perm;
+      using eq_tr = hydraulic_properties::equilateral_triangle;
 
-      explicit coef_t(std::bool_constant<phase1>, const pore_network_image* pni, const phase_state* state, double theta, Perm darcy_perm)
-        : pni(pni), state(state), theta(theta), darcy_perm(darcy_perm) {}
+      const pore_network_image* pni_;
+      const phase_state* state_;
+      double theta_;
+      Perm darcy_perm_;
+
+    public:
+      explicit term_multi_t(std::bool_constant<phase1>,
+        const pore_network_image* pni, const phase_state* state, double theta, Perm darcy_perm)
+        : pni_(pni), state_(state), theta_(theta), darcy_perm_(darcy_perm) {}
 
       auto operator()(macro_t i) const {
-        using eq_tr = hydraulic_properties::equilateral_triangle;
-
         if constexpr (phase1) {
-          auto area = eq_tr::area(attrib::r_ins(pni->pn(), i));
-          return eq_tr::conductance_single(area)*(1 - eq_tr::area_corners(theta, state->r_cap(pni->net(i)))/area);
+          auto area = eq_tr::area(attrib::r_ins(pni_->pn(), i));
+          return eq_tr::conductance_single(area)*(1 - eq_tr::area_corners(theta_, state_->r_cap(pni_->net(i)))/area);
         }
         else
-          return state->config(pni->net(i)).layout() == phase_config::bulk_films()
-            ? eq_tr::conductance_films(theta, eq_tr::area_films(theta, state->r_cap(pni->net(i))))
-            : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni->pn(), i)));
+          return state_->config(pni_->net(i)).layout() == phase_config::bulk_films()
+            ? eq_tr::conductance_films(theta_, eq_tr::area_films(theta_, state_->r_cap(pni_->net(i))))
+            : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni_->pn(), i)));
       }
 
-      auto operator()(std::size_t i) const {
-        using eq_tr = hydraulic_properties::equilateral_triangle;
+      auto operator()(throat_t i) const {
         if constexpr (phase1) {
-          auto area = eq_tr::area(attrib::r_ins(pni->pn(), i));
-          return eq_tr::conductance_single(area)*(1 - eq_tr::area_corners(theta, state->r_cap(i))/area);
+          auto area = eq_tr::area(attrib::r_ins(pni_->pn(), i));
+          return eq_tr::conductance_single(area)*(1 - eq_tr::area_corners(theta_, state_->r_cap(i))/area);
         }
         else
-          return state->config(i).layout() == phase_config::bulk_films()
-            ? eq_tr::conductance_films(theta, eq_tr::area_films(theta, state->r_cap(i)))
-            : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni->pn(), i)));
+          return state_->config(i).layout() == phase_config::bulk_films()
+            ? eq_tr::conductance_films(theta_, eq_tr::area_films(theta_, state_->r_cap(i)))
+            : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni_->pn(), i)));
       }
 
       auto operator()(voxel_t i) const { // TODO: BUG: Use frozen r_cap when trapped!??? If it is trapped, it is not flowing?
-        return darcy_perm(i);
+        return darcy_perm_(i);
       }
     };
 
@@ -345,7 +346,7 @@ namespace xpm {
 
 
     template <int cycle, int phase>
-    double calc_relative(dpl::so_span<phase_t, const darcy_info> darcy, double theta/*, auto phase1*/) {
+    double calc_relative(dpl::so_span<phase_t, const darcy_info> darcy, double theta) {
       dpl::so_uptr<phase_t, double> kr(darcy.size());
 
       for (auto* ptr = kr.data(); const auto& d : darcy)
@@ -355,7 +356,7 @@ namespace xpm {
       //   kr[i] = darcy[i].kr[cycle][phase1](darcy[i].pc_to_sw[cycle](state_.pc_global()));
 
       filter_t<phase> filter{pni_, &img_->phase, &kr, &state_};
-      coef_t term{
+      term_multi_t term{
         std::bool_constant<phase>{},
         pni_,
         &state_,
@@ -367,7 +368,7 @@ namespace xpm {
       };
 
       auto [nrows, mapping] = pni_->generate_mapping(*cfg_->solver.decomposition, filter);
-      auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), term, filter);
+      auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), cfg_->macro_mult, term, filter);
 
       auto hash = pressure_cache::hash(nvalues, input);
 
@@ -398,7 +399,7 @@ namespace xpm {
         for (HYPRE_BigInt i = 0; i < nrows; ++i)
           pressure[mapping.backward[i]] = decomposed_pressure[i];
 
-        auto inlet = pni_->flow_rates(pressure, term, filter).second;
+        auto inlet = pni_->flow_rates(pressure, cfg_->macro_mult, term, filter).second;
 
         if (cfg_->solver.cache.save) {
           pressure_cache::cache()[hash] = inlet;

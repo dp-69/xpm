@@ -914,7 +914,12 @@ namespace xpm
         if (!pressure)
           model_.compute_pressure();
 
-        LaunchInvasion();
+        if (
+          std::ranges::all_of(
+            model_.cfg().image.darcy.info.span(model_.cfg().image.darcy.count),
+            [](const darcy_info& d) { return bool{d.pc_to_sw[0]}; })
+        )
+          LaunchInvasion();
       }
       else {
         pc_axis_y_->setRange(1, 1000);
