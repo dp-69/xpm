@@ -408,7 +408,7 @@ namespace xpm
       system::print_memory("PRE input", hypre::hypre_print_level);
 
       auto [nvalues, input] = pni_.generate_pressure_input(nrows, std::move(mapping.forward), cfg_.macro_mult, single_phase_conductance{&pn_,
-        [this](voxel_t i) { return cfg_.image.perm(img_.phase[i]); }
+        [this](voxel_t i) { return cfg_.image.darcy.info[img_.phase[i]].perm; }
       });
 
       system::print_memory("POST input", hypre::hypre_print_level);
@@ -480,7 +480,9 @@ namespace xpm
 
       {
         auto [inlet, outlet] = pni_.flow_rates(pressure, cfg_.macro_mult, single_phase_conductance{&pn_, 
-          [this](voxel_t i) { return cfg_.image.perm(img_.phase[i]); }
+          [this](voxel_t i) {
+            return cfg_.image.darcy.info[img_.phase[i]].perm;
+          }
         });
 
         using namespace presets;

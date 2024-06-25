@@ -701,9 +701,9 @@ namespace xpm
         phase_t count;
         dpl::so_uptr<phase_t, darcy_info> info;
 
-        // auto span() {
-        //   return info.span(count);
-        // }
+        auto span() const {
+          return info.span(count);
+        }
       } darcy;
 
 
@@ -756,22 +756,22 @@ namespace xpm
         *darcy.narrow[solid_v] = *darcy.count + 1;
       }
 
-      auto poro(voxel_ns::phase_t p) const {
-        return darcy.info[p].poro;
-      }
+      // auto poro(voxel_ns::phase_t p) const {
+      //   return darcy.info[p].poro;
+      // }
 
-      auto perm(voxel_ns::phase_t p) const {
-        return darcy.info[p].perm;
-      }
+      // auto perm(voxel_ns::phase_t p) const {
+      //   return darcy.info[p].perm;
+      // }
     } image;
 
     double theta = 0;
 
-    struct input_curves {
-      dpl::curve2d pc;  /* [Sw, Pc] */
-      std::array<dpl::curve2d, 2> kr;
-    } /*primary,*/
-      secondary;
+    // struct input_curves {
+    //   dpl::curve2d pc;  /* [Sw, Pc] */
+    //   std::array<dpl::curve2d, 2> kr;
+    // } /*primary,*/
+    //   secondary;
     
 
     struct {

@@ -813,9 +813,7 @@ namespace xpm
 
         InitNetworkImage(
           [this](voxel_t v) { return img().is_darcy(v); },
-          map,
-          lut.Get(),
-          lut.Get());
+          map, lut, lut);
 
         macro_network_->RemovePart(macro_network_->GetParts()->GetLastProp3D());
       }
@@ -832,9 +830,7 @@ namespace xpm
 
         InitNetworkImage(
           [this](voxel_t v) { return img().is_darcy(v); },
-          map,
-          lut_image,
-          lut_network.Get());
+          map, lut_image, lut_network);
       }
       else if (name == "phases-triplet") {
         vtkNew<vtkLookupTable> lut_image, lut_network;
@@ -848,10 +844,7 @@ namespace xpm
 
         InitNetworkImage(
           [this](voxel_t) { return true; },
-          // [this](voxel_t v) { return img().dict.is_darcy(img().phase[v]); },
-          map,
-          lut_image.Get(),
-          lut_network.Get());
+          map, lut_image, lut_network);
       }
       else if (name == "permeability") {
         vtkNew<vtkLookupTable> lut;
@@ -860,14 +853,13 @@ namespace xpm
 
         permeability_map map{
           img(),
-          model_.cfg().image.darcy.info,
-          model_.cfg().image.darcy.count};
+          model_.cfg().image.darcy.span()};
 
         InitNetworkImage(
           [this](voxel_t v) { return img().is_darcy(v); },
           map,
-          lut.Get(),
-          lut.Get());
+          lut,
+          lut);
       }
       else {
         vtkNew<vtkLookupTable> lut;
@@ -880,9 +872,7 @@ namespace xpm
 
         InitNetworkImage(
           [this](voxel_t v) { return img().is_darcy(v); },
-          map,
-          lut.Get(),
-          lut.Get());
+          map, lut, lut);
       }
 
       
@@ -891,7 +881,7 @@ namespace xpm
       renderer_->GetActiveCamera()->Zoom(0.70);
       // renderer_->ResetCameraClippingRange();
       
-      tidy_axes_.Init(renderer_.Get());
+      tidy_axes_.Init(renderer_);
 
       connect(qvtk_widget_, &QVTKWidgetRef::resized, this, [this] { tidy_axes_.RefreshAxes(); });
 
@@ -916,7 +906,7 @@ namespace xpm
 
         if (
           std::ranges::all_of(
-            model_.cfg().image.darcy.info.span(model_.cfg().image.darcy.count),
+            model_.cfg().image.darcy.span(),
             [](const darcy_info& d) { return bool{d.pc_to_sw[0]}; })
         )
           LaunchInvasion();
@@ -934,7 +924,7 @@ namespace xpm
 
         
 
-        for (const auto& info : darcy.info.span(darcy.count) | std::views::reverse) {
+        for (const auto& info : darcy.span() | std::views::reverse) {
           for (int c = 0; c < 2; ++c)   
           {
             auto* s = new QLineSeries;
@@ -999,7 +989,7 @@ namespace xpm
         double max_pc = 1/(0.7*eq_tr::r_cap_piston_with_films_valvatne(0, min_r_cap_throat));
         if (*darcy.count)
           max_pc = max(max_pc,
-            ranges::max(transform(darcy.info.span(darcy.count), [](const darcy_info& d) { return d.pc_to_sw[0].back().x(); }))
+            ranges::max(transform(darcy.span(), [](const darcy_info& d) { return d.pc_to_sw[0].back().x(); }))
           );
 
         pc_axis_y_->setRange(
@@ -1214,45 +1204,36 @@ namespace xpm
     };
 
 
-    struct permeability_map
+    class permeability_map
     {
-    private:
       using phase_t = voxel_ns::phase_t;
 
       const image_data* img;
-      const dpl::so_uptr<phase_t, darcy_info>* poro_perm;
+      dpl::so_span<phase_t, const darcy_info> poro_perm;
       double log10_min;
       double log10_diff; 
     
     public:
-      permeability_map(
-        const image_data& img,
-        const dpl::so_uptr<phase_t, darcy_info>& poro_perm, phase_t darcy_count)
-        : img(&img),
-          poro_perm(&poro_perm)
+      permeability_map(const image_data& img, dpl::so_span<phase_t, const darcy_info> poro_perm)
+        : img(&img), poro_perm(poro_perm)
       {
         using namespace std;
 
-        if (*darcy_count) {
+        if (poro_perm) {
           auto [min, max] = ranges::minmax(
-            poro_perm.span(darcy_count) | views::transform([](const darcy_info& x) { return x.perm; }));
+            poro_perm | views::transform([](const darcy_info& x) { return x.perm; }));
 
           log10_min = log10(min);
           log10_diff = log10(max) - log10_min;
         }
-        // else {
-        //   log10_min = std::numeric_limits<double>::quiet_NaN();
-        //   log10_diff = std::numeric_limits<double>::quiet_NaN();
-        // }
       }
-    
     
       auto operator()(macro_throat_t auto) const {
         return std::numeric_limits<double>::quiet_NaN();
       }
     
       auto operator()(voxel_t i) const {
-        return (log10((*poro_perm)[img->phase[i]].perm) - log10_min)/log10_diff/1.25+0.1;  /*/2+0.25*/
+        return (log10(poro_perm[img->phase[i]].perm) - log10_min)/log10_diff/1.25 + 0.1;  /*/2+0.25*/
       }
     };
 
