@@ -347,7 +347,7 @@ namespace xpm
       }
 
       t1 = system_clock::now();
-      cout << boost::format("AVL creation: %i ms\n\n") % duration_cast<milliseconds>(t1 - t0).count();
+      // cout << boost::format("AVL creation: %i ms\n\n") % duration_cast<milliseconds>(t1 - t0).count(); //TODO
       cout << "*** verification: " << algo::verify(header_a) << "***\n";
 
 
@@ -383,7 +383,7 @@ namespace xpm
 
         if (iter % 10000 == 0) {
           t1 = system_clock::now();
-          cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl;
+          // cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl;  //TODO
           t0 = t1;
         }
       }
@@ -407,7 +407,7 @@ namespace xpm
 
         if (iter % 10000 == 0) {
           t1 = system_clock::now();
-          cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl;
+          // cout << boost::format("%i ms: ") % duration_cast<milliseconds>(t1 - t0).count() << iter << endl; //TODO
           t0 = t1;
         }
 

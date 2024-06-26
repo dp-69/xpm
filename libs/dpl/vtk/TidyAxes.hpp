@@ -41,10 +41,12 @@
 #include <vtkTextProperty.h>
 #include <vtkViewport.h>
 
+
 #ifdef __cpp_lib_format
   #include <format>
 #else
-  #include <boost/format.hpp>
+  #include <fmt/format.h>
+  // #include <boost/format.hpp>
 #endif
 
 #include <array>
@@ -286,12 +288,13 @@ namespace dpl::vtk
           !Face(f1).gridlines_actor_->GetVisibility())
         return;
 
-      #ifdef __cpp_lib_format
-        auto format = "{:" + format_ + "}";
-      #else
-        std::string format = "%" + format_;
-        const char* format_ptr = format.c_str();
-      #endif
+      // #ifdef __cpp_lib_format
+      //   auto format = "{:" + format_ + "}";
+      // #else
+      //   // std::string format = "%" + format_;
+      //   // const char* format_ptr = format.c_str();
+      // #endif
+      auto format = "{:" + format_ + "}";
 
       
       static constexpr auto run_dim = third(f0.dim, f1.dim);
@@ -399,8 +402,12 @@ namespace dpl::vtk
             mapper->SetInput(std::vformat(format, std::make_format_args(value)).c_str());
           }
           #else
-            mapper->SetInput((boost::format(format_ptr) %
-              ((min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim])).str().c_str());
+          {
+            double value = (min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim];
+            mapper->SetInput(fmt::vformat(format, fmt::make_format_args(value)).c_str());
+          }
+          // mapper->SetInput((boost::format(format_ptr) %
+          //   ((min_[run_dim] + step_[run_dim]*(count - 1))/scale_[run_dim])).str().c_str());
           #endif
 
           mapper->GetSize(renderer_, label_size);
@@ -430,7 +437,11 @@ namespace dpl::vtk
               mapper->SetInput(std::vformat(format, std::make_format_args(value)).c_str());
             }
             #else
-              mapper->SetInput((boost::format(format_ptr) % (r[run_dim]/scale_[run_dim])).str().c_str());
+            {
+              double value = r[run_dim]/scale_[run_dim];
+              mapper->SetInput(fmt::vformat(format, fmt::make_format_args(value)).c_str());
+            }
+            // mapper->SetInput((boost::format(format_ptr) % (r[run_dim]/scale_[run_dim])).str().c_str());
             #endif
             
             mapper->GetTextProperty()->SetJustification(alignment.x());

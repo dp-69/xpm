@@ -520,12 +520,6 @@ namespace xpm
     def_attrib(volume)
   }
 
-  // using disjoint_sets = boost::disjoint_sets<int*, idx1d_t*>;
-  //   boost::disjoint_sets_with_storage<
-  //   boost::typed_identity_property_map<idx1d_t>,
-  //   boost::typed_identity_property_map<idx1d_t>
-  // >;
-
   template <typename Rank = idx1d_t>
   std::tuple<std::unique_ptr<Rank[]>, std::unique_ptr<idx1d_t[]>> init_rank_parent(idx1d_t size) {
     auto rank = std::make_unique<Rank[]>(size);
@@ -755,24 +749,9 @@ namespace xpm
         darcy.narrow[void_v] = darcy.count;
         *darcy.narrow[solid_v] = *darcy.count + 1;
       }
-
-      // auto poro(voxel_ns::phase_t p) const {
-      //   return darcy.info[p].poro;
-      // }
-
-      // auto perm(voxel_ns::phase_t p) const {
-      //   return darcy.info[p].perm;
-      // }
     } image;
 
     double theta = 0;
-
-    // struct input_curves {
-    //   dpl::curve2d pc;  /* [Sw, Pc] */
-    //   std::array<dpl::curve2d, 2> kr;
-    // } /*primary,*/
-    //   secondary;
-    
 
     struct {
       std::optional<dpl::vector3i> decomposition;
@@ -811,30 +790,12 @@ namespace xpm
 
       auto vars = get_vars(j);
 
-      if (auto j_darcy = j("darcy"); j_darcy) {
-        image.set_poro_perm(*j_darcy, vars);
-
-        // const auto& first_record = (*j_micro)["voxel"][0];
-        // darcy.perm_single = first_record["permeability"].get<double>()*0.001*presets::darcy_to_m2;
-        // darcy.poro_single = first_record["porosity"];
-
-        
+      if (auto jj = j("darcy"); jj) {
+        image.set_poro_perm(*jj, vars);
 
         // j_micro.set(darcy.n1, "kozeny_carman", "n1");
         // j_micro.set(darcy.n2, "kozeny_carman", "n2");
         // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
-
-        // if (auto jj = j_micro("primary"); jj) {
-        //   parse((*jj)["capillary_pressure"],       primary.pc);
-        //   parse((*jj)["relative_permeability"][0], primary.kr[0]);
-        //   parse((*jj)["relative_permeability"][1], primary.kr[1]);
-        // }
-
-        // if (auto jj = j_micro("secondary"); jj) { // TODO: secondary
-        //   parse((*jj)["capillary_pressure"],       secondary.pc);
-        //   parse((*jj)["relative_permeability"][0], secondary.kr[0]);
-        //   parse((*jj)["relative_permeability"][1], secondary.kr[1]);
-        // }
       }
 
       j.try_set(occupancy_images, "report", "occupancy_images");
@@ -862,7 +823,6 @@ namespace xpm
 
     std::vector<Type> src(src_total_size);
     std::vector<Type> dst(dst_total_size);
-
     
     
     std::ifstream is{src_path, std::ios::binary};

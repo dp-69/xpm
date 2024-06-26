@@ -57,7 +57,7 @@ namespace dpl::system
     if (print_level > 0) {
       MPI_Barrier(mpi::comm);
       if (rank) { /* root */
-        fmt::print("\n ~~~~~~~~~~~~~~~~ {} [{} GB] ~~~~~~~~~~~~~~~~\n", text, get_memory_consumption<units::gigabyte>());
+        fmt::print("\n ~~~~~~~~~~~~~~~~ {} [{:.0f} GB] ~~~~~~~~~~~~~~~~\n", text, *get_memory_consumption<units::gigabyte>());
         std::cout << "" << std::flush;
       }
       MPI_Barrier(mpi::comm);

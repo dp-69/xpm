@@ -32,7 +32,7 @@
 #include <dpl/graph/dc_graph.hpp>
 #include <dpl/hypre/core.hpp>
 
-#include <boost/format.hpp>
+// #include <boost/format.hpp>
 #include <boost/pending/disjoint_sets.hpp>
 
 #include <fmt/format.h>
