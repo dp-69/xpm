@@ -51,37 +51,22 @@ struct fmt::formatter<dpl::so_integer<Tag>> : formatter<typename Tag::type>
 template <typename T>
 struct fmt::formatter<dpl::vector_n<T, 3>>
 {
-  template<typename ParseContext>
+  template <typename ParseContext>
   static constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <typename FormatContext>
-  auto format(dpl::vector_n<T, 3> si, FormatContext& ctx) {
-    return fmt::format_to(ctx.out(), "({}, {}, {})", si.x(), si.y(), si.z());
+  auto format(const dpl::vector_n<T, 3>& v, FormatContext& ctx) {
+    return fmt::format_to(ctx.out(), "({}, {}, {})", v.x(), v.y(), v.z());
   }
 };
 
-// template <typename Quantity, typename Tag>
-// struct fmt::formatter<dpl::units::def_unit<Quantity, Tag>> // : formatter<double>
-// {
-//   std::string fmt;
-//
-//   template <typename ParseContext>
-//   constexpr auto parse(ParseContext& ctx) {
-//       std::string tmp;
-//       auto it = ctx.begin();
-//       while(it != ctx.end() && *it != '}')
-//         tmp += *it++;
-//       fmt = tmp;
-//       return it;
-//   }
-//
-//   template <typename FormatContext>
-//   auto format(dpl::units::def_unit<dpl::units::digital_size, Tag> si, FormatContext& ctx) {
-//     if (fmt.empty())
-//       return fmt::format_to(ctx.out(), "{:.0f}", *si);
-//
-//     return fmt::format_to(ctx.out(), fmt::runtime("{:"+fmt+"}"), *si);
-//   }
-// };
+template <typename Quantity, typename Tag>
+struct fmt::formatter<dpl::units::def_unit<Quantity, Tag>> : formatter<double>
+{
+  template <typename FormatContext>
+  auto format(dpl::units::def_unit<Quantity, Tag> u, FormatContext& ctx) const {
+    return formatter<double>::format(*u, ctx);
+  }
+};

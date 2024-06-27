@@ -429,7 +429,7 @@ namespace xpm
           .read(reinterpret_cast<char*>(pressure.data()), nrows*sizeof(HYPRE_Complex));  // NOLINT(cppcoreguidelines-narrowing-conversions)
       }
       else {
-        fmt::print("  input store [{:.0f} MB]...", *units::megabyte{
+        fmt::print("  input store [{:.0f} MB]...", units::megabyte{
           units::byte{
             nrows*(sizeof(HYPRE_Int) + sizeof(HYPRE_Complex)) +
             nvalues*(sizeof(HYPRE_BigInt) + sizeof(HYPRE_Complex))
