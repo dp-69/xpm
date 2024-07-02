@@ -855,7 +855,7 @@ namespace xpm
       return net(i) != isolated_idx_;
     }
 
-    void evaluate_isolated() {
+    double evaluate_isolated(const dpl::so_uptr<voxel_ns::phase_t, darcy_info>& darcy) {
       auto gross_total_size = *pn_->node_count() + *img_->size();
 
       auto [rank, parent] = init_rank_parent(gross_total_size);
@@ -916,18 +916,35 @@ namespace xpm
 
       total_to_net_map_.resize(total_t{gross_total_size});
 
+      double v = 0.0;
+
+      using namespace attrib;
+
       for (macro_t i{0}; i < pn_->node_count(); ++i) {
         auto total_idx = total(i);
         auto rep = ds.find_set(*total_idx); 
-        total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_macro_count_++ : isolated_idx_;
+        if (inlet[rep] && outlet[rep]) {
+          total_to_net_map_[total_idx] = connected_macro_count_++;
+          v += volume(pn_, i);
+        }
+        else
+          total_to_net_map_[total_idx] = isolated_idx_;
       }
-      
+
+      for (throat_t i{0}; i < pn_->throat_count(); ++i)
+        if (connected(adj(pn_, i).first))
+          v += volume(pn_, i);
+
+
       connected_count_ = connected_macro_count_;
+
+      const double cell_size = (pn_->physical_size/img_->dim()).prod();
 
       for (voxel_t i{0}; i < img_->size(); ++i) {
         if (auto total_idx = total(i); img_->is_darcy(i)) {
           auto rep = ds.find_set(*total_idx); 
           total_to_net_map_[total_idx] = inlet[rep] && outlet[rep] ? connected_count_++ : isolated_idx_;
+          v += darcy[img_->phase[i]].poro*cell_size;
         }
         else
           total_to_net_map_[total_idx] = isolated_idx_;
@@ -938,6 +955,8 @@ namespace xpm
       for (total_t i{0}; i < gross_total_size; ++i)
         if (total_to_net_map_[i] != isolated_idx_)
           net_to_total_map_[total_to_net_map_[i]] = i;
+
+      return v/pn_->physical_size.prod();
     }
 
 

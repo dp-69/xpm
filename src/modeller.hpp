@@ -41,19 +41,22 @@ namespace xpm
     struct
     {
       std::array<double, 2> perm_macro;   /* mD */
-      std::array<double, 2> perm_total;    /* mD */
+      std::array<double, 2> perm_total;   /* mD */
 
-      double porosity;
+      double total_porosity;
+      double effective_porosity;
     } petrophysics_summary_;
 
     double absolute_rate_;
 
     invasion_task invasion_task_{pni_, cfg_};
 
-    auto pc_to_string(auto primary, fmt::format_string<const double&, const double&> f, auto sep, auto begin, auto end) const {
+    template <bool primary>
+    auto pc_to_string(fmt::format_string<const double&, const double&> f, auto sep, auto begin, auto end) const
+    {
       using namespace std;
 
-      std::list<string> rows;
+      list<string> rows;
 
       using dst = conditional_t<primary,
         front_insert_iterator<decltype(rows)>,
@@ -61,7 +64,7 @@ namespace xpm
 
       ranges::transform(
         primary ? invasion_task_.primary().pc : invasion_task_.secondary().pc,
-        dst(rows), [f](const dpl::vector2d& p) { return format(f, p.x(), p.y()); });
+        dst(rows), [f](const dpl::vector2d& p) { return fmt::format(f, p.x(), p.y()); });
 
       stringstream ss;
       ss << begin << rows.front();
@@ -79,10 +82,11 @@ namespace xpm
       return petrophysics_summary_;
     }
 
-    auto kr_to_string(
-      auto primary,
-      fmt::format_string<const double&, const double&, const double&> f, auto sep, auto begin, auto end) const {
+    template <bool primary>
+    auto kr_to_string(fmt::format_string<const double&, const double&, const double&> f, auto sep, auto begin, auto end) const
+    {
       using namespace std;
+
       list<string> rows;
         
       using dst = conditional_t<primary,
@@ -91,7 +95,7 @@ namespace xpm
 
       ranges::transform(
         primary ? invasion_task_.primary().kr : invasion_task_.secondary().kr,
-        dst(rows), [f](const dpl::vector3d& p) { return format(f, p.x(), p.y(), p.z()); });
+        dst(rows), [f](const dpl::vector3d& p) { return fmt::format(f, p.x(), p.y(), p.z()); });
 
       stringstream ss;
       ss << begin << rows.front();
@@ -102,23 +106,27 @@ namespace xpm
       return ss.str();
     }
 
-    auto pc_to_plain(auto primary) const {
-      return pc_to_string(primary, "{:.6f}\t{:.6e}", "\n", "", "");
+    template<bool primary>
+    auto pc_to_plain() const {
+      return modeller::pc_to_string<primary>("{:.6f}\t{:.6e}", "\n", "", "");
     }
 
-    auto pc_to_json(auto primary) const {
-      return pc_to_string(primary, "[{:.6f}, {:.6e}]", ", ", "[", "]");
+    template<bool primary>
+    auto pc_to_json() const {
+      return modeller::pc_to_string<primary>("[{:.6f}, {:.6e}]", ", ", "[", "]");
     }
 
-    auto kr_to_plain(auto primary) const {
-      return kr_to_string(primary, "{:.6f}\t{:.6e}\t{:.6e}", "\n", "", "\n");
+    template<bool primary>
+    auto kr_to_plain() const {
+      return modeller::kr_to_string<primary>("{:.6f}\t{:.6e}\t{:.6e}", "\n", "", "\n");
     }
 
-    auto kr_to_json(auto primary, auto phase1) const {
+    template<bool primary, bool phase1>
+    auto kr_to_json() const {
       if constexpr (phase1)
-        return kr_to_string(primary, "[{0:.6f}, {2:.6e}]", ", ", "[", "]");
+        return modeller::kr_to_string<primary>("[{0:.6f}, {2:.6e}]", ", ", "[", "]");
       else
-        return kr_to_string(primary, "[{0:.6f}, {1:.6e}]", ", ", "[", "]");
+        return modeller::kr_to_string<primary>("[{0:.6f}, {1:.6e}]", ", ", "[", "]");
     }
 
 
@@ -188,18 +196,17 @@ namespace xpm
       cfg_.load(j);
 
 
-      // auto pc_to_sw = cfg_.primary.pc.inverse();
-      for (voxel_ns::phase_t i{0}; i < cfg_.image.darcy.count; ++i) {
-        for (int c = 0; c < 2; ++c)
-          for (auto& p : cfg_.image.darcy.info[i].pc_to_sw[c] /*cfg_.image.darcy.info[i].pc_to_sw*/)
-            for (int k = 0; k < *i; ++k)
-              p.x() *= 1.0;
-              // p.x() *= 1.2;
-
-
-
-        // cfg_.image.darcy.info[i].kr = cfg_.primary.kr;
-      }
+      // for (voxel_ns::phase_t i{0}; i < cfg_.image.darcy.count; ++i) {
+      //   for (int c = 0; c < 2; ++c)
+      //     for (auto& p : cfg_.image.darcy.info[i].pc_to_sw[c] /*cfg_.image.darcy.info[i].pc_to_sw*/)
+      //       for (int k = 0; k < *i; ++k)
+      //         // p.x() *= 1.0;
+      //         p.x() *= 1.2;    
+      //
+      //
+      //
+      //   // cfg_.image.darcy.info[i].kr = cfg_.primary.kr;
+      // }
 
 
       std::filesystem::create_directories("cache");
@@ -270,7 +277,7 @@ namespace xpm
 
       
 
-      petrophysics_summary_.porosity = img_.read_image(cfg_.image);
+      petrophysics_summary_.total_porosity = img_.read_image(cfg_.image);
 
       // petrophysics_summary_.porosity = img_.verify_darcy(settings_);
 
@@ -278,9 +285,14 @@ namespace xpm
 
       std::cout << "connectivity (isolated components)...";
 
-      pni_.evaluate_isolated();
-
-      std::cout << fmt::format(" done\n  macro: {:L}\n  darcy: {:L}\n\n",
+      petrophysics_summary_.effective_porosity = pni_.evaluate_isolated(cfg_.image.darcy.info);
+      
+      std::cout << fmt::format(
+        " done\n"
+        "  eff. porosity: {:.2f}% \n"
+        "  macro: {:L}\n"
+        "  darcy: {:L}\n\n",
+        petrophysics_summary_.effective_porosity*100,
         pni_.connected_macro_count(),
         *pni_.connected_count() - *pni_.connected_macro_count());
     }

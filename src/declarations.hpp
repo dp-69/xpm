@@ -701,7 +701,7 @@ namespace xpm
       } darcy;
 
 
-      void set_poro_perm(const json& list, json& vars) {
+      void set_poro_perm(json& list, json& vars) {
         auto s = list.size();
 
         if (s > ((1 << sizeof(phase_t)*8) - 2))
@@ -713,34 +713,55 @@ namespace xpm
         auto mult = 255./(s + 1);                          // NOLINT(cppcoreguidelines-narrowing-conversions, clang-diagnostic-implicit-int-float-conversion)
 
         using namespace dpl;
+        using namespace std;
 
-        for (phase_t i{0}; const auto& j : list) {
-          auto p = j["value"].get<phase_t>();
+        unordered_map<string, json> cache;
+
+        for (phase_t i{0}; auto& j : list) {
+          auto end = j.end();
+
+          if (auto f = j.find("file"); f != end) {
+            json* file_json;  // NOLINT(cppcoreguidelines-init-variables)
+
+            string filename = *f;
+            if (auto iter = cache.find(filename); iter == cache.end()) {
+              file_json = &cache[filename];
+              *file_json = json::parse(ifstream{filename});
+            }
+            else
+              file_json = &iter->second;
+
+            for (const auto& [key, val] : file_json->items())
+              if (j.find(key) == end)
+                j[key] = val;
+          }
+
+          auto p = j.at("value").get<phase_t>();
 
           darcy.narrow[p] = i;
           darcy.found[p] = true;
 
-          auto& ref = darcy.info[i];                       // NOLINT(CppUseStructuredBinding)
+          auto& info = darcy.info[i];  // NOLINT(CppUseStructuredBinding)
 
-          ref.poro = j["poro"];
-          ref.perm = j["perm"].get<double>()*presets::mD_to_m2;
+          info.poro = j.at("poro");
+          info.perm = j.at("perm").get<double>()*presets::mD_to_m2;
 
-          if (auto iter = j.find("cap_press"); iter != j.end())
+          if (auto iter = j.find("cap_press"); iter != end)
             for (int c = 0; c < 2; ++c){
-              parse(try_var(vars, (*iter)[c]), ref.pc_to_sw[c]);
-              ref.pc_to_sw[c] = ref.pc_to_sw[c].inverse();
+              parse(try_var(vars, (*iter)[c]), info.pc_to_sw[c]);
+              info.pc_to_sw[c] = info.pc_to_sw[c].inverse();
             }
 
-          if (auto iter = j.find("rel_perm"); iter != j.end())
+          if (auto iter = j.find("rel_perm"); iter != end)
             for (int c = 0; c < 2; ++c) {
               const auto& rel_perm = try_var(vars, (*iter)[c]);
-              parse(rel_perm.at(0), ref.kr[c][0]);
-              parse(rel_perm.at(1), ref.kr[c][1]);
+              parse(rel_perm.at(0), info.kr[c][0]);
+              parse(rel_perm.at(1), info.kr[c][1]);
             }
 
           {
-            ref.color = QColor::fromHsl(*i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
-            qt::try_parse(j, ref.color);
+            info.color = QColor::fromHsl(*i*mult, 175, 122);  // NOLINT(cppcoreguidelines-narrowing-conversions)
+            qt::try_parse(j, info.color);
           }
 
           ++i;
@@ -796,6 +817,10 @@ namespace xpm
         // j_micro.set(darcy.n1, "kozeny_carman", "n1");
         // j_micro.set(darcy.n2, "kozeny_carman", "n2");
         // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
+      }
+      else {
+        image.darcy.count = voxel_ns::phase_t{0};
+        image.darcy.info.resize(voxel_ns::phase_t{0});
       }
 
       j.try_set(occupancy_images, "report", "occupancy_images");

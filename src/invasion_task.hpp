@@ -795,7 +795,7 @@ namespace xpm {
     }
 
     void launch_primary(double absolute_rate, double theta) {
-      static constexpr bool to_sleep = false;
+      // static constexpr bool to_sleep = false;
 
       pressure_cache::load();
 
@@ -807,18 +807,18 @@ namespace xpm {
       auto darcy_span = cfg_->image.darcy.span();
       auto darcy_r_cap = [this, darcy_span](voxel_t i) { return 1/darcy_span[img_->phase[i]].pc_to_sw[0].front().x(); };
 
-      if (darcy_span)
-        pc_max_log_step_ = 0.25;
-      else {
-        double min_r_cap_throat = numeric_limits<double>::max();
-
-        for (size_t i{0}; i < pn_->throat_count(); ++i)
-          if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && pni_->connected(l))
-            min_r_cap_throat = min(min_r_cap_throat, r_ins(pn_, i));
-
-        min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films_valvatne(theta, min_r_cap_throat);
-        pc_max_log_step_ = std::log10(0.075/min_r_cap_throat);
-      }
+      // if (darcy_span)
+      pc_max_log_step_ = 0.25;
+      // else {
+      //   double min_r_cap_throat = numeric_limits<double>::max();
+      //
+      //   for (size_t i{0}; i < pn_->throat_count(); ++i)
+      //     if (auto [l, r] = adj(pn_, i); pn_->inner_node(r) && pni_->connected(l))
+      //       min_r_cap_throat = min(min_r_cap_throat, r_ins(pn_, i));
+      //
+      //   min_r_cap_throat = 0.95*eq_tr::r_cap_piston_with_films_valvatne(theta, min_r_cap_throat);
+      //   pc_max_log_step_ = std::log10(0.075/min_r_cap_throat);
+      // }
 
       so_uptr<net_t, bool> explored(pni_->connected_count());
       vector<bool> explored_throat(pn_->throat_count());
@@ -870,6 +870,8 @@ namespace xpm {
         primary_.kr.emplace_back(sw,
           calc_relative<0, 0>(darcy_span, theta)/absolute_rate,
           calc_relative<0, 1>(darcy_span, theta)/absolute_rate
+          // sw,    
+          // 1 - sw 
         ); // TODO: calculate when breakthrough
       };
 
@@ -975,14 +977,14 @@ namespace xpm {
           {
             auto p = img_->phase[voxel];
 
-            if (to_sleep && !slept[p]) {
-              slept[p] = true;
-
-              using namespace this_thread;
-              using namespace chrono;
-              
-              sleep_for(milliseconds{1000});
-            }
+            // if (to_sleep && !slept[p]) {
+            //   slept[p] = true;
+            //
+            //   using namespace this_thread;
+            //   using namespace chrono;
+            //   
+            //   sleep_for(milliseconds{1000});
+            // }
 
             inv_porosity[p] += darcy_span[p].poro; // TODO -- merge with cell volume or remove poro from here
           }
@@ -1045,13 +1047,13 @@ namespace xpm {
 
           for (auto i = 0; i < steps; ++i) {
 
-             if (to_sleep &&/*i%2 == 0*/true) {
-              ++progress_idx_;
-              using namespace this_thread;
-              using namespace chrono;
-              sleep_for(milliseconds{1500});
-              
-            }
+            //  if (to_sleep &&/*i%2 == 0*/true) {
+            //   ++progress_idx_;
+            //   using namespace this_thread;
+            //   using namespace chrono;
+            //   sleep_for(milliseconds{1500});
+            //   
+            // }
 
             auto next_r_cap = state_.r_cap_global/step;
 

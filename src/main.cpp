@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
 
         {
           nlohmann::json pp_j;
-          pp_j["total_poro"] = modeller.petrophysics_summary().porosity;
+          pp_j["total_poro"] = modeller.petrophysics_summary().total_porosity;
           pp_j["total_perm"] = modeller.petrophysics_summary().perm_total;
           pp_j["macro_perm"] = modeller.petrophysics_summary().perm_macro;
 
@@ -97,13 +97,11 @@ int main(int argc, char* argv[])
             modeller.absolute_rate(),
             modeller.cfg().theta);
 
-          
+          std::ofstream{dir/"pc_primary.txt"} << modeller.pc_to_plain<true>();
+          std::ofstream{dir/"pc_secondary.txt"} << modeller.pc_to_plain<false>();
 
-          std::ofstream{dir/"pc_primary.txt"} << modeller.pc_to_plain(std::true_type{});
-          std::ofstream{dir/"pc_secondary.txt"} << modeller.pc_to_plain(std::false_type{});
-
-          std::ofstream{dir/"kr_primary.txt"} << modeller.kr_to_plain(std::true_type{});
-          std::ofstream{dir/"kr_secondary.txt"} << modeller.kr_to_plain(std::false_type{});
+          std::ofstream{dir/"kr_primary.txt"} << modeller.kr_to_plain<true>();
+          std::ofstream{dir/"kr_secondary.txt"} << modeller.kr_to_plain<false>();
         }
 
         std::cout << '\n';

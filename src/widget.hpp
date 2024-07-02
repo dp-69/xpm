@@ -37,6 +37,7 @@
 #include <QApplication>
 #include <QChartView>
 #include <QClipboard>
+#include <QFileDialog>
 #include <QLegendMarker>
 #include <QLineSeries>
 #include <QLogValueAxis>
@@ -71,6 +72,7 @@
 #include <vtkPNGWriter.h>
 #include <vtkPointData.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkProp3DCollection.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
 #include <vtkSphereSource.h>
@@ -79,7 +81,6 @@
 #include <vtkUnstructuredGrid.h>
 #include <vtkVersionMacros.h>
 #include <vtkWindowToImageFilter.h>
-#include <vtkProp3DCollection.h>
 
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/pending/disjoint_sets.hpp>
@@ -306,6 +307,76 @@ namespace xpm
     void initMainMenu() {
       {
         auto* cat = menuBar()->addMenu("File");
+
+        connect(cat->addAction("Export..."), &QAction::triggered, [this] {
+          auto filename = QFileDialog::getSaveFileName(  // NOLINT(CppTooWideScopeInitStatement)
+            this, "Export Petrophysics", "", "JSON (*.json);;All Files (*.*)");
+
+          if (!filename.isEmpty()) {
+            nlohmann::json j;
+
+            const auto& task = model_.get_invasion_task();
+
+            j["poro"] = model_.petrophysics_summary().effective_porosity;
+
+            {
+              auto& perm = model_.petrophysics_summary().perm_total;
+              j["perm"] = (perm[0] + perm[1])/2;
+            }
+
+            {
+              auto& pc = j["cap_press"];
+
+              {
+                nlohmann::json primary;
+                for (auto& p : task.primary().pc | std::views::reverse)
+                  primary.push_back(p);
+                pc.push_back(primary);
+              }
+
+              pc.push_back(task.secondary().pc);
+            }
+
+            {
+              auto& kr = j["rel_perm"];
+
+              {
+                nlohmann::json k0;
+                nlohmann::json ph0;
+                nlohmann::json ph1;
+
+                for (const auto& p : task.primary().kr | std::views::reverse) {
+                  ph0.push_back(dpl::vector2d{p.x(), p.y()});
+                  ph1.push_back(dpl::vector2d{p.x(), p.z()});
+                }
+                
+                k0.push_back(ph0);
+                k0.push_back(ph1);
+                kr.push_back(k0);
+              }
+
+              {
+                nlohmann::json k1;
+                nlohmann::json ph0;
+                nlohmann::json ph1;
+
+                for (auto& p : task.secondary().kr) {
+                  ph0.push_back(dpl::vector2d{p.x(), p.y()});
+                  ph1.push_back(dpl::vector2d{p.x(), p.z()});
+                }
+
+                k1.push_back(ph0);
+                k1.push_back(ph1);
+                kr.push_back(k1);
+              }
+            }
+
+            std::ofstream(filename.toStdString()) << j.dump(2);
+          }
+
+        });
+
+        cat->addSeparator();
 
         connect(cat->addAction("Exit"), &QAction::triggered, [this] { close(); });
       }
@@ -632,13 +703,13 @@ namespace xpm
               });
             };
 
-            add("Copy (primary)", [this] { return model_.pc_to_plain(std::true_type{}); });
-            add("Copy (secondary)", [this] { return model_.pc_to_plain(std::false_type{}); });
+            add("Copy (primary)", [this] { return model_.pc_to_plain<true>(); });
+            add("Copy (secondary)", [this] { return model_.pc_to_plain<false>(); });
 
             menu->addSeparator();
 
-            add("Copy JSON (primary)", [this] { return model_.pc_to_json(std::true_type{}); });
-            add("Copy JSON (secondary)", [this] { return model_.pc_to_json(std::false_type{}); });
+            add("Copy JSON (primary)", [this] { return model_.pc_to_json<true>(); });
+            add("Copy JSON (secondary)", [this] { return model_.pc_to_json<false>(); });
 
             pc_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
             connect(pc_chart_view_, &QTreeView::customContextMenuRequested,
@@ -706,20 +777,20 @@ namespace xpm
               "  {}\n"
               "]\n";
 
-            add("Copy (primary)", [this] { return model_.kr_to_plain(std::true_type{}); });
-            add("Copy (secondary)", [this] { return model_.kr_to_plain(std::false_type{}); });
+            add("Copy (primary)", [this] { return model_.kr_to_plain<true>(); });
+            add("Copy (secondary)", [this] { return model_.kr_to_plain<false>(); });
 
             menu->addSeparator();
 
             add("Copy JSON (primary)", [this] { return fmt::format(
               json_format,
-              model_.kr_to_json(std::true_type{}, std::false_type{}),
-              model_.kr_to_json(std::true_type{}, std::true_type{})); });
+              model_.kr_to_json<true, false>(),
+              model_.kr_to_json<true, true>()); });
 
             add("Copy JSON (secondary)", [this] { return fmt::format(
               json_format,
-              model_.kr_to_json(std::false_type{}, std::false_type{}),
-              model_.kr_to_json(std::false_type{}, std::true_type{})); });
+              model_.kr_to_json<false, false>(),
+              model_.kr_to_json<false, true>()); });
            
             kr_chart_view_->setContextMenuPolicy(Qt::ContextMenuPolicy::CustomContextMenu);
             connect(kr_chart_view_, &QTreeView::customContextMenuRequested,
