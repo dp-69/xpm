@@ -310,70 +310,13 @@ namespace xpm
 
         connect(cat->addAction("Export..."), &QAction::triggered, [this] {
           auto filename = QFileDialog::getSaveFileName(  // NOLINT(CppTooWideScopeInitStatement)
-            this, "Export Petrophysics", "", "JSON (*.json);;All Files (*.*)");
+            this,
+            "Export Petrophysics",
+            /*""*/QString::fromStdString(model_.cfg().image.pnextract_modelname()),
+            "JSON (*.json);;All Files (*.*)");
 
-          if (!filename.isEmpty()) {
-            nlohmann::json j;
-
-            const auto& task = model_.get_invasion_task();
-
-            j["poro"] = model_.petrophysics_summary().effective_porosity;
-
-            {
-              auto& perm = model_.petrophysics_summary().perm_total;
-              j["perm"] = (perm[0] + perm[1])/2;
-            }
-
-            {
-              auto& pc = j["cap_press"];
-
-              {
-                nlohmann::json primary;
-                for (auto& p : task.primary().pc | std::views::reverse)
-                  primary.push_back(p);
-                pc.push_back(primary);
-              }
-
-              pc.push_back(task.secondary().pc);
-            }
-
-            {
-              auto& kr = j["rel_perm"];
-
-              {
-                nlohmann::json k0;
-                nlohmann::json ph0;
-                nlohmann::json ph1;
-
-                for (const auto& p : task.primary().kr | std::views::reverse) {
-                  ph0.push_back(dpl::vector2d{p.x(), p.y()});
-                  ph1.push_back(dpl::vector2d{p.x(), p.z()});
-                }
-                
-                k0.push_back(ph0);
-                k0.push_back(ph1);
-                kr.push_back(k0);
-              }
-
-              {
-                nlohmann::json k1;
-                nlohmann::json ph0;
-                nlohmann::json ph1;
-
-                for (auto& p : task.secondary().kr) {
-                  ph0.push_back(dpl::vector2d{p.x(), p.y()});
-                  ph1.push_back(dpl::vector2d{p.x(), p.z()});
-                }
-
-                k1.push_back(ph0);
-                k1.push_back(ph1);
-                kr.push_back(k1);
-              }
-            }
-
-            std::ofstream(filename.toStdString()) << j.dump(2);
-          }
-
+          if (!filename.isEmpty())
+            std::ofstream{filename.toStdString()} << model_.petrophysics_json().dump(2);
         });
 
         cat->addSeparator();
@@ -1082,8 +1025,6 @@ namespace xpm
 
         auto start = std::chrono::system_clock::now();
 
-        // auto pc_inv = model_.settings().primary.calc_pc_inv();
-
         auto invasion_future = std::async(std::launch::async, &invasion_task::launch_primary,
           &task,
           model_.absolute_rate(),
@@ -1202,6 +1143,8 @@ namespace xpm
         while (invasion_future.wait_for(std::chrono::milliseconds{1500}) != std::future_status::ready)
           update();
         update();
+
+        std::cout << "\ndone (invasion percolation)\n";
       });
     }
 

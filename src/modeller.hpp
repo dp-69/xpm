@@ -82,6 +82,66 @@ namespace xpm
       return petrophysics_summary_;
     }
 
+    auto petrophysics_json() const {
+      nlohmann::json j;
+
+      j["poro"] = petrophysics_summary_.effective_porosity;
+
+      {
+        auto& perm = petrophysics_summary_.perm_total;
+        j["perm"] = (perm[0] + perm[1])/2;
+      }
+
+      {
+        auto& pc = j["cap_press"];
+
+        {
+          nlohmann::json primary;
+          for (auto& p : invasion_task_.primary().pc | std::views::reverse)
+            primary.push_back(p);
+          pc.push_back(primary);
+        }
+
+        pc.push_back(invasion_task_.secondary().pc);
+      }
+
+      {
+        auto& kr = j["rel_perm"];
+
+        {
+          nlohmann::json k0;
+          nlohmann::json ph0;
+          nlohmann::json ph1;
+
+          for (const auto& p : invasion_task_.primary().kr | std::views::reverse) {
+            ph0.push_back(dpl::vector2d{p.x(), p.y()});
+            ph1.push_back(dpl::vector2d{p.x(), p.z()});
+          }
+                
+          k0.push_back(ph0);
+          k0.push_back(ph1);
+          kr.push_back(k0);
+        }
+
+        {
+          nlohmann::json k1;
+          nlohmann::json ph0;
+          nlohmann::json ph1;
+
+          for (auto& p : invasion_task_.secondary().kr) {
+            ph0.push_back(dpl::vector2d{p.x(), p.y()});
+            ph1.push_back(dpl::vector2d{p.x(), p.z()});
+          }
+
+          k1.push_back(ph0);
+          k1.push_back(ph1);
+          kr.push_back(k1);
+        }
+      }
+
+      return j;
+    }
+
     template <bool primary>
     auto kr_to_string(fmt::format_string<const double&, const double&, const double&> f, auto sep, auto begin, auto end) const
     {

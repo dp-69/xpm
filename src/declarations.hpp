@@ -661,6 +661,16 @@ namespace xpm
         solid_v = j["phase"]["solid"];
       }
 
+      std::string pnextract_modelname() const {
+        auto stem_str = path.stem().string();
+
+        if (std::smatch matches;
+          std::regex_match(stem_str, matches, std::regex{R"((.+)_(\d+)x(\d+)x(\d+)_(\d+)p(\d+)um$)"}))
+          return matches[1];
+
+        return stem_str;
+      }
+
       auto pnextract_filename() const {
         auto stem = path.stem();
 

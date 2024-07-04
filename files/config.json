@@ -1,6 +1,42 @@
+/*
+ ------------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+
+// {
+//   "image":  {
+//     "path": "EstailladesNano-v0s255_335x335x503_0p032um.raw",
+//     "size": [335, 335, 503],
+//     "resolution": 32.0e-9,
+//     "phase": {
+//       "void": 0, /* must be 0 for Ali's extraction */
+//       "solid": 255
+//     }  
+//   },
+//   // "max_capillary_pressure" : 1e7,
+//   // "macro_contact_angle" : 59, /* degrees, for eq. triangle theta < 60 */
+//   "solver": {
+//     "cache" : { "use" : true, "save" : true },
+//     "decomposition": [4, 3, 2], /* the product is a number of MPI processes */
+//     "tolerance": 1e-9,
+//     "max_iterations": 19    
+//   },
+//   "report" : {
+//     "display" : "saturation", /* saturation | pressure | permeability */
+//     "occupancy_images": false,
+//     "capillary_pressure_sw_step": 0.075, /* def 0.05 */
+//     "relative_permeability_sw_step": 0.1 /* def 0.075 */
+//   }
+// }
+
+/*
+ ------------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+
+
+
 {
   "image": {
-    "path" : "C:/Users/dmytr/OneDrive - Imperial College London/hwu/pnm_petronas/images/EstailladesPHASES-0-255_256x256x256_4p0um.raw",
+    "path" : "EstailladesPHASES-0-255_256x256x256_4p0um.raw",
     "size" : [256, 256, 256],
     "resolution": 4e-6,
     "phase": {
@@ -17,19 +53,19 @@
      * cap_press (saturation, Pa)
      * rel_perm (saturation, fraction)
      */
-    { "value": 19, /*  "ref": "file.json", */ "poro": 0.419, "perm": 9.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [61, 78, 232] */ },
-    { "value": 39, /*  "ref": "file.json", */ "poro": 0.419, "perm": 9.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [61, 78, 232] */ }, /* "_TEMPLATES/modified_pc.json" */
-    { "value": 59, /*  "ref": "file.json", */ "poro": 0.419, "perm": 9.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [61, 78, 232] */ },
-    { "value": 78, /*  "ref": "file.json", */ "poro": 0.419, "perm": 5.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [194, 210, 0] */ },
-    { "value": 98, /*  "ref": "file.json", */ "poro": 0.219, "perm": 5.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [194, 210, 0] */ },  /* [[0, 0, 1, 1], [0, 1, 1, 0]] */
+    { "value": 19,  "file": "C:/Users/dmytr/Desktop/CHECK.json"/* , "poro": 0.419, "perm": 9.861493 *//* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [61, 78, 232] */ }, /* "C:/Users/dmytr/Desktop/CHECK.json" */
+    { "value": 39,  "file": "C:/Users/dmytr/Desktop/CHECK.json"/* , "poro": 0.419, "perm": 9.861493 *//* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [61, 78, 232] */ }, /* "_TEMPLATE/phase_def.json" */
+    { "value": 59,  "file": "C:/Users/dmytr/Desktop/CHECK.json"/* , "poro": 0.419, "perm": 9.861493 *//* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [61, 78, 232] */ },
+    { "value": 78,  "file": "C:/Users/dmytr/Desktop/CHECK.json"/* , "poro": 0.419, "perm": 5.861493 *//* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [194, 210, 0] */ },
+    { "value": 98,  "file": "C:/Users/dmytr/Desktop/CHECK.json"/* , "poro": 0.219, "perm": 5.861493 *//* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [194, 210, 0] */ },  /* [[0, 0, 1, 1], [0, 1, 1, 0]] */
 
-    { "value": 118,/*  "ref": "file.json", */ "poro": 0.5,   "perm": 5.061493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [194, 210, 0] */ },
-    { "value": 137,/*  "ref": "file.json", */ "poro": 0.419, "perm": 4.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [194, 210, 0] */ },
-    { "value": 157,/*  "ref": "file.json", */ "poro": 0.419, "perm": 3.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [143, 0, 210] */ },
-    { "value": 177,/*  "ref": "file.json", */ "poro": 0.419, "perm": 1.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [210, 0, 63]  */ },
-    { "value": 196,/*  "ref": "file.json", */ "poro": 0.419, "perm": 1.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [210, 0, 63]  */ },
-    { "value": 216,/*  "ref": "file.json", */ "poro": 0.419, "perm": 1.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [210, 0, 63]  */ },
-    { "value": 236,/*  "ref": "file.json", */ "poro": 0.419, "perm": 1.861493, "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"]  /* , "rgb": [210, 0, 63]  */ }
+    { "value": 118, "file": "_TEMPLATE/phase_def.json", "poro": 0.5,   "perm": 5.061493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [194, 210, 0] */ },
+    { "value": 137, "file": "_TEMPLATE/phase_def.json", "poro": 0.419, "perm": 4.861493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [194, 210, 0] */ },
+    { "value": 157, "file": "_TEMPLATE/phase_def.json", "poro": 0.419, "perm": 3.861493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [143, 0, 210] */ },
+    { "value": 177, "file": "_TEMPLATE/phase_def.json", "poro": 0.419, "perm": 1.861493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [210, 0, 63]  */ },
+    { "value": 196, "file": "_TEMPLATE/phase_def.json", "poro": 0.419, "perm": 1.861493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [210, 0, 63]  */ },
+    { "value": 216, "file": "_TEMPLATE/phase_def.json", "poro": 0.419, "perm": 1.861493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [210, 0, 63]  */ },
+    { "value": 236, "file": "_TEMPLATE/phase_def.json", "poro": 0.419, "perm": 1.861493/* , "cap_press": ["pc0", "pc1"], "rel_perm": ["kr0", "kr1"] */  /* , "rgb": [210, 0, 63]  */ }
   ],
   /*
    * local variables
