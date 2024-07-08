@@ -271,7 +271,7 @@ namespace xpm
 
       std::filesystem::create_directories("cache");
 
-      std::locale::global(std::locale("en_US.UTF-8"));
+      // std::locale::global(std::locale("en_US.UTF-8"));
     }
 
     void init(std::filesystem::path input) {
