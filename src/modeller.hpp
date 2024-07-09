@@ -271,7 +271,12 @@ namespace xpm
 
       std::filesystem::create_directories("cache");
 
-      // std::locale::global(std::locale("en_US.UTF-8"));
+      struct separate_thousands : std::numpunct<char> {
+        char_type do_thousands_sep() const override { return ','; }  // separate with commas
+        string_type do_grouping() const override { return "\3"; }    // groups of 3 digit
+      };
+      
+      std::locale::global(std::locale(std::locale(), new separate_thousands));
     }
 
     void init(std::filesystem::path input) {
