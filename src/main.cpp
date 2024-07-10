@@ -67,10 +67,10 @@ int main(int argc, char* argv[])
     if (cmdl["G"]) { /*argc == 2 && !std::strcmp(argv[1], "-G")*/
       using json = nlohmann::json;
 
-      auto non_gui_exec = [](json& j) {
+      auto non_gui_exec = [&input](json& j) {
         xpm::modeller modeller;
     
-        modeller.init(j);
+        modeller.init(input, j);
 
         modeller.prepare();
         modeller.compute_pressure();

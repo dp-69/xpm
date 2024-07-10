@@ -653,7 +653,7 @@ namespace xpm
       dpl::vector3i size;
       double resolution;
 
-      void load(const json& j) {
+      void parse(const json& j) {
         path = std::string{j["path"]};
         size = j["size"];
         resolution = j["resolution"];
@@ -711,7 +711,7 @@ namespace xpm
       } darcy;
 
 
-      void set_poro_perm(json& list, json& vars) {
+      void set_poro_perm(const std::filesystem::path& cfg_path, json& list, json& vars) {
         auto s = list.size();
 
         if (s > ((1 << sizeof(phase_t)*8) - 2))
@@ -758,15 +758,15 @@ namespace xpm
 
           if (auto iter = j.find("cap_press"); iter != end)
             for (int c = 0; c < 2; ++c){
-              parse(try_var(vars, (*iter)[c]), info.pc_to_sw[c]);
+              dpl::parse(try_var(vars, (*iter)[c]), info.pc_to_sw[c]);
               info.pc_to_sw[c] = info.pc_to_sw[c].inverse();
             }
 
           if (auto iter = j.find("rel_perm"); iter != end)
             for (int c = 0; c < 2; ++c) {
               const auto& rel_perm = try_var(vars, (*iter)[c]);
-              parse(rel_perm.at(0), info.kr[c][0]);
-              parse(rel_perm.at(1), info.kr[c][1]);
+              dpl::parse(rel_perm.at(0), info.kr[c][0]);
+              dpl::parse(rel_perm.at(1), info.kr[c][1]);
             }
 
           {
@@ -796,7 +796,7 @@ namespace xpm
         bool save = true;
       } cache;
 
-      void load(wrapper<const json> j) {
+      void parse(wrapper<const json> j) {
         tolerance = (*j)["tolerance"];
         max_iterations = (*j)["max_iterations"];
         j.try_set(aggressive_levels, "aggressive_number_of_levels");
@@ -816,21 +816,30 @@ namespace xpm
     } report;
 
 
-    void load(wrapper<json> j) {
-      image.load(*j("image"));
+    void parse(const std::filesystem::path& cfg_path, wrapper<json> j) {
+      image.parse(*j("image"));
 
-      auto vars = get_vars(j);
+      {
+        auto saved_path = std::filesystem::current_path();
 
-      if (auto jj = j("darcy"); jj) {
-        image.set_poro_perm(*jj, vars);
+        if (cfg_path.has_parent_path())
+          current_path(cfg_path.parent_path());
 
-        // j_micro.set(darcy.n1, "kozeny_carman", "n1");
-        // j_micro.set(darcy.n2, "kozeny_carman", "n2");
-        // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
-      }
-      else {
-        image.darcy.count = voxel_ns::phase_t{0};
-        image.darcy.info.resize(voxel_ns::phase_t{0});
+        auto vars = get_vars(j);
+
+        if (auto jj = j("darcy"); jj) {
+          image.set_poro_perm(cfg_path, *jj, vars);
+
+          // j_micro.set(darcy.n1, "kozeny_carman", "n1");
+          // j_micro.set(darcy.n2, "kozeny_carman", "n2");
+          // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
+        }
+        else {
+          image.darcy.count = voxel_ns::phase_t{0};
+          image.darcy.info.resize(voxel_ns::phase_t{0});
+        }
+
+        current_path(saved_path);
       }
 
       j.try_set(occupancy_images, "report", "occupancy_images");
@@ -844,7 +853,7 @@ namespace xpm
       if (auto j_theta = j("macro_contact_angle"); j_theta)
         theta = j_theta->get<double>()/180*std::numbers::pi;
 
-      solver.load(*j("solver"));
+      solver.parse(*j("solver"));
     }
   };
 

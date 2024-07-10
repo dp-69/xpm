@@ -252,8 +252,8 @@ namespace xpm
       return invasion_task_;
     }
 
-    void init(nlohmann::json& j) {
-      cfg_.load(j);
+    void init(const std::filesystem::path& cfg_path, nlohmann::json& j) {
+      cfg_.parse(cfg_path, j);
 
 
       // for (voxel_ns::phase_t i{0}; i < cfg_.image.darcy.count; ++i) {
@@ -275,7 +275,7 @@ namespace xpm
         char_type do_thousands_sep() const override { return ','; }  // separate with commas
         string_type do_grouping() const override { return "\3"; }    // groups of 3 digit
       };
-      
+
       std::locale::global(std::locale(std::locale(), new separate_thousands));
     }
 
@@ -292,7 +292,7 @@ namespace xpm
       }
 
       auto j = nlohmann::json::parse(std::ifstream{input}, nullptr, true, true);
-      init(j.is_array() ? j[0] : j);
+      init(input, j.is_array() ? j[0] : j);
     }
 
     void prepare() {
