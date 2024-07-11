@@ -817,23 +817,19 @@ namespace xpm
 
 
     void parse(const std::filesystem::path& cfg_path, wrapper<json> j) {
-      image.parse(*j("image"));
-
       {
         auto saved_path = std::filesystem::current_path();
 
         if (cfg_path.has_parent_path())
           current_path(cfg_path.parent_path());
 
+        image.parse(*j("image"));
+        image.path = absolute(image.path);
+
         auto vars = get_vars(j);
 
-        if (auto jj = j("darcy"); jj) {
+        if (auto jj = j("darcy"); jj)
           image.set_poro_perm(cfg_path, *jj, vars);
-
-          // j_micro.set(darcy.n1, "kozeny_carman", "n1");
-          // j_micro.set(darcy.n2, "kozeny_carman", "n2");
-          // darcy.A = darcy.perm_single*std::pow(1 - darcy.poro_single, darcy.n2)/std::pow(darcy.poro_single, darcy.n1);
-        }
         else {
           image.darcy.count = voxel_ns::phase_t{0};
           image.darcy.info.resize(voxel_ns::phase_t{0});
@@ -850,7 +846,7 @@ namespace xpm
       j.try_set(max_pc, "max_capillary_pressure");
       j.try_set(macro_mult, "macro", "trans_multiplier");
 
-      if (auto j_theta = j("macro_contact_angle"); j_theta)
+      if (auto j_theta = j("macro", "contact_angle"); j_theta)
         theta = j_theta->get<double>()/180*std::numbers::pi;
 
       solver.parse(*j("solver"));
