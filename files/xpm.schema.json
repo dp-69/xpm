@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/xpm/schema.json",
+  "title": "xpm config schema",
+  "type": "object",
+  "properties": {
+    "image": { "type": "object", "description": "Image properties.",
+      "properties": {
+        "path": { "type": "string", "description": "Path to an 8-bit uncompressed image." },
+        "size": { "type": "array", "items": { "type": "integer" }, "description": "Voxel count in 3 dimensions.", "minItems": 3, "maxItems": 3 },
+        "resolution": { "type": "number", "description": "Side length of a voxel, m." },
+        
+        "phase": { "type": "object",
+          "properties": {
+            "void": { "type": "integer", "description": "Value for void voxels, must be 0.", "minimum": 0, "maximum": 0 },
+            "solid": { "type": "integer", "description": "Value for solid voxels." }            
+          },
+          
+          "required": ["void", "solid"]
+        }
+      },
+
+      "required": ["path", "size", "resolution", "phase"]
+    },
+
+    "macro": { "type": "object", "description": "Macroscopic network properties.",
+      "properties": {
+        "contact_angle": { "type": "number", "description": "Contact angle, deg.", "default": 0 },
+        "trans_multiplier": { "type": "number", "description": "Transmissibility multiplier.", "default": 1 }
+      }
+    },
+
+    "darcy": { "type": "array", "description": "Array of darcy properties per under-resolved image value.",
+      "items": { "type": "object",
+        "properties": {
+          "value": { "type": "integer", "description": "Value of the underlying under-resolved phase.", "minimum": 0, "maximum": 255 },
+          "poro": { "type": "number", "description": "Porosity, frac." },
+          "perm": { "type": "number", "description": "Permeability, mD." },
+          "cap_press": { "type": "array", "items": { "type": "array" }, "description": "Capillary pressure curves, Pa (one data table per flooding cycle).", "maxItems": 2 },
+          "rel_perm": { "type": "array", "items": { "type": "array" }, "description": "Relative permeability curves (array of two data tables per flooding cycle).", "maxItems": 2 },
+          "file": { "type": "string", "description": "Path to an external JSON file that contains relevant darcy properties. " }
+        }
+      }
+    },
+
+    "solver": { "type": "object", "description": "Linear solver properties.",
+      "properties": {
+        "cache": { "type": "object",  "description": "Caching of pressure solutions.",
+          "properties": {
+            "use": { "type": "boolean", "default": true },
+            "save": { "type": "boolean", "default": true }
+          }
+        },
+        "decomposition": { "type": "array", "items": { "type": "integer" }, "description": "Volume decomposition in 3 dimensions. MPI processor count is the vector product.", "minItems": 3, "maxItems": 3 },
+        "tolerance": {  "type": "number", "description": "The convergence tolerance." },
+        "max_iterations": { "type": "integer", "description": "Maximum number of iterations." }
+      },
+
+      "required": ["tolerance", "decomposition", "max_iterations"]
+    },
+
+    "report": { "type": "object", "description": "Reporting properties.",
+      "properties": {
+        "display": { "type": "string", "description": "Display property of the 3D view.",
+          "enum": ["pressure", "saturation", "permeability", "phase", "velem"], "default": "saturation"
+        },
+        "invasion_percolation": { "type": "boolean", "description": "Simulate invasion percolation.", "default": true },
+        "occupancy_images": { "type": "boolean", "description": "Write 3D image files for difference occupancies.", "default": false },
+        "capillary_pressure_sw_step": { "type": "number", "description": "Sw step in capillary pressure curves.", "default": 0.05 },
+        "relative_permeability_sw_step": { "type": "number", "description": "Sw step in relative permeability curves.", "default": 0.075 }
+      }
+    }
+  }
+}
