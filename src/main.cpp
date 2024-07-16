@@ -103,10 +103,10 @@ int main(int argc, char* argv[])
           std::ofstream{dir/"kr_primary.txt"} << modeller.kr_to_plain<true>();
           std::ofstream{dir/"kr_secondary.txt"} << modeller.kr_to_plain<false>();
 
-          std::ofstream{dir/"phi_k_kr_pc.json"} << modeller.petrophysics_json().dump(2);
+          std::cout << '\n';
         }
 
-        std::cout << '\n';
+        std::ofstream{dir/"phi_k_kr_pc.json"} << modeller.petrophysics_json().dump(2);
       };
 
       if (auto root = json::parse(std::ifstream{input}, nullptr, true, true);

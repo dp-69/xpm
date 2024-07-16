@@ -92,50 +92,57 @@ namespace xpm
         j["perm"] = (perm[0] + perm[1])/2;
       }
 
-      {
-        auto& pc = j["cap_press"];
-
+      if (cfg_.report.invasion_percolation) {
         {
-          nlohmann::json primary;
-          for (auto& p : invasion_task_.primary().pc | std::views::reverse)
-            primary.push_back(p);
-          pc.push_back(primary);
+          auto& pc = j["cap_press"];
+
+          {
+            nlohmann::json primary;
+            for (const auto& p : invasion_task_.primary().pc | std::views::reverse)
+              primary.push_back(p);
+            pc.push_back(primary);
+          }
+
+          {
+            nlohmann::json secondary;
+            for (const auto& p : invasion_task_.secondary().pc)
+              secondary.push_back(p);
+            pc.push_back(secondary);
+          }
         }
 
-        pc.push_back(invasion_task_.secondary().pc);
-      }
-
-      {
-        auto& kr = j["rel_perm"];
-
         {
-          nlohmann::json k0;
-          nlohmann::json ph0;
-          nlohmann::json ph1;
+          auto& kr = j["rel_perm"];
 
-          for (const auto& p : invasion_task_.primary().kr | std::views::reverse) {
-            ph0.push_back(dpl::vector2d{p.x(), p.y()});
-            ph1.push_back(dpl::vector2d{p.x(), p.z()});
-          }
+          {
+            nlohmann::json k0;
+            nlohmann::json ph0;
+            nlohmann::json ph1;
+
+            for (const auto& p : invasion_task_.primary().kr | std::views::reverse) {
+              ph0.push_back(dpl::vector2d{p.x(), p.y()});
+              ph1.push_back(dpl::vector2d{p.x(), p.z()});
+            }
                 
-          k0.push_back(ph0);
-          k0.push_back(ph1);
-          kr.push_back(k0);
-        }
-
-        {
-          nlohmann::json k1;
-          nlohmann::json ph0;
-          nlohmann::json ph1;
-
-          for (auto& p : invasion_task_.secondary().kr) {
-            ph0.push_back(dpl::vector2d{p.x(), p.y()});
-            ph1.push_back(dpl::vector2d{p.x(), p.z()});
+            k0.push_back(ph0);
+            k0.push_back(ph1);
+            kr.push_back(k0);
           }
 
-          k1.push_back(ph0);
-          k1.push_back(ph1);
-          kr.push_back(k1);
+          {
+            nlohmann::json k1;
+            nlohmann::json ph0;
+            nlohmann::json ph1;
+
+            for (const auto& p : invasion_task_.secondary().kr) {
+              ph0.push_back(dpl::vector2d{p.x(), p.y()});
+              ph1.push_back(dpl::vector2d{p.x(), p.z()});
+            }
+
+            k1.push_back(ph0);
+            k1.push_back(ph1);
+            kr.push_back(k1);
+          }
         }
       }
 
