@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://example.com/xpm/schema.json",
   "title": "xpm config schema",
   "type": "object",
@@ -51,7 +51,7 @@
             "save": { "type": "boolean", "default": true }
           }
         },
-        "decomposition": { "type": "array", "items": { "type": "integer" }, "description": "Volume decomposition in 3 dimensions. MPI processor count is the vector product.", "minItems": 3, "maxItems": 3 },
+        "decomposition": { "type": "array", "items": { "type": "integer" }, "description": "Volume decomposition in 3 dimensions. MPI processor count is the product of 3 components.", "minItems": 3, "maxItems": 3 },
         "tolerance": {  "type": "number", "description": "The convergence tolerance." },
         "max_iterations": { "type": "integer", "description": "Maximum number of iterations." }
       },
@@ -65,7 +65,7 @@
           "enum": ["pressure", "saturation", "permeability", "phase", "velem"], "default": "saturation"
         },
         "invasion_percolation": { "type": "boolean", "description": "Simulate invasion percolation.", "default": true },
-        "occupancy_images": { "type": "boolean", "description": "Write 3D image files for difference occupancies.", "default": false },
+        "occupancy_images": { "type": "boolean", "description": "Write 3D image files for different occupancies.", "default": false },
         "capillary_pressure_sw_step": { "type": "number", "description": "Sw step in capillary pressure curves.", "default": 0.05 },
         "relative_permeability_sw_step": { "type": "number", "description": "Sw step in relative permeability curves.", "default": 0.075 }
       }

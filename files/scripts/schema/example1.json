@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dp-69/xpm/main/files/xpm.schema.json",
+  "image": {
+    "path": "EstailladesNano-v0s255_335x335x503_0p032um.raw",
+    "size": [335, 335, 503],
+    "resolution": 32.0e-9,
+    "phase": {
+      "void": 0,
+      "solid": 255
+    }  
+  },
+  "macro" : {
+    "trans_multiplier": 1,
+    "contact_angle" : 59
+  },
+  "solver": {
+    "cache" : { "use" : true, "save" : true },
+    "decomposition": [4, 3, 3],
+    "tolerance": 1e-9,
+    "max_iterations": 19    
+  },
+  "report" : {
+    "invasion_percolation": true,
+    "display" : "saturation",
+    "occupancy_images": false,
+    "capillary_pressure_sw_step": 0.075,
+    "relative_permeability_sw_step": 0.1
+  }
+}
