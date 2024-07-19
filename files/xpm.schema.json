@@ -38,6 +38,7 @@
           "perm": { "type": "number", "description": "Permeability, mD." },
           "cap_press": { "type": "array", "items": { "type": "array" }, "description": "Capillary pressure curves, Pa (one data table per flooding cycle).", "maxItems": 2 },
           "rel_perm": { "type": "array", "items": { "type": "array" }, "description": "Relative permeability curves (array of two data tables per flooding cycle).", "maxItems": 2 },
+          "rgb": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "description": "Color in RGB format.", "minItems": 3, "maxItems": 3 },
           "file": { "type": "string", "description": "Path to an external JSON file that contains relevant darcy properties. " }
         }
       }
@@ -53,7 +54,9 @@
         },
         "decomposition": { "type": "array", "items": { "type": "integer" }, "description": "Volume decomposition in 3 dimensions. MPI processor count is the product of 3 components.", "minItems": 3, "maxItems": 3 },
         "tolerance": {  "type": "number", "description": "The convergence tolerance." },
-        "max_iterations": { "type": "integer", "description": "Maximum number of iterations." }
+        "max_iterations": { "type": "integer", "description": "Maximum number of iterations." },
+        "print_level": { "type": "integer", "description": "Requests automatic printing of setup and solve information.\n0 : no printout\n1 : print setup information\n2 : print solve information\n3 : print both setup and solve information", "minimum": 0, "maximum": 3, "default": 0 },
+        "aggressive_number_of_levels": { "type": "integer", "description": "Defines the number of levels of aggressive coarsening.", "default": 0 }
       },
 
       "required": ["tolerance", "decomposition", "max_iterations"]

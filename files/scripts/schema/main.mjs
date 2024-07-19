@@ -49,19 +49,13 @@ function recordStr(key, value, level) {
   
   const indentStr = '<br/>\n&ensp;&ensp;&ensp;';
 
-  function descStr({description : d}/* , level */) {            /* type : t,  */
-    // function fmtText(s) {
-    //   // return s ? s.charAt(0).toLowerCase() + (s.endsWith('.') ? s.slice(1, -1) : s.slice(1)) : "";
-    //   return s;
-    // }
-    
-    return d !== undefined                                  /* t !== 'object' && */
-      ? (level === 0 ? '\n' : indentStr) + d                    // fmtText(d)
-      : '';                                                     // ${'&ensp;'.repeat(indent_count + 2)}
+  function descStr({ description: d }/* , level */) {
+    return d !== undefined                                      
+      ? (level === 0 ? '\n' : indentStr) + d.replaceAll('\n', indentStr)
+      : '';
   }
 
-  
-  function valueStr({enum : e, default : d}) {
+  function valueStr({ enum: e, default: d }) {
     return (
       e !== undefined  // ReSharper disable once QualifiedExpressionMaybeNull
         ? indentStr + `*values* : ${e.map(x => `\`"${x}"\``).join(' | ')}`
@@ -87,7 +81,7 @@ Paragraph indent resembles the nesting levels in the JSON input file.
 This file has been automatically generated from a machine-readable [JSON schema](https://raw.githubusercontent.com/dp-69/xpm/main/files/xpm.schema.json).
 `;
 
-let details = {
+const details = {
   'darcy':
     'Acceptable data table format is `[[x1, y1], [x2, y2], ...]` or `[x1, y1, x2, y2, ...]` where `x(i)` < `x(i+1)`.'
 };
@@ -130,31 +124,6 @@ ${
 fs.writeFileSync('xpm.schema.md', output);
 
 console.log('done.');
-
-
-
-// for (const [cat, cat_v] of props(root)) {
-//   md_file += recordStr(cat, cat_v, 0);
-
-//   if (cat_v.type === 'object') {
-//     for (const [key, key_v] of props(cat_v)) {
-//       if (key_v.type === 'object') {
-//         md_file += recordStr(key, key_v, 1);
-//         // md_file += `- \`${key}\` : object<br/>\n`;  // ${descStr(key_v)} ${optional(cat_v, key)}
-
-//         for (const [skey, skey_v] of props(key_v))
-//           md_file += recordStr(skey, skey_v, 2);
-//       }
-//       else {
-//         md_file += recordStr(key, key_v);
-//       }
-//     }
-//   }
-//   else { /* array */
-//     for (const [key, key_v] of props(cat_v.items))  
-//       md_file += recordStr(key, key_v);
-//   }
-// }
 
 
 // console.log(md_file);
