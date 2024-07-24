@@ -46,6 +46,8 @@ int main(int argc, char* argv[])
 
   // int p = 3;
 
+  // using namespace std::string_literals;
+
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
     dpl::hypre::process();
@@ -56,6 +58,29 @@ int main(int argc, char* argv[])
   #ifdef _WIN32
     MPI_Init(&argc, &argv);
   #endif
+
+  /*
+   *
+   */
+  constexpr auto author_note = 
+R"( * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ *                Extensive Pore Modelling - xpm v0.2.3                *
+ *                                                                     *
+ *                        Copyright (c) 2024                           *
+ *   Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh   *
+ *                                                                     *
+ *                    https://github.com/dp-69/xpm                     *
+ *                                                                     *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+)";
+
+  std::cout << author_note;
+
+  /*
+   *
+   */
+
 
   dpl::mpi::exec = argv[0];
   auto cmdl = argh::parser(argc, argv);

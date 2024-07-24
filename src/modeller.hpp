@@ -370,124 +370,36 @@ namespace xpm
     }
 
     auto compute_pressure() {
-      // using namespace dpl;
-      //
-      // std::cout << fmt::format("image path: {}\n\n", settings_.image.path);
-      //
-      // auto pnm_path = extract_network()/"";
-      //
-      // // auto begin_init_time = clock::now();
-      //
-      // //------------------------------
-      //
-      //
-      // pn_.read_from_text_file(pnm_path);
-      //
-      // #ifdef XPM_DEBUG_OUTPUT
-      //   std::cout
-      //     << fmt::format("network\n  nodes: {:L}\n  throats: {:L}\n", pn_.node_count(), pn_.throat_count())
-      //     << (pn_.eval_inlet_outlet_connectivity() ? "  (connected)" : "  (disconected)") << '\n';
-      // #endif
-      //
-      // #ifdef _WIN32
-      //   pn_.connectivity_flow_summary(settings_.solver.tolerance, settings_.solver.max_iterations);
-      // #else
-      //   pn_.connectivity_flow_summary_MPI(settings_.solver.tolerance, settings_.solver.max_iterations);
-      // #endif
-      //
-      // std::cout << '\n';
-      //
-      // img_.dict = settings_.image.phases;
-      //
-      // img_.read_image("pnextract"/settings_.image.pnextract_filename());
-      // img_.set_dim(settings_.loaded ? settings_.image.size : std::round(std::cbrt(*img_.size())));
-      //
-      // {
-      //   using namespace voxel_prop;
-      //
-      //   strong_array<phase_t, bool> occurance;
-      //   strong_array<phase_t, idx1d_t> count(0);
-      //   for (auto p : img_.phase.span(img_.size())) {
-      //     occurance[p] = true;
-      //     ++count[p];
-      //   }
-      //
-      //   std::list<phase_t> missing;
-      //   for (int i = 0; i < 256; ++i)
-      //     if (phase_t p(i);  // NOLINT(clang-diagnostic-implicit-int-conversion)
-      //       settings_.image.phases.is_darcy(p) && occurance[p] && settings_.darcy.poro_perm[p].is_nan()) {
-      //       missing.push_back(p);
-      //     }
-      //
-      //   // { "value": 118, "porosity": 0.15, "permeability": 1.061493 }
-      //
-      //   if (!missing.empty()) {
-      //     std::cout << "unassigned porosity and permeability: [\n";
-      //
-      //     auto print = [](auto iter) {
-      //       fmt::print(R"(  {{ "value": {}, "porosity": null, "permeability": null }})", *iter);
-      //     };
-      //
-      //     auto iter = missing.begin();
-      //     auto end = missing.end();
-      //
-      //     print(iter);
-      //     while (++iter != end) {
-      //       std::cout << ",\n";
-      //       print(iter);
-      //     }
-      //     std::cout << "\n]\n";
-      //
-      //     throw config_exception("missing microporosity values.");
-      //   }
-      // }
-      //
-      //
-      // img_.read_icl_velems(pnm_path);
-      //
-      // std::cout << "connectivity (isolated components)...";
-      //
-      // pni_.evaluate_isolated();
-      //
-      // std::cout << fmt::format(" done\n  macro: {:L}\n  voxel: {:L}\n\n",
-      //   pni_.connected_macro_count(),
-      //   *pni_.connected_count() - *pni_.connected_macro_count());
-
-      
       using namespace dpl;
 
-      vector3i procs{1};
+      const auto& procs = cfg_.solver.decomposition;
       
-      if (cfg_.solver.decomposition)
-        procs = *cfg_.solver.decomposition;
-      else {
-        if (auto proc_count = std::thread::hardware_concurrency();
-          proc_count == 12)
-          procs = {2, 2, 3};
-        else if (proc_count == 24)
-          procs = {4, 3, 2};
-        else if (proc_count == 32)
-          procs = {4, 4, 2};
-        else if (proc_count == 48)
-          procs = {4, 4, 3};
-      }
+      // if (cfg_.solver.decomposition)
+      //   procs = *cfg_.solver.decomposition;
+      // else {
+      //   if (auto proc_count = std::thread::hardware_concurrency();
+      //     proc_count == 12)
+      //     procs = {2, 2, 3};
+      //   else if (proc_count == 24)
+      //     procs = {4, 3, 2};
+      //   else if (proc_count == 32)
+      //     procs = {4, 4, 2};
+      //   else if (proc_count == 48)
+      //     procs = {4, 4, 3};
+      // }
 
       so_uptr<net_t, HYPRE_Real> pressure;
       HYPRE_Real residual = std::numeric_limits<HYPRE_Real>::quiet_NaN();
       HYPRE_Int iters = 0;
-
-
-
 
       std::cout << "matrix\n";
       fmt::print("  decompose {} {} procs...", procs.prod(), procs);
 
       auto [nrows, mapping] = pni_.generate_mapping(procs);
 
-      std::cout
-        << " done\n"
-        << "  input build...";
-
+      fmt::print(
+        " done\n  input build ({}-bit, {}-bit)...", sizeof(idx1d_t)*8, sizeof(HYPRE_BigInt)*8
+      );
 
       system::print_memory("PRE input", hypre::hypre_print_level);
 
@@ -560,13 +472,9 @@ namespace xpm
         }
       }
 
-      // std::cout << '\n';
-
       {
-        auto [inlet, outlet] = pni_.flow_rates(pressure, cfg_.macro_mult, single_phase_conductance{&pn_, 
-          [this](voxel_t i) {
-            return cfg_.image.darcy.info[img_.phase[i]].perm;
-          }
+        auto [inlet, outlet] = pni_.flow_rates(pressure, cfg_.macro_mult, single_phase_conductance{&pn_,
+          [this](voxel_t i) { return cfg_.image.darcy.info[img_.phase[i]].perm; }
         });
 
         using namespace presets;
@@ -577,11 +485,9 @@ namespace xpm
         };
 
         std::cout << fmt::format(
-          // "microprs perm: {:.6f} mD\n"
           "  inlet perm: {:.6f} mD\n"
           "  outlet perm: {:.6f} mD\n"
           "  residual: {:.4g}, iterations: {}\n\n",
-          // settings_.darcy.perm_single/darcy_to_m2*1000,
           petrophysics_summary_.perm_total[0],
           petrophysics_summary_.perm_total[1],
           residual, iters);

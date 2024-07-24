@@ -831,6 +831,22 @@ namespace xpm
 
         macro_network_->RemovePart(macro_network_->GetParts()->GetLastProp3D());
       }
+
+      else if (name == "decomposition") {
+        auto [nrows, mapping] = model_.pni().generate_mapping(model_.cfg().solver.decomposition);
+
+        vtkNew<vtkLookupTable> lut;
+        dpl::vtk::PopulateLutRedWhiteBlue(lut);
+        lut->SetTableRange(0, model_.cfg().solver.decomposition.prod() - 1);
+
+        decomposition_map map{&pni(), &mapping};
+
+        InitNetworkImage(
+          [this](voxel_t v) { return pni().connected(v) && img().is_darcy(v); },
+          map, lut, lut);
+
+        macro_network_->RemovePart(macro_network_->GetParts()->GetLastProp3D());
+      }
       else if (name == "phase" || name == "phases") {
         vtkNew<vtkLookupTable> lut_image, lut_network;
 
@@ -1184,37 +1200,43 @@ namespace xpm
       }
     };
 
+    struct decomposition_map
+    {
+      pore_network_image* pni;
+      rows_mapping* mapping;
+
+      auto operator()(macro_voxel_t auto i) const {
+        const int idx = std::ranges::lower_bound( 
+          mapping->block_rows,
+          mapping->forward[pni->net(i)],
+          {},
+          [](const dpl::hypre::index_range& r) -> idx1d_t { return r.lower; }
+        ) - mapping->block_rows.begin();
+
+        return pni->connected(i) ? idx : std::numeric_limits<HYPRE_Real>::quiet_NaN();  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+      }
+
+      auto operator()(throat_t) const {
+        return std::numeric_limits<HYPRE_Real>::quiet_NaN();
+      }
+    };
+
     struct pressure_map
     {
       pore_network_image* pni;
-      dpl::so_uptr<net_t, HYPRE_Real>* data;
+      dpl::so_uptr<net_t, HYPRE_Real>* values;
 
       auto operator()(macro_voxel_t auto i) const {
-        return pni->connected(i) ? (*data)[pni->net(i)] : std::numeric_limits<HYPRE_Real>::quiet_NaN();
+        return pni->connected(i) ? (*values)[pni->net(i)] : std::numeric_limits<HYPRE_Real>::quiet_NaN();
       }
 
       auto operator()(throat_t i) const {
         auto [l, r] = attrib::adj(pni->pn(), i);
 
         return pni->connected(l)
-          ? ((*data)[pni->net(l)] + (*data)[pni->net(r)])/2
+          ? ((*values)[pni->net(l)] + (*values)[pni->net(r)])/2
           : std::numeric_limits<HYPRE_Real>::quiet_NaN();
       }
-
-      // auto operator()(voxel_t i) const {
-      //   return pni->connected(i) ? (*pressure)[pni->net(i)] : std::numeric_limits<double>::quiet_NaN();
-      //
-      //   pni().connected(voxel_t{idx1d})
-      //         ?
-      //           /*0*/
-      //           pressure[pni().net(voxel_t{idx1d})]
-      //           
-      //           // (log10(model_.settings().darcy.perm(img().phase[voxel_t{idx1d}])) - log10(minPERM.perm))/(
-      //           //   
-      //           //   log10(maxPERM.perm) - log10(minPERM.perm))/1.25+0.1  /*/2+0.25*/
-      //
-      //         : std::numeric_limits<double>::quiet_NaN()
-      // }
     };
 
 
@@ -1252,7 +1274,12 @@ namespace xpm
     };
 
 
-    void InitNetworkImage(const auto& filter, const auto& map, vtkLookupTable* lut_img, vtkLookupTable* lut_network) { /* dpl::strong_vector<net_t, double> pressure*/
+    void InitNetworkImage(
+      const auto& voxel_filter,
+      const auto& map,
+      vtkLookupTable* lut_img,
+      vtkLookupTable* lut_network)
+    {
       {
         vtkSmartPointer<vtkActor> actor;
 
@@ -1287,7 +1314,7 @@ namespace xpm
             for (k = 0; k < img().dim().z(); ++k)
               for (j = 0; j < img().dim().y(); ++j)
                 for (i = 0; i < img().dim().x(); ++i, ++idx1d) {
-                  filter_cache[idx1d] = filter(idx1d);
+                  filter_cache[idx1d] = voxel_filter(idx1d);
                     // pni().connected(voxel_t{idx1d}) &&
                     // !(i < img().dim().x()/2.*1.25 &&
                     //   j > img().dim().y()/2./1.25 &&

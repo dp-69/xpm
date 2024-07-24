@@ -365,7 +365,7 @@ namespace xpm {
         }
       };
 
-      auto [nrows, mapping] = pni_->generate_mapping(*cfg_->solver.decomposition, filter);
+      auto [nrows, mapping] = pni_->generate_mapping(cfg_->solver.decomposition, filter);
       auto [nvalues, input] = pni_->generate_pressure_input(nrows, std::move(mapping.forward), cfg_->macro_mult, term, filter);
 
       auto hash = pressure_cache::hash(nvalues, input);
@@ -386,7 +386,7 @@ namespace xpm {
           auto t0 = high_resolution_clock::now();
           dpl::hypre::save_input(std::move(input), nrows, nvalues, mapping.block_rows, cfg_->solver.tolerance, cfg_->solver.max_iterations, 0, 0);
           auto t1 = high_resolution_clock::now();
-          std::system(fmt::format("mpiexec -np {} \"{}\" -s", cfg_->solver.decomposition->prod(), dpl::mpi::exec).c_str()); // NOLINT(concurrency-mt-unsafe)
+          std::system(fmt::format("mpiexec -np {} \"{}\" -s", cfg_->solver.decomposition.prod(), dpl::mpi::exec).c_str()); // NOLINT(concurrency-mt-unsafe)
           auto t2 = high_resolution_clock::now();
           std::tie(decomposed_pressure, std::ignore, std::ignore) = dpl::hypre::load_values(nrows);
 

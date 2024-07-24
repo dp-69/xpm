@@ -48,8 +48,8 @@
       "properties": {
         "cache": { "type": "object",  "description": "Caching of pressure solutions.",
           "properties": {
-            "use": { "type": "boolean", "default": true },
-            "save": { "type": "boolean", "default": true }
+            "use": { "type": "boolean", "default": false },
+            "save": { "type": "boolean", "default": false }
           }
         },
         "decomposition": { "type": "array", "items": { "type": "integer" }, "description": "Volume decomposition in 3 dimensions. MPI processor count is the product of 3 components.", "minItems": 3, "maxItems": 3 },
@@ -65,7 +65,7 @@
     "report": { "type": "object", "description": "Reporting properties.",
       "properties": {
         "display": { "type": "string", "description": "Display property of the 3D view.",
-          "enum": ["pressure", "saturation", "permeability", "phase", "velem"], "default": "saturation"
+          "enum": ["pressure", "saturation", "permeability", "phase", "velem", "decomposition"], "default": "saturation"
         },
         "invasion_percolation": { "type": "boolean", "description": "Simulate invasion percolation.", "default": true },
         "occupancy_images": { "type": "boolean", "description": "Write 3D image files for different occupancies.", "default": false },

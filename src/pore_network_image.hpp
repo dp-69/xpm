@@ -968,9 +968,9 @@ namespace xpm
 
       std::vector<pair> idx_to_block(*connected_count_);
 
-      dpl::idx1d_map block_idx1d{blocks}; /*<voxel_t>*/
+      dpl::idx1d_map block_idx1d{blocks};
 
-      auto eval_block = [&](const dpl::vector3d& pos) {
+      auto eval_block = [&](const dpl::vector3d& pos) {  // NOLINT(CppTooWideScope)
         dpl::vector3i block_idx = pos/block_size;
 
         return block_idx1d(
@@ -1289,15 +1289,14 @@ namespace xpm
                   macro_t adj_macro_idx{*velem};
 
                   // auto li = cell_size.x()/2;
-                  auto gi = term(idx1d);
+                  auto gd = term(idx1d);
 
-                  auto lj = r_ins(pn_, adj_macro_idx);
-                  auto gj = macro_term*term(adj_macro_idx);
+                  auto li = r_ins(pn_, adj_macro_idx);
+                  auto gi = macro_term*term(adj_macro_idx);
 
-                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - cell_size.x()/2 - lj);
-                  auto gt = gj;
+                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - cell_size.x()/2 - li);
                   
-                  auto coef = -1.0/(0.5/gi/cell_size.x() + lt/gt + lj/gj);
+                  auto coef = -1.0/(0.5/gd/cell_size.x() + lt/gi + li/gi);
 
                   builder.set(adj_macro_idx, idx1d, coef);
                 }

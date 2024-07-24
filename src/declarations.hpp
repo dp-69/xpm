@@ -785,15 +785,15 @@ namespace xpm
     double theta = 0;
 
     struct {
-      std::optional<dpl::vector3i> decomposition;
+      dpl::vector3i decomposition;
       HYPRE_Real tolerance = 1.e-20;
       HYPRE_Int max_iterations = 20;
       HYPRE_Int aggressive_levels = 0;
       HYPRE_Int print_level = 0;
 
       struct {
-        bool use = true;
-        bool save = true;
+        bool use = false;
+        bool save = false;
       } cache;
 
       void parse(wrapper<const json> j) {
