@@ -1206,7 +1206,7 @@ namespace xpm
       rows_mapping* mapping;
 
       auto operator()(macro_voxel_t auto i) const {
-        const int idx = std::ranges::lower_bound( 
+        const int idx = std::ranges::lower_bound(
           mapping->block_rows,
           mapping->forward[pni->net(i)],
           {},

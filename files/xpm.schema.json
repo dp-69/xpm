@@ -53,13 +53,13 @@
           }
         },
         "decomposition": { "type": "array", "items": { "type": "integer" }, "description": "Volume decomposition in 3 dimensions. MPI processor count is the product of 3 components.", "minItems": 3, "maxItems": 3 },
-        "tolerance": {  "type": "number", "description": "The convergence tolerance." },
-        "max_iterations": { "type": "integer", "description": "Maximum number of iterations." },
+        "tolerance": {  "type": "number", "description": "The convergence tolerance.", "default": 1e-6 },
+        "max_iterations": { "type": "integer", "description": "Maximum number of iterations.", "default": 100 },
         "print_level": { "type": "integer", "description": "Requests automatic printing of setup and solve information.\n0 : no printout\n1 : print setup information\n2 : print solve information\n3 : print both setup and solve information", "minimum": 0, "maximum": 3, "default": 0 },
         "aggressive_number_of_levels": { "type": "integer", "description": "Defines the number of levels of aggressive coarsening.", "default": 0 }
       },
 
-      "required": ["tolerance", "decomposition", "max_iterations"]
+      "required": ["decomposition"]
     },
 
     "report": { "type": "object", "description": "Reporting properties.",

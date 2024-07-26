@@ -398,7 +398,7 @@ namespace xpm
       auto [nrows, mapping] = pni_.generate_mapping(procs);
 
       fmt::print(
-        " done\n  input build ({}-bit)...", /*{}-bit,  sizeof(idx1d_t)*8, */sizeof(HYPRE_BigInt)*8
+        " done\n  input build [{}-bit]...", /*{}-bit,  sizeof(idx1d_t)*8, */sizeof(HYPRE_BigInt)*8
       );
 
       system::print_memory("PRE input", hypre::hypre_print_level);

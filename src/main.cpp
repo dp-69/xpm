@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
    */
   constexpr auto author_note = 
 R"( * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
- *                Extensive Pore Modelling - xpm v0.2.3                *
+ *                Extensive Pore Modelling - xpm v0.2.4                *
  *                                                                     *
  *                        Copyright (c) 2024                           *
  *   Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh   *

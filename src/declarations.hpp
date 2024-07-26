@@ -785,9 +785,9 @@ namespace xpm
     double theta = 0;
 
     struct {
-      dpl::vector3i decomposition;
-      HYPRE_Real tolerance = 1.e-20;
-      HYPRE_Int max_iterations = 20;
+      dpl::vector3i decomposition{1};
+      HYPRE_Real tolerance = 1.e-6;
+      HYPRE_Int max_iterations = 100;
       HYPRE_Int aggressive_levels = 0;
       HYPRE_Int print_level = 0;
 
@@ -797,8 +797,8 @@ namespace xpm
       } cache;
 
       void parse(wrapper<const json> j) {
-        tolerance = (*j)["tolerance"];
-        max_iterations = (*j)["max_iterations"];
+        j.try_set(tolerance, "tolerance");
+        j.try_set(max_iterations, "max_iterations");
         j.try_set(aggressive_levels, "aggressive_number_of_levels");
         j.try_set(print_level, "print_level");
         j.try_set(decomposition, "decomposition");
@@ -809,7 +809,7 @@ namespace xpm
 
 
     struct {
-      bool invasion_percolation = true;
+      bool invasion_percolation = false;
       std::string display = "saturation";
       double sw_of_pc = 0.05;
       double sw_of_kr = 0.075;

@@ -12,6 +12,11 @@ xpm uses [pnextract](https://github.com/ImperialCollegeLondon/pnextract) to acqu
 
 xpm uses [vcpkg](https://vcpkg.io/) for dependency management.
 
+<!--
+> [!NOTE]
+> The decimal separator in your system (see region or locale settings) must be a period (.) and not a comma (,). This issue is typical of Cyrillic-based Windows or Ubuntu operating systems.
+-->
+
 ### Windows
 
 Commands are issued in an *x64 Native Tools Command Prompt for VS 2022*, which is part of the Microsoft Visual Studio toolset.
