@@ -526,7 +526,7 @@ namespace xpm
     auto parent = std::make_unique<idx1d_t[]>(size);
 
     std::fill_n(rank.get(), size, 0);
-    std::iota(parent.get(), parent.get() + size, 0);
+    std::iota(parent.get(), parent.get() + size, idx1d_t{0});
 
     return std::make_tuple(std::move(rank), std::move(parent));
   }
