@@ -67,7 +67,7 @@
         "display": { "type": "string", "description": "Display property of the 3D view.",
           "enum": ["pressure", "saturation", "permeability", "phase", "velem", "decomposition"], "default": "saturation"
         },
-        "invasion_percolation": { "type": "boolean", "description": "Simulate invasion percolation.", "default": true },
+        "invasion_percolation": { "type": "boolean", "description": "Simulate invasion percolation.", "default": false },
         "occupancy_images": { "type": "boolean", "description": "Write 3D image files for different occupancies.", "default": false },
         "capillary_pressure_sw_step": { "type": "number", "description": "Sw step in capillary pressure curves.", "default": 0.05 },
         "relative_permeability_sw_step": { "type": "number", "description": "Sw step in relative permeability curves.", "default": 0.075 }

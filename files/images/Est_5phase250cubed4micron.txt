@@ -1,0 +1,5 @@
+Size: 250 250 250
+res 4 mum
+pore=0
+solid=4
+micropores=1-3

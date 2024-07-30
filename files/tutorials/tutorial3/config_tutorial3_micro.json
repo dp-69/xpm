@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dp-69/xpm/main/files/xpm.schema.json",
+  "image": {
+    "path" : "../../images/Est_3phase250cubed4micron.raw",
+    "size" : [250, 250, 250],
+    "resolution": 4e-6,
+    "phase": {
+      "void" : 0, 
+      "solid" : 2
+    }  
+  },
+  "darcy": [
+    { "value": 1, "file": "../../results/Est_Nano/phi_k_kr_pc.json" 
+	}
+],
+  "solver" : {
+    "decomposition": [4, 3, 2]
+  },
+  "report" : {
+    "display" : "pressure"
+  }
+}

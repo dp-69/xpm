@@ -29,6 +29,10 @@ import stripJsonComments from 'strip-json-comments';
 //   return r !== undefined && r.includes(name) ? '' : '*opt* ';
 // }
 
+const valueMap = {
+  'tolerance' : x => x.toExponential(2)
+};
+
 function recordStr(key, value, level) {
   function typeStr(x) {
     switch (x.type) {
@@ -60,8 +64,11 @@ function recordStr(key, value, level) {
       e !== undefined  // ReSharper disable once QualifiedExpressionMaybeNull
         ? indentStr + `*values* : ${e.map(x => `\`"${x}"\``).join(' | ')}`
         : d !== undefined
-          ? indentStr + `*default* : \`${typeof d === 'string' ? `"${d}"` : d}\``
-          : '');
+          ? indentStr + `*default* : \`${                                   /* eslint-disable indent */
+              typeof d === 'string'                                                       
+                ? `"${d}"`                                                
+                : (valueMap[key] !== undefined ? valueMap[key](d) : d)}\``  /* eslint-enable indent */
+          : '');    
   }
 
 

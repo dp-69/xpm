@@ -12,7 +12,12 @@ export default [
       // "no-console" : "warn",
       "arrow-spacing": ["error", { "before": true, "after": true }],
       "dot-notation": "error",
-      "indent": ["warn", 2, { SwitchCase: 1 }],
+      "indent": ["warn", 2, { 
+        // ignoredNodes: [
+        //   "TemplateLiteral > *"
+        // ],
+        SwitchCase: 1
+      }],
       "quotes": ["error", "single"],
       "no-path-concat": "error",
       "no-undef": "error",

@@ -1,0 +1,4 @@
+Size: 191 191 192
+res 32 nm
+pore=0
+solid=255

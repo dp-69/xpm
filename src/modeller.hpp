@@ -293,7 +293,6 @@ namespace xpm
 
         if (!exists(input) && !input.has_extension())
           input.replace_extension("json");
-          // std::cout << ".json";
 
         std::cout << '\n';
       }

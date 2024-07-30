@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dp-69/xpm/main/files/xpm.schema.json",
+  "image": {
+    "path" : "../../images/Est_Nano.raw",
+    "size" : [191, 191, 192],
+    "resolution": 32e-9,
+    "phase": {
+      "void" : 0, 
+      "solid" : 255
+    }  
+  },
+  "macro" : {
+    "contact_angle" : 59 
+  },
+  "solver" : {
+    "decomposition": [4, 3, 2]
+  },
+  "report" : {
+    "display" : "saturation", 
+    "invasion_percolation" : true,
+    "capillary_pressure_sw_step": 0.025,
+    "relative_permeability_sw_step": 0.075,
+	  "max_capillary_pressure" : 1e7
+  }
+}
