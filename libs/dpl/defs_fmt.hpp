@@ -34,7 +34,7 @@ template <>
 struct fmt::formatter<std::filesystem::path> : formatter<std::string_view>
 {
   template <typename FormatContext>
-  auto format(const std::filesystem::path& path, FormatContext& ctx) {
+  auto format(const std::filesystem::path& path, FormatContext& ctx) const {
     return formatter<std::string_view>::format(path.string(), ctx);
   }
 };
@@ -43,7 +43,7 @@ template <typename Tag>
 struct fmt::formatter<dpl::so_integer<Tag>> : formatter<typename Tag::type>
 {
   template <typename FormatContext>
-  auto format(dpl::so_integer<Tag> si, FormatContext& ctx) {
+  auto format(dpl::so_integer<Tag> si, FormatContext& ctx) const {
     return formatter<typename Tag::type>::format(*si, ctx);
   }
 };
@@ -57,7 +57,7 @@ struct fmt::formatter<dpl::vector_n<T, 3>>
   }
 
   template <typename FormatContext>
-  auto format(const dpl::vector_n<T, 3>& v, FormatContext& ctx) {
+  auto format(const dpl::vector_n<T, 3>& v, FormatContext& ctx) const {
     return fmt::format_to(ctx.out(), "({}, {}, {})", v.x(), v.y(), v.z());
   }
 };
