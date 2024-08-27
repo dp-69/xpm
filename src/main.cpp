@@ -59,27 +59,31 @@ int main(int argc, char* argv[])
     MPI_Init(&argc, &argv);
   #endif
 
-  /*
-   *
-   */
-  constexpr auto author_note = 
-R"( * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
- *                Extensive Pore Modelling - xpm v0.2.4                *
- *                                                                     *
- *                        Copyright (c) 2024                           *
- *   Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh   *
- *                                                                     *
- *                    https://github.com/dp-69/xpm                     *
- *                                                                     *
- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+  /* */
+  
+//   constexpr auto author_note = 
+// R"( * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+//  *                Extensive Pore Modelling - xpm v0.2.4                *
+//  *                                                                     *
+//  *                        Copyright (c) 2024                           *
+//  *   Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh   *
+//  *                                                                     *
+//  *                    https://github.com/dp-69/xpm                     *
+//  *                                                                     *
+//  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+//
+// )";
+
+      constexpr auto author_note = 
+R"(      ~ Extensive Pore Modelling v0.2.5, Copyright (c) 2024 ~
+  Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh
+                     ~ github.com/dp-69/xpm ~
 
 )";
 
   std::cout << author_note;
 
-  /*
-   *
-   */
+  /* */
 
 
   dpl::mpi::exec = argv[0];
