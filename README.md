@@ -21,12 +21,13 @@ xpm uses [vcpkg](https://vcpkg.io/) for dependency management.
 
 Commands are issued in an *x64 Native Tools Command Prompt for VS 2022*, which is part of the Microsoft Visual Studio toolset.
 
-> [Step 2](#W2) assumes `C:\` as the starting directory and may take at least an hour to complete.<br/>
-> [Step 3](#W3) can be performed from any location.
-
 1. Download and install [Microsoft MPI](https://www.microsoft.com/en-us/download/details.aspx?id=57467)
 
-2. <a id="W2"></a> Clone vcpkg and install xpm dependencies 
+2. <a id="W2"></a> Clone vcpkg and install xpm dependencies
+
+> [!IMPORTANT]
+> Assumes `C:\` as the starting directory. May take at least an hour to complete.
+
 ```cmd
 git clone https://github.com/microsoft/vcpkg
 cd vcpkg
@@ -36,6 +37,13 @@ vcpkg.exe install vtk[qt] qtcharts hypre boost-intrusive boost-iostreams boost-g
 ```
 
 3. <a id="W3"></a> Clone and build xpm
+
+> [!NOTE]
+> Can be performed from any location.<br/>
+
+> [!IMPORTANT]
+> Modify the path `"C:/vcpkg/scripts/buildsystems/vcpkg.cmake"` in the `xpm/CMakePresets.json` file accordingly if [Step 2](#W2) is not performed in `C:\`.
+
 ```cmd
 git clone https://github.com/dp-69/xpm
 cd xpm
@@ -53,9 +61,6 @@ xpm.exe
 
 Commands are issued from a terminal.
 
-> [Step 2](#U2) assumes home directory `~` as the starting directory and may take at least an hour to complete.<br/>
-> [Step 3](#U3) can be performed from any location.
-
 1. Install required Ubuntu packages
 ```cmd
 sudo apt install     \
@@ -72,10 +77,15 @@ sudo apt install     \
   cmake              \
   linux-libc-dev     \
   python3-jinja2     \
+  bison flex         \
   openmpi-bin        
 ```
 
-2. <a id="U2"></a> Clone vcpkg and install xpm dependencies 
+2. <a id="U2"></a> Clone vcpkg and install xpm dependencies
+
+> [!IMPORTANT]
+> Assumes home directory `~` as the starting directory. May take at least an hour to complete.
+
 ```cmd
 git clone https://github.com/microsoft/vcpkg
 cd vcpkg
@@ -85,6 +95,13 @@ git clone -b xpm https://github.com/dp-69/vcpkg-ports ports-xpm
 ```
 
 3. <a id="U3"></a> Clone and build xpm
+
+> [!NOTE]
+> Can be performed from any location.<br/>
+
+> [!IMPORTANT]
+> Modify the value `"~/vcpkg/scripts/buildsystems/vcpkg.cmake"` in the `xpm/CMakePresets.json` file accordingly if [Step 2](#U2) is not performed in home directory `~`.
+
 ```cmd
 git clone https://github.com/dp-69/xpm
 cd xpm
