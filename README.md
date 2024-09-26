@@ -112,7 +112,7 @@ cmake --build --preset=lin-rel
 4. Execute xpm
 ```cmd
 cd build/Release/bin
-./xpm
+./xpm config.json
 ```
 
 ## Copyright
