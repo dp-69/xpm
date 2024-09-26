@@ -1283,10 +1283,12 @@ namespace xpm
       {
         vtkSmartPointer<vtkActor> actor;
 
-        std::tie(actor, macro_colors) = xpm::CreateNodeActor(pn(), lut_network, map);
+        std::tie(actor, macro_colors) = xpm::CreateNodeActor(
+          pn(), lut_network, map, std::pow(model_.cfg().macro_mult, 0.25));
         macro_network_->AddPart(actor);
 
-        std::tie(actor, throat_colors) = xpm::CreateThroatActor(pn(), lut_network, map);
+        std::tie(actor, throat_colors) = xpm::CreateThroatActor(
+          pn(), lut_network, map, std::pow(model_.cfg().macro_mult, 0.25));
         macro_network_->AddPart(actor);
       }
 

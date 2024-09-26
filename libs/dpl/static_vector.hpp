@@ -427,8 +427,8 @@ namespace dpl
     // return p0.y() + (p1 - p0).slope()*(arg - p0.x());
   }
 
-  template <typename T>
-  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::linear_t = extrapolant::linear) {
+  template <typename T, size_t Extent = std::dynamic_extent>
+  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, extrapolant::linear_t = extrapolant::linear) {
     if (arg <= curve.front().x())
       return solve(curve[0], curve[1], arg);
 
@@ -439,8 +439,8 @@ namespace dpl
     return solve(*(iter - 1), *iter, arg);
   }
 
-  template <typename T>
-  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::flat_t) {
+  template <typename T, size_t Extent = std::dynamic_extent>
+  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, extrapolant::flat_t) {
     if (arg <= curve.front().x())
       return curve.front().y();
 
@@ -451,8 +451,8 @@ namespace dpl
     return solve(*(iter - 1), *iter, arg);
   }
 
-  template <typename T>
-  auto solve(std::span<const vector_n<T, 2>> curve, const auto arg, extrapolant::flat_t, lerp_base::log10_t, lerp_base::linear_t) {
+  template <typename T, size_t Extent = std::dynamic_extent>
+  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, extrapolant::flat_t, lerp_base::log10_t, lerp_base::linear_t) {
     if (arg <= curve.front().x())
       return curve.front().y();
 

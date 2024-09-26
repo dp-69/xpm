@@ -69,7 +69,11 @@ namespace xpm
     };
   }
   
-  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(const pore_network& pnm, vtkLookupTable* lut, const auto& scalar_map) {
+  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateNodeActor(
+    const pore_network& pnm,
+    vtkLookupTable* lut,
+    const auto& scalar_map,
+    double r_mult) {
     vtkNew<vtkPolyData> polydata;
       
     vtkNew<vtkSphereSource> cylinder;
@@ -105,7 +109,7 @@ namespace xpm
       
     for (macro_t i{0}; i < pnm.node_count(); ++i) {
       points->InsertNextPoint(attrib::pos(pnm, i));
-      scale_arr->InsertNextTuple1(attrib::r_ins(pnm, i));
+      scale_arr->InsertNextTuple1(r_mult*attrib::r_ins(pnm, i));
       scalar_arr->InsertNextTuple1(scalar_map(i));
     }
       
@@ -125,7 +129,11 @@ namespace xpm
     return {actor, scalar_arr};
   }
 
-  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(const pore_network& pn, vtkLookupTable* lut, const auto& color_map) {
+  std::tuple<vtkSmartPointer<vtkActor>, vtkFloatArray*> CreateThroatActor(
+    const pore_network& pn,
+    vtkLookupTable* lut,
+    const auto& color_map,
+    double r_mult) {
     vtkNew<vtkPolyData> polydata;
       
     vtkNew<vtkCylinderSource> cylinder;
@@ -174,7 +182,11 @@ namespace xpm
         
         points->InsertNextPoint(l_pos);
         orient_array->InsertNextTuple(angles_for_j_norm(lr_vec));
-        scale_array->InsertNextTuple(dpl::vector3d{r_ins(pn, i), lr_vec.length(), r_ins(pn, i)});
+        scale_array->InsertNextTuple(dpl::vector3d{
+          r_mult*r_ins(pn, i),
+          lr_vec.length(),
+          r_mult*r_ins(pn, i)
+        });
         color_array->InsertNextTuple1(color_map(i));
       }
 
