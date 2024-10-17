@@ -536,7 +536,6 @@ namespace dpl
     /* inner direction */
     static constexpr auto non_zero_component = std::integral_constant<int, is_upper ? -1 : 1>{};
     static constexpr auto normal = vector3i{dim, non_zero_component};
-    /* */
   };
 
   template<int dim>

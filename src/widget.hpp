@@ -930,6 +930,9 @@ namespace xpm
       //     occupancy_arrays_.macro[i] = 0;
       // }
 
+      auto dir = std::filesystem::path{dpl::mpi::exec}.replace_filename("results")/model_.cfg().image.path.stem();
+      create_directories(dir);
+
       if (model_.cfg().report.invasion_percolation) {
         if (!pressure)
           model_.compute_pressure();
@@ -938,11 +941,14 @@ namespace xpm
           std::ranges::all_of(
             model_.cfg().image.darcy.span(),
             [](const darcy_info& d) { return bool{d.pc_to_sw[0]}; })
-        )
+        ) {
           LaunchInvasion();
+        }
       }
       else {
         pc_axis_y_->setRange(1, 1000);
+
+        std::ofstream{dir/"phi_k_kr_pc.json"} << model_.petrophysics_json().dump(2);
       }
     }
 
@@ -1159,6 +1165,19 @@ namespace xpm
         while (invasion_future.wait_for(std::chrono::milliseconds{1500}) != std::future_status::ready)
           update();
         update();
+
+        {
+          using namespace std;
+          auto dir = filesystem::path{dpl::mpi::exec}.replace_filename("results")/model_.cfg().image.path.stem();
+          
+          ofstream{dir/"pc_primary.txt"} << model_.pc_to_plain<true>();
+          ofstream{dir/"pc_secondary.txt"} << model_.pc_to_plain<false>();
+          
+          ofstream{dir/"kr_primary.txt"} << model_.kr_to_plain<true>();
+          ofstream{dir/"kr_secondary.txt"} << model_.kr_to_plain<false>();
+
+          ofstream{dir/"phi_k_kr_pc.json"} << model_.petrophysics_json().dump(2);
+        }
 
         std::cout << "\ndone (invasion percolation)\n";
       });

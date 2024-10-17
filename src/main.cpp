@@ -39,14 +39,6 @@ int main(int argc, char* argv[])
   //   [](std::uint8_t v) { return /*v < 50 ? 0 : */v; });
   //
   // getchar();
-  
-  // for (auto lul : std::ranges::iota_view(xpm::voxel_t{0}, 10)) {
-  //   std::cout << *lul;
-  // }
-
-  // int p = 3;
-
-  // using namespace std::string_literals;
 
   if (argc == 2 && !std::strcmp(argv[1], "-s")) {
     MPI_Init(&argc, &argv);
@@ -59,37 +51,19 @@ int main(int argc, char* argv[])
     MPI_Init(&argc, &argv);
   #endif
 
-  /* */
-  
-//   constexpr auto author_note = 
-// R"( * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-//  *                Extensive Pore Modelling - xpm v0.2.4                *
-//  *                                                                     *
-//  *                        Copyright (c) 2024                           *
-//  *   Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh   *
-//  *                                                                     *
-//  *                    https://github.com/dp-69/xpm                     *
-//  *                                                                     *
-//  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-//
-// )";
-
-      constexpr auto author_note = 
-R"(      ~ Extensive Pore Modelling v0.2.5, Copyright (c) 2024 ~
-  Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh
-                     ~ github.com/dp-69/xpm ~
-
-)";
+  constexpr auto author_note = 
+    "      ~ Extensive Pore Modelling v0.2.6, Copyright (c) 2024 ~\n"
+    "  Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh\n"
+    "                     ~ github.com/dp-69/xpm ~\n\n";
 
   std::cout << author_note;
 
-  /* */
-
+  using std::filesystem::path;
 
   dpl::mpi::exec = argv[0];
   auto cmdl = argh::parser(argc, argv);
 
-  std::filesystem::path input;
+  path input;
   cmdl(1, "config.json") >> input;
 
   try {
@@ -104,12 +78,11 @@ R"(      ~ Extensive Pore Modelling v0.2.5, Copyright (c) 2024 ~
         modeller.prepare();
         modeller.compute_pressure();
 
-        auto dir =
-          std::filesystem::path(dpl::mpi::exec)
-            .replace_filename("results")/modeller.cfg().image.path.stem();
+        auto dir = path{dpl::mpi::exec}.replace_filename("results")/modeller.cfg().image.path.stem();
 
         create_directories(dir);
 
+        // TODO: deprecated
         {
           nlohmann::json pp_j;
           pp_j["total_poro"] = modeller.petrophysics_summary().total_porosity;
