@@ -41,15 +41,14 @@
 #include <vtkTextProperty.h>
 #include <vtkViewport.h>
 
-
 #ifdef __cpp_lib_format
   #include <format>
 #else
   #include <fmt/format.h>
-  // #include <boost/format.hpp>
 #endif
 
 #include <array>
+#include <numbers>
 
 namespace dpl::vtk
 {
@@ -91,11 +90,9 @@ namespace dpl::vtk
       viewport_ = renderer;
     }
 
-    
-
     template <int span_dim_idx>
     void BuildGridlines(sdim<3, span_dim_idx>, double min, double step, int count) {
-      static constexpr auto run_dim_idx = third<rel.i, span_dim_idx>();
+      static constexpr auto run_dim_idx = third<rel.i, span_dim_idx>();  // NOLINT(CppInconsistentNaming)
       
       vector3d r;
 
@@ -103,9 +100,10 @@ namespace dpl::vtk
 
       auto point_idx = points_->GetNumberOfPoints();
 
-      for (auto i = 0; i < count; ++i) {
-        r[run_dim_idx] = /* bounds[run_dim_idx*2] + */ min + step*i;
-        r[span_dim_idx] = bounds_[span_dim_idx*2];
+      for (int i = 0; i < count; ++i) {
+        r[run_dim_idx] = min + step*i;
+        
+        r[span_dim_idx] = bounds_[span_dim_idx*2];  // NOLINT(bugprone-implicit-widening-of-multiplication-result)
         points_->InsertNextPoint(r);
 
         r[span_dim_idx] = bounds_[span_dim_idx*2 + 1];
@@ -162,47 +160,12 @@ namespace dpl::vtk
       coord->SetValue(r);
       face_triangle_display[2] = coord->GetComputedDoubleViewportValue(viewport_);
 
-      // r[rel.k] = bounds_[rel.k*2];
-      // coord->SetValue(r);
-      // face_triangle_display[3] = coord->GetComputedDoubleViewportValue(viewport_);
-
-      //
-      // int on_screen = 0;
-      // for (int i = 0; i < 4; ++i) {
-      //   if (0 <= face_triangle_display[i].x() && face_triangle_display[i].x() <= viewport_size.x() &&
-      //       0 <= face_triangle_display[i].y() && face_triangle_display[i].y() <= viewport_size.y())
-      //     ++on_screen;
-      // }
       
-      // if (on_screen >= 3)
       gridlines_actor_->SetVisibility(
         sface.non_zero_component*
         operation::cross::z(
           face_triangle_display[1] - face_triangle_display[0],
           face_triangle_display[2] - face_triangle_display[1]) < 0);
-      // else {
-      //   auto* cmr = viewport_->GetActiveCamera();
-      //   gridlines_actor_->SetVisibility(
-      //     (vector3d_map{cmr->GetPosition()} - vector3d_map{cmr->GetFocalPoint()})
-      //       .normalise().dot(face.normal) > 0);
-      // }
-
-      // if ((face_idx == 0)) {
-      //   // std::cout << boost::format("%f\n") % 
-      //   //   vector3d{coord->GetComputedWorldValue(viewport_)};
-      //   //   face_triangle_display[0];
-      //
-      //     auto* cmr = viewport_->GetActiveCamera();
-      //
-      //     vector3d_map pos{cmr->GetPosition()};
-      //   vector3d_map focal{cmr->GetFocalPoint()};
-      //   
-      //   std::cout << boost::format("angle = %f; cos = %f;\n")
-      //   % (std::acos((pos - focal).normalise().dot(face.normal))/3.14159*180.0 - 90)
-      //   % (pos - focal).normalise().dot(face.normal);
-      //
-      //   // gridlines_actor_->SetVisibility(false);
-      // }
     }
   };
 
@@ -246,8 +209,7 @@ namespace dpl::vtk
     vector3d step_;
     vector3i count_;
     
-
-    static constexpr auto PI = 3.14159265359;
+    static constexpr auto PI = std::numbers::pi_v<double>;
 
     static vector2i GetAlignment(vector2d v) {
       static constexpr auto vertical_narrow_factor = 1.2*PI/16;//PI/16;
@@ -804,3 +766,45 @@ namespace dpl::vtk
     }
   };
 }
+
+
+
+
+
+// r[rel.k] = bounds_[rel.k*2];
+// coord->SetValue(r);
+// face_triangle_display[3] = coord->GetComputedDoubleViewportValue(viewport_);
+
+//
+// int on_screen = 0;
+// for (int i = 0; i < 4; ++i) {
+//   if (0 <= face_triangle_display[i].x() && face_triangle_display[i].x() <= viewport_size.x() &&
+//       0 <= face_triangle_display[i].y() && face_triangle_display[i].y() <= viewport_size.y())
+//     ++on_screen;
+// }
+
+// if (on_screen >= 3)
+
+// else {
+//   auto* cmr = viewport_->GetActiveCamera();
+//   gridlines_actor_->SetVisibility(
+//     (vector3d_map{cmr->GetPosition()} - vector3d_map{cmr->GetFocalPoint()})
+//       .normalise().dot(face.normal) > 0);
+// }
+
+// if ((face_idx == 0)) {
+//   // std::cout << boost::format("%f\n") % 
+//   //   vector3d{coord->GetComputedWorldValue(viewport_)};
+//   //   face_triangle_display[0];
+//
+//     auto* cmr = viewport_->GetActiveCamera();
+//
+//     vector3d_map pos{cmr->GetPosition()};
+//   vector3d_map focal{cmr->GetFocalPoint()};
+//   
+//   std::cout << boost::format("angle = %f; cos = %f;\n")
+//   % (std::acos((pos - focal).normalise().dot(face.normal))/3.14159*180.0 - 90)
+//   % (pos - focal).normalise().dot(face.normal);
+//
+//   // gridlines_actor_->SetVisibility(false);
+// }

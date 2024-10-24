@@ -127,7 +127,52 @@ namespace dpl::vtk
       vector3d pos;
       
       idx1d_t idx1d;
-      
+
+      idx1d_t faces_count = 0;
+
+      for (e2 = 0; e2 < e2_count; ++e2)
+        for (e1 = 0; e1 < e1_count; ++e1) {
+          e0 = 0;
+
+          idx1d = map_idx(ijk);
+
+          if constexpr (!sface.is_upper)
+            if (filter(idx1d))
+              ++faces_count;
+
+          for (; e0 < e0_count - 1; ++e0) {
+            idx1d = map_idx(ijk);
+            bool filtered = filter(idx1d);
+
+            auto adj_idx1d = idx1d + adj_step;
+            bool adj_filtered = filter(adj_idx1d);
+
+            if (filtered != adj_filtered) {
+              if constexpr (sface.is_upper) {
+                if (filtered)
+                  ++faces_count;
+              }
+              else {
+                if (adj_filtered)
+                  ++faces_count;
+              }
+            }
+          }
+
+
+          if constexpr (sface.is_upper) {
+            idx1d = map_idx(ijk);
+            
+            if (filter(idx1d))
+              ++faces_count;
+          }
+        }
+
+      this->points_->SetNumberOfPoints(faces_count);
+      this->original_indices_.resize(faces_count);
+
+      idx1d_t face_idx = 0;
+
       for (e2 = 0; e2 < e2_count; ++e2)
         for (e1 = 0; e1 < e1_count; ++e1) {
           e0 = 0;
@@ -140,8 +185,12 @@ namespace dpl::vtk
               pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
               pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion) 
 
-              this->points_->InsertNextPoint(pos);
-              this->original_indices_.push_back(idx1d);
+              this->points_->SetPoint(face_idx, pos);
+              this->original_indices_[face_idx] = idx1d;
+              ++face_idx;
+              
+              // this->points_->InsertNextPoint(pos);
+              // this->original_indices_.push_back(idx1d);
             }
           }
           
@@ -159,14 +208,22 @@ namespace dpl::vtk
 
               if constexpr (sface.is_upper) {
                 if (filtered) {
-                  this->points_->InsertNextPoint(pos);
-                  this->original_indices_.push_back(idx1d);
+                  this->points_->SetPoint(face_idx, pos);
+                  this->original_indices_[face_idx] = idx1d;
+                  ++face_idx;
+
+                  // this->points_->InsertNextPoint(pos);
+                  // this->original_indices_.push_back(idx1d);
                 }
               }
               else {
                 if (adj_filtered) {
-                  this->points_->InsertNextPoint(pos);
-                  this->original_indices_.push_back(adj_idx1d);
+                  this->points_->SetPoint(face_idx, pos);
+                  this->original_indices_[face_idx] = adj_idx1d;
+                  ++face_idx;
+                  
+                  // this->points_->InsertNextPoint(pos);
+                  // this->original_indices_.push_back(adj_idx1d);
                 }
               }
             }
@@ -180,15 +237,95 @@ namespace dpl::vtk
               pos[rel.i] = (e0_count)*cell_size[rel.i];
               pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
               pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+
+              this->points_->SetPoint(face_idx, pos);
+              this->original_indices_[face_idx] = idx1d;
+              ++face_idx;
               
-              this->points_->InsertNextPoint(pos);
-              this->original_indices_.push_back(idx1d);
+              // this->points_->InsertNextPoint(pos);
+              // this->original_indices_.push_back(idx1d);
             }
           }
         }
 
-      this->color_arr_->SetNumberOfTuples(this->points_->GetNumberOfPoints());
+      this->color_arr_->SetNumberOfTuples(faces_count);
+      // this->color_arr_->SetNumberOfTuples(this->points_->GetNumberOfPoints());
     }
+    
+    // void Populate(const vector3i& cells, const vector3d& cell_size, const auto& filter) {
+    //   idx1d_map<idx1d_t> map_idx{cells};
+    //   vector_n<idx1d_t, 3> ijk;
+    //   
+    //   auto [e0, e1, e2] = rel.tie(ijk);
+    //   auto [e0_count, e1_count, e2_count] = rel.tie(cells);
+    //   
+    //   auto adj_step = map_idx(rel.i);
+    //
+    //   vector3d pos;
+    //   
+    //   idx1d_t idx1d;
+    //   
+    //   for (e2 = 0; e2 < e2_count; ++e2)
+    //     for (e1 = 0; e1 < e1_count; ++e1) {
+    //       e0 = 0;
+    //
+    //       idx1d = map_idx(ijk);
+    //
+    //       if constexpr (!sface.is_upper) {
+    //         if (filter(idx1d)) {
+    //           pos[rel.i] = 0; //(0)*cell_size[e1_dim];
+    //           pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+    //           pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion) 
+    //
+    //           this->points_->InsertNextPoint(pos);
+    //           this->original_indices_.push_back(idx1d);
+    //         }
+    //       }
+    //       
+    //       for (; e0 < e0_count - 1; ++e0) {
+    //         idx1d = map_idx(ijk);
+    //         bool filtered = filter(idx1d);
+    //
+    //         auto adj_idx1d = idx1d + adj_step;
+    //         bool adj_filtered = filter(adj_idx1d);
+    //
+    //         if (filtered != adj_filtered) {
+    //           pos[rel.i] = (e0 + 1.0)*cell_size[rel.i];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+    //           pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+    //           pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+    //
+    //           if constexpr (sface.is_upper) {
+    //             if (filtered) {
+    //               this->points_->InsertNextPoint(pos);
+    //               this->original_indices_.push_back(idx1d);
+    //             }
+    //           }
+    //           else {
+    //             if (adj_filtered) {
+    //               this->points_->InsertNextPoint(pos);
+    //               this->original_indices_.push_back(adj_idx1d);
+    //             }
+    //           }
+    //         }
+    //       }
+    //
+    //
+    //       if constexpr (sface.is_upper) {
+    //         idx1d = map_idx(ijk);
+    //         
+    //         if (filter(idx1d)) {
+    //           pos[rel.i] = (e0_count)*cell_size[rel.i];
+    //           pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+    //           pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+    //           
+    //           this->points_->InsertNextPoint(pos);
+    //           this->original_indices_.push_back(idx1d);
+    //         }
+    //       }
+    //     }
+    //
+    //   this->color_arr_->SetNumberOfTuples(this->points_->GetNumberOfPoints());
+    // }
   };
 
 
