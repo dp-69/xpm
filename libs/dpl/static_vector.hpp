@@ -596,7 +596,7 @@ namespace dpl
       return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
     }
 
-    auto operator()(std::integral_constant<int, 0>) const { return 1; }
+    constexpr auto operator()(std::integral_constant<int, 0>) const { return R{1}; }
     auto operator()(std::integral_constant<int, 1>) const { return x_; }
     auto operator()(std::integral_constant<int, 2>) const { return xy_; }
   };

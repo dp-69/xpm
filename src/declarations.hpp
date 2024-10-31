@@ -813,6 +813,7 @@ namespace xpm
       std::string display = "saturation";
       double sw_of_pc = 0.05;
       double sw_of_kr = 0.075;
+      int upscale_factor = 1;
     } report;
 
 
@@ -842,6 +843,7 @@ namespace xpm
       j.try_set(report.sw_of_pc, "report", "capillary_pressure_sw_step");
       j.try_set(report.sw_of_kr, "report", "relative_permeability_sw_step");
       j.try_set(report.display, "report", "display");
+      j.try_set(report.upscale_factor, "report", "upscale_factor");
       j.try_set(report.invasion_percolation, "report", "invasion_percolation");
       j.try_set(max_pc, "max_capillary_pressure");
       j.try_set(macro_mult, "macro", "trans_multiplier");

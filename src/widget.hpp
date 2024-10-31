@@ -1313,6 +1313,110 @@ namespace xpm
 
       renderer_->AddActor(macro_network_);
 
+      
+
+      if (model_.cfg().report.upscale_factor > 1) {
+        auto UPSCALE_FACTOR = model_.cfg().report.upscale_factor;
+
+        auto original_cell_size = pn().physical_size.x()/img().dim().x();  // NOLINT(clang-diagnostic-implicit-int-float-conversion, cppcoreguidelines-narrowing-conversions)
+
+        auto new_dim = img().dim()/UPSCALE_FACTOR;
+        auto new_size = new_dim.prod();
+        auto new_cell_size = original_cell_size*UPSCALE_FACTOR;
+        
+        img_glyph_mapper_.Init(new_cell_size); /* scale_factor, needed for vtk 8.2 floating point arithmetics */
+      
+        {
+          dpl::so_uptr<voxel_t, bool> filter_cache{voxel_t{new_size}};
+          std::unordered_map<idx1d_t, float> colors;
+
+          {
+            idx3d_t ijk;
+            auto& [i, j, k] = ijk;
+            voxel_t idx1d{0};
+
+            idx3d_t ijk_shift;
+            auto& [ii, jj, kk] = ijk_shift;
+      
+            for (k = 0; k < new_dim.z(); ++k)
+              for (j = 0; j < new_dim.y(); ++j)
+                for (i = 0; i < new_dim.x(); ++i, ++idx1d) {
+                  auto original_ijk = ijk*UPSCALE_FACTOR;
+                  auto original_idx1d = img().idx_map(original_ijk);
+
+                  int count{0};
+                  int nan_count{0};
+                  double sum = 0.0;
+                  
+                  for (kk = 0; kk < UPSCALE_FACTOR; ++kk)
+                    for (jj = 0; jj < UPSCALE_FACTOR; ++jj)
+                      for (ii = 0; ii < UPSCALE_FACTOR; ++ii) {
+                        auto shift = img().idx_map(ijk_shift);      // img().idx_map(std::integral_constant<int, 0>{})*ii + // img().idx_map(std::integral_constant<int, 1>{})*jj + // img().idx_map(std::integral_constant<int, 2>{})*kk;
+
+                        if (voxel_filter(original_idx1d + shift)) {
+                          ++count;
+
+                          double value = map(original_idx1d + shift);
+                          if (std::isnan(value))
+                            ++nan_count;
+                          else
+                            sum += value;
+                        }
+                      }
+
+                  if (count) {
+                    filter_cache[idx1d] = true;
+
+                    if (count == nan_count) {
+                      colors[*idx1d] = std::numeric_limits<double>::quiet_NaN();
+                    }
+                    else
+                      colors[*idx1d] = sum/(count - nan_count);
+                  }
+                }
+          }
+      
+          cout << "3D faces...";
+      
+          using seconds = std::chrono::seconds;
+          using clock = std::chrono::high_resolution_clock;
+      
+          auto t0 = clock::now();
+      
+          img_glyph_mapper_.Populate(new_dim, new_cell_size, [&](idx1d_t i) {
+            return filter_cache[voxel_t{i}];
+          });
+      
+          std::cout << fmt::format(" done {}s\n\n", duration_cast<seconds>(clock::now() - t0).count());
+      
+          dpl::sfor<6>([&](auto face_idx) {
+            dpl::vtk::GlyphMapperFace<idx1d_t>& face = std::get<face_idx>(img_glyph_mapper_.faces_);
+      
+            for (vtkIdType i = 0; auto idx1d : face.GetIndices())
+              face.GetColorArray()->SetTypedComponent(i++, 0, colors[idx1d]);  // NOLINT(clang-diagnostic-implicit-float-conversion, clang-diagnostic-implicit-int-float-conversion)
+      
+            auto* glyphs = face.GetGlyphMapper();
+            auto* actor = face.GetActor();
+      
+            glyphs->SetLookupTable(lut_img);
+              
+            glyphs->SetColorModeToMapScalars();
+            glyphs->UseLookupTableScalarRangeOn();
+              
+            actor->SetMapper(glyphs);
+      
+            actor->GetProperty()->SetEdgeVisibility(false);
+            actor->GetProperty()->SetEdgeColor(dpl::vector3d{0.25});
+                
+            actor->GetProperty()->SetAmbient(0.5);
+            actor->GetProperty()->SetDiffuse(0.4);
+            actor->GetProperty()->BackfaceCullingOn();
+              
+            renderer_->AddActor(actor);
+          });
+        }
+      }
+      else
       {
         img_glyph_mapper_.Init(
           /*
@@ -1382,6 +1486,8 @@ namespace xpm
           });
         }
       }
+      
+      
       
       tidy_axes_.SetScale(1.e-6);
 
