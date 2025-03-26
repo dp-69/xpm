@@ -262,17 +262,12 @@ namespace xpm
     void init(const std::filesystem::path& cfg_path, nlohmann::json& j) {
       cfg_.parse(cfg_path, j);
 
-
       // for (voxel_ns::phase_t i{0}; i < cfg_.image.darcy.count; ++i) {
       //   for (int c = 0; c < 2; ++c)
       //     for (auto& p : cfg_.image.darcy.info[i].pc_to_sw[c] /*cfg_.image.darcy.info[i].pc_to_sw*/)
       //       for (int k = 0; k < *i; ++k)
       //         // p.x() *= 1.0;
       //         p.x() *= 1.2;    
-      //
-      //
-      //
-      //   // cfg_.image.darcy.info[i].kr = cfg_.primary.kr;
       // }
 
 

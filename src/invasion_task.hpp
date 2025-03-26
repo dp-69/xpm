@@ -189,7 +189,7 @@ namespace xpm {
         }
         else
           return state_->config(pni_->net(i)).layout() == phase_config::bulk_films()
-            ? eq_tr::conductance_films(theta_, eq_tr::area_films(theta_, state_->r_cap(pni_->net(i))))
+            ? eq_tr::conductance_films(theta_, eq_tr::area_corners(theta_, state_->r_cap(pni_->net(i))))
             : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni_->pn(), i)));
       }
 
@@ -200,7 +200,7 @@ namespace xpm {
         }
         else
           return state_->config(i).layout() == phase_config::bulk_films()
-            ? eq_tr::conductance_films(theta_, eq_tr::area_films(theta_, state_->r_cap(i)))
+            ? eq_tr::conductance_films(theta_, eq_tr::area_corners(theta_, state_->r_cap(i)))
             : eq_tr::conductance_single(eq_tr::area(attrib::r_ins(pni_->pn(), i)));
       }
 
@@ -459,6 +459,8 @@ namespace xpm {
 
       so_uptr<phase_t, double> inv_poro(darcy_span.size(), 0);
 
+      const double cell_volume = (pn_->physical_size/img_->dim()).prod();
+      
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
@@ -467,15 +469,21 @@ namespace xpm {
         for (k = 0; k < img_->dim().z(); ++k)
           for (j = 0; j < img_->dim().y(); ++j)
             for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
-              if (pni_->connected(idx1d)) { // TODO BUG: Early primary termination
+              if (pni_->connected(idx1d)) {
                 phase_t p = img_->phase[idx1d];
-                inv_poro[p] += darcy_span[p].poro;
-                queue.insert(idx1d, darcy_r_cap(darcy_span[p]));
+                
+                if (has_films(pni_->net(idx1d))) {
+                  inv_poro[p] += darcy_span[p].poro;
+                  queue.insert(idx1d, darcy_r_cap(darcy_span[p]));  
+                }
+                else {
+                  inv_vol0 += cell_volume*darcy_span[p].poro;      
+                }
               }
       }
 
 
-      const double cell_volume = (pn_->physical_size/img_->dim()).prod();
+      
       auto eval_inv_volume = [&](double r_cap_global) {
         double vol = 0.0;
         for (phase_t i{0}; i < darcy_span.size(); ++i)
@@ -489,7 +497,7 @@ namespace xpm {
 
       auto eval_pc_point = [&] {
         return vector2d{
-          eval_inv_volume(state_.r_cap_global) / total_pore_volume_,
+          eval_inv_volume(state_.r_cap_global)/total_pore_volume_,
           state_.pc_global()
         };
       };
@@ -599,18 +607,22 @@ namespace xpm {
           ranges::max(darcy_span | views::transform([=](const darcy_info& d) { return 1/darcy_r_cap(d); }))
         );
 
-        const double step = pow(10, (log10(max_pc) - log10(topmost_pc))/steps);
-
-        for (int i = 0; i < steps; ++i) {
-          state_.r_cap_global *= step;
-          last_pc_point_ = eval_pc_point();
-          secondary_.pc.push_back(last_pc_point_);
-          if (i%2 != 0)
-            write_occupancy_image(last_pc_point_.x());
+        if (const double step = pow(10, (log10(max_pc) - log10(topmost_pc))/steps); step > 0) {
+          auto r_cap = state_.r_cap_global;
+          
+          for (int i = 0; i < steps; ++i) {
+            r_cap *= step;
+            if (auto p = eval_pc_point(); p.y() < cfg_->max_pc) {
+              state_.r_cap_global = r_cap;
+              last_pc_point_ = p;
+              secondary_.pc.push_back(last_pc_point_);
+              if (i%2 != 0)
+                write_occupancy_image(last_pc_point_.x());
+            }
+          }
         }
 
         ++progress_idx_;
-
 
         // if (true)
         { /* Relative permeabilty */
@@ -625,7 +637,8 @@ namespace xpm {
               break;
 
             if (auto sw = eval_inv_volume(1/pc)/total_pore_volume_;
-              sw - last_kr_sw > cfg_->report.sw_of_kr)
+              sw - last_kr_sw > cfg_->report.sw_of_kr &&
+              pc < cfg_->max_pc)
             {
               state_.r_cap_global = 1/pc;
               last_kr_sw = sw;
@@ -951,7 +964,7 @@ namespace xpm {
           progress_percolation(net, r_cap);
 
           inv_vol_coefs[0] += volume(pn_, macro);
-          inv_vol_coefs[2] -= volume(pn_, macro)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, macro));
+          inv_vol_coefs[2] -= volume(pn_, macro)*eq_tr::area_corners(theta)/eq_tr::area(r_ins(pn_, macro));
           
           for (edge_t vu : g_.edges(vertex_t(*net)))
             if (net_t u_net_idx{*target(vu, g_)}; u_net_idx == outlet_idx || pni_->is_macro(u_net_idx)) { // macro-macro
@@ -1012,7 +1025,7 @@ namespace xpm {
           progress_percolation(local, r_cap);
 
           inv_vol_coefs[0] += volume(pn_, local);
-          inv_vol_coefs[2] -= volume(pn_, local)*eq_tr::area_films(theta)/eq_tr::area(r_ins(pn_, local));
+          inv_vol_coefs[2] -= volume(pn_, local)*eq_tr::area_corners(theta)/eq_tr::area(r_ins(pn_, local));
 
           if (pn_->inner_node(r))
             if (auto r_net = pni_->net(r); !explored[r_net]) {

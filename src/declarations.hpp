@@ -225,12 +225,12 @@ namespace xpm
         return r_ins/(cos(theta) - sin(theta)/sqrt_3);
       }
 
-      static double area_films(double theta, double r_cap = 1) { // TODO: replace with area_corners_valv
-        return sqr(r_cap)*(
-          -0.5435164422364771 + 3*theta + 1.7320508075688772*std::cos(2*theta) +
-          1.7320508075688772*std::sin(0.5235987755982988 - 2*theta)
-        );
-      }
+      // static double area_films(double theta, double r_cap = 1) { // TODO: replace with area_corners_valv
+      //   return sqr(r_cap)*(
+      //     -0.5435164422364771 + 3*theta + 1.7320508075688772*std::cos(2*theta) +
+      //     1.7320508075688772*std::sin(0.5235987755982988 - 2*theta)
+      //   );
+      // }
 
       // static double r_cap_piston_with_films(double theta, double r_ins = 1) {  // TODO: replace with Valvatne
       //   return r_ins/(std::cos(theta) + 0.759835685652*std::sqrt(1.04719755120 - theta + std::cos(theta)*std::sin(theta)));          

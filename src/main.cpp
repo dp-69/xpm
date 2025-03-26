@@ -51,12 +51,12 @@ int main(int argc, char* argv[])
     MPI_Init(&argc, &argv);
   #endif
 
-  constexpr auto author_note = 
-    "      ~ Extensive Pore Modelling v0.2.6, Copyright (c) 2024 ~\n"
+  constexpr auto AUTHOR_NOTE = 
+    "      ~ Extensive Pore Modelling v0.2.7, Copyright (c) 2024 ~\n"
     "  Dmytro Petrovskyy, Julien Maes, Hannah P. Menke, Kamaljit Singh\n"
     "                     ~ github.com/dp-69/xpm ~\n\n";
 
-  std::cout << author_note;
+  std::cout << AUTHOR_NOTE;
 
   using std::filesystem::path;
 

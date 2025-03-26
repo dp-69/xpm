@@ -100,11 +100,9 @@ namespace xpm
       val = strtoull(ptr, &ptr, 10);
     }
 
-    #ifdef __linux__
-    static void parse_text(char* &ptr, size_t& val) { // for Ubuntu
-      val = strtoull(ptr, &ptr, 10);
+    static void parse_text(char* &ptr, unsigned long& val) {
+      val = strtoul(ptr, &ptr, 10);
     }
-    #endif
 
     static void parse_text(char* &ptr, double& val) {
       val = strtod(ptr, &ptr);
