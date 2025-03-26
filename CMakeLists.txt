@@ -45,10 +45,10 @@ if(Qt6_FOUND)
   qt_standard_project_setup()
   message("Qt6_DIR: " ${Qt6_DIR})
   message("Qt6_VERSION: " ${Qt6_VERSION})
-else()
-  find_package(Qt5 COMPONENTS Core Gui Widgets Charts REQUIRED) #Charts
-  message("Qt5_DIR: " ${Qt5_DIR})
-  message("Qt5_VERSION: " ${Qt5_VERSION})
+#else()
+#  find_package(Qt5 COMPONENTS Core Gui Widgets Charts REQUIRED) #Charts
+#  message("Qt5_DIR: " ${Qt5_DIR})
+#  message("Qt5_VERSION: " ${Qt5_VERSION})
 endif()
 
 
@@ -126,38 +126,39 @@ if(Qt6_FOUND)
         $<TARGET_FILE_DIR:xpm>/styles/
     )
   endif()
-else()
-  target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Charts)
+#else()
+#  target_link_libraries(xpm PUBLIC Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Charts)
 endif()
 
+target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES})
+vtk_module_autoinit(TARGETS xpm MODULES VTK::RenderingFreeType) # Needed in Ubuntu
 
-
-if(VTK_VERSION VERSION_LESS "8.90.0")
-  message("VTK_USE_FILE: " ${VTK_USE_FILE})
-  include(${VTK_USE_FILE})
-
-  target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES}
-    vtkCommonColor
-    vtkCommonCore
-    vtkFiltersModeling
-    vtkFiltersSources
-    vtkChartsCore
-    vtkImagingCore
-    vtkIOImage
-    vtkInteractionStyle
-    vtkInteractionWidgets
-    vtkRenderingAnnotation    
-    vtkRenderingContextOpenGL2
-    vtkRenderingCore
-    vtkRenderingFreeType
-    vtkRenderingGL2PSOpenGL2
-    vtkRenderingOpenGL2
-    vtkRenderingVolumeOpenGL2
-    vtkGUISupportQt)
-else()
-  target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES})
-  vtk_module_autoinit(TARGETS xpm MODULES ${VTK_LIBRARIES})
-endif()
+#if(VTK_VERSION VERSION_LESS "8.90.0")
+#  message("VTK_USE_FILE: " ${VTK_USE_FILE})
+#  include(${VTK_USE_FILE})
+#
+#  target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES}
+#    vtkCommonColor
+#    vtkCommonCore
+#    vtkFiltersModeling
+#    vtkFiltersSources
+#    vtkChartsCore
+#    vtkImagingCore
+#    vtkIOImage
+#    vtkInteractionStyle
+#    vtkInteractionWidgets
+#    vtkRenderingAnnotation    
+#    vtkRenderingContextOpenGL2
+#    vtkRenderingCore
+#    vtkRenderingFreeType
+#    vtkRenderingGL2PSOpenGL2
+#    vtkRenderingOpenGL2
+#    vtkRenderingVolumeOpenGL2
+#    vtkGUISupportQt)
+#else()
+#  target_link_libraries(xpm PRIVATE ${VTK_LIBRARIES})
+#  vtk_module_autoinit(TARGETS xpm MODULES ${VTK_LIBRARIES})
+#endif()
 
 
 
