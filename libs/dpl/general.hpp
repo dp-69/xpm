@@ -443,14 +443,14 @@ namespace dpl
   // struct are_arithmetic<V_> : std::is_arithmetic<V_> {};
 
 
-  template <typename U, typename V, typename... Rest>
-  struct are_assignable : std::bool_constant<std::is_assignable_v<U, V> && are_assignable<U, Rest...>::value> {};
-
-  template <typename U, typename V>
-  struct are_assignable<U, V> : std::is_assignable<U, V> {};
-
-  template <typename... Args>
-  inline constexpr bool are_assignable_v = are_assignable<Args...>::value;
+  // template <typename U, typename V, typename... Rest>
+  // struct are_assignable : std::bool_constant<std::is_assignable_v<U, V> && are_assignable<U, Rest...>::value> {};
+  //
+  // template <typename U, typename V>
+  // struct are_assignable<U, V> : std::is_assignable<U, V> {};
+  //
+  // template <typename... Args>
+  // inline constexpr bool are_assignable_v = are_assignable<Args...>::value;
 
 
   // template <int n, int i = 0> requires (n > 0)
@@ -463,14 +463,16 @@ namespace dpl
 
   template <int n, typename T = void, int i = 0> requires (n > 0)
   constexpr auto tail_aggregate(const auto& op, const auto& data) {
+    static constexpr std::integral_constant<int, i> _i; // NOLINT(CppInconsistentNaming);
+    
     if constexpr (i == n - 1) {
       if constexpr (std::is_same_v<T, void>)
-        return data[i];
+        return data[_i];
       else
-        return static_cast<T>(data[i]);
+        return static_cast<T>(data[_i]);
     }
     else
-      return op(data[i], tail_aggregate<n, T, i + 1>(op, data));
+      return op(data[_i], tail_aggregate<n, T, i + 1>(op, data));
   }
   
   template <int n0, int n1, typename Func>
@@ -523,46 +525,50 @@ namespace dpl
     //   task.wait();
   }
 
-  namespace extrapolant
-  {
-    static inline constexpr struct linear_t {} linear;
-    static inline constexpr struct flat_t {} flat;
-  }
+  // namespace extrapolant
+  // {
+  //   static inline constexpr struct linear_t {} linear;
+  //   static inline constexpr struct flat_t {} flat;
+  // }
+  //
+  // namespace lerp_base
+  // {
+  //   static inline constexpr struct linear_t {} linear;
+  //   static inline constexpr struct log10_t {} log10;
+  // };
 
-  namespace lerp_base
-  {
-    static inline constexpr struct linear_t {} linear;
-    static inline constexpr struct log10_t {} log10;
-  };
+  static inline constexpr struct linear_t {} linear;
+  static inline constexpr struct loga_t {} loga;
+  static inline constexpr struct flat_t {} flat;  
   
-  template <typename Base = lerp_base::linear_t, typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Base = linear_t, typename Extrapolant = linear_t, typename T>
   constexpr auto lerp(const T& a, const T& b, double t) {
-    if constexpr (std::is_same_v<Extrapolant, extrapolant::linear_t> && std::is_same_v<Base, lerp_base::linear_t>)
+    if constexpr (std::is_same_v<Extrapolant, linear_t> && std::is_same_v<Base, linear_t>)
       return a + (b - a)*t;
-    else if constexpr (std::is_same_v<Base, lerp_base::log10_t>)
-      return std::pow(10., dpl::lerp<lerp_base::linear_t, Extrapolant>(std::log10(a), std::log10(b), t));
-    else if constexpr (std::is_same_v<Extrapolant, extrapolant::flat_t>)
+    else if constexpr (std::is_same_v<Base, loga_t>)
+      return std::pow(10., dpl::lerp<linear_t, Extrapolant>(std::log10(a), std::log10(b), t));
+    else if constexpr (std::is_same_v<Extrapolant, flat_t>)
       return
         t < 0 ? a :
         t > 1 ? b :
-        dpl::lerp<Base, extrapolant::linear_t>(a, b, t);
+        dpl::lerp<Base, linear_t>(a, b, t);
     else
       static_assert(always_false<T>, "wrong extrapolant or base");
   }
 
-  template <typename Base = lerp_base::linear_t, typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Base = linear_t, typename Extrapolant = linear_t, typename T>
   constexpr auto lerp(T* ptr, double t) {
     return dpl::lerp<Base, Extrapolant>(ptr[0], ptr[1], t);
   }
 
-  template <typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Extrapolant = linear_t, typename T>
   constexpr auto lerp(bool log10, const T& a, const T& b, double t) {
     return log10
-      ? dpl::lerp<lerp_base::log10_t, Extrapolant>(a, b, t)
-      : dpl::lerp<lerp_base::linear_t, Extrapolant>(a, b, t);
+      ? dpl::lerp<loga_t, Extrapolant>(a, b, t)
+      : dpl::lerp<linear_t, Extrapolant>(a, b, t);
   }
 
-  template <typename Extrapolant = extrapolant::linear_t, typename T>
+  template <typename Extrapolant = linear_t, typename T>
   constexpr auto lerp(bool log10, T* ptr, double t) {
     return dpl::lerp<Extrapolant>(log10, ptr[0], ptr[1], t);
   }

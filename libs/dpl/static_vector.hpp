@@ -31,75 +31,37 @@
 
 namespace dpl
 {
-  static inline constexpr auto _0 = std::integral_constant<int, 0>{};
-
-  struct operation
+  namespace detail
   {
-    static constexpr auto add = [](const auto& l, const auto& r) { return l + r; };
-    static constexpr auto diff = [](const auto& l, const auto& r) { return l - r; };
-    static constexpr auto mult = [](const auto& l, const auto& r) { return l*r; };
-    static constexpr auto div = [](const auto& l, const auto& r) { return l/r; };
-    static constexpr auto min = [](const auto& l, const auto& r) { return std::min(l, r); };
-    
-    struct cross
+    struct op
     {
-      static constexpr auto x = [](const auto& a, const auto& b) {
-        return a[1]*b[2] - a[2]*b[1]; 
-      };
+      static constexpr auto add  = [](const auto& l, const auto& r) { return l + r; };
+      static constexpr auto diff = [](const auto& l, const auto& r) { return l - r; };
+      static constexpr auto mult = [](const auto& l, const auto& r) { return l*r; };
+      static constexpr auto div  = [](const auto& l, const auto& r) { return l/r; };
       
-      static constexpr auto y = [](const auto& a, const auto& b) {
-        return a[2]*b[0] - a[0]*b[2]; 
-      };
-
-      static constexpr auto z = [](const auto& a, const auto& b) {
-        return a[0]*b[1] - a[1]*b[0]; 
+      struct cross
+      {
+        static constexpr std::integral_constant<int, 0> _0;
+        static constexpr std::integral_constant<int, 1> _1;
+        static constexpr std::integral_constant<int, 2> _2;
+        
+        static constexpr auto x = [](const auto& a, const auto& b) { return a[_1]*b[_2] - a[_2]*b[_1]; };
+        static constexpr auto y = [](const auto& a, const auto& b) { return a[_2]*b[_0] - a[_0]*b[_2]; };
+        static constexpr auto z = [](const auto& a, const auto& b) { return a[_0]*b[_1] - a[_1]*b[_0]; };
       };
     };
-  };
+  }
   
   
   template <typename T_, int n_>
   class vector_n;
   
-
-  template <typename Derived_, typename T_, int i_>
-  class _vector_rec : public _vector_rec<Derived_, T_, i_ - 1> {};
-
-  template <typename Derived_, typename T_>
-  class _vector_rec<Derived_, T_, 0>
-  {
-  public:
-    auto& x() { return static_cast<Derived_*>(this)->template _get<0>(); }
-    constexpr auto& x() const { return static_cast<const Derived_*>(this)->template _get<0>(); }
-  };
-
-  template <typename Derived_, typename T_>
-  class _vector_rec<Derived_, T_, 1> : public _vector_rec<Derived_, T_, 0>
-  {
-  public:
-    auto& y() { return static_cast<Derived_*>(this)->template _get<1>(); }
-    constexpr auto& y() const { return static_cast<const Derived_*>(this)->template _get<1>(); }
-
-    constexpr auto slope() const { return this->y()/this->x(); }
-  };
-  
-  template <typename Derived_, typename T_>
-  class _vector_rec<Derived_, T_, 2> : public _vector_rec<Derived_, T_, 1>
-  {        
-  public:
-    auto& z() { return static_cast<Derived_*>(this)->template _get<2>(); }
-    constexpr auto& z() const { return static_cast<const Derived_*>(this)->template _get<2>(); }
-
-    // template <typename U_ = vector_n<T_, 3>>
-    // constexpr auto cross(const U_& r) const {
-    //   return vector_n<T_, 3>{operation::cross{}, *static_cast<const Derived_*>(this), r};
-    // }
-  };
-
-
   template <typename Derived_, typename T_, int n_>
-  class _vector_oper : public _vector_rec<Derived_, T_, n_ - 1>
+  class _vector_oper
   {
+    static constexpr std::integral_constant<int, 0> _0;
+    
     template <typename U_, typename Func_>
     constexpr auto _binary_op_impl_ptr(U_* r, const Func_& f) const {
       vector_n<decltype(f(T_{}, U_{})), n_> v;
@@ -120,115 +82,38 @@ namespace dpl
   public:
     using ScalarType = T_;
     
-    template <int i_>
-    auto& get() {
-      return static_cast<Derived_*>(this)->template _get<i_>();
-    }
-
-    template <int i_>
-    constexpr auto& get() const {
-      return static_cast<const Derived_*>(this)->template _get<i_>();
+    // template <int i>           auto& get()       { return static_cast<      Derived_*>(this)->template _get<i>(); }
+    // template <int i> constexpr auto& get() const { return static_cast<const Derived_*>(this)->template _get<i>(); }
+    
+    template <int i> auto& operator[](std::integral_constant<int, i>) {
+      return static_cast<Derived_*>(this)->template get<i>();
     }
     
-    template <int i>
-    auto& operator[](std::integral_constant<int, i>) {
-      return get<i>();
+    template <int i> constexpr auto& operator[](std::integral_constant<int, i>) const {
+      return static_cast<const Derived_*>(this)->template get<i>();
     }
-
-    template <int i>
-    constexpr auto& operator[](std::integral_constant<int, i>) const {
-      return get<i>();
-    }
-
-    template <typename U> requires std::is_integral_v<U>
-    auto& operator[](U i) {
-      return static_cast<Derived_*>(this)->_get(i);
-    }
-    
-    template <typename U> requires std::is_integral_v<U>
-    constexpr auto& operator[](U i) const {
-      return static_cast<const Derived_*>(this)->_get(i);
-    }
-
 
     template <typename U = void>
     constexpr auto prod() const /*-> std::conditional_t<std::is_same_v<U, void>, decltype(operation::mult(T_{}, T_{})), U>*/ {
-      return dpl::tail_aggregate<n_, U>(operation::mult, *this);
+      return dpl::tail_aggregate<n_, U>(detail::op::mult, *this);
     }
 
-    template <typename U = void>
-    constexpr auto sum() const /*-> std::conditional_t<std::is_same_v<U, void>, decltype(operation::mult(T_{}, T_{})), U>*/ {
-      return dpl::tail_aggregate<n_, U>(operation::add, *this);
-    }
-
-    // template <typename U_ = T_>
-    // constexpr auto min() const {
-    //   U_ val = (*this)[_0];
-    //   s_for<1, n_>([&](auto i) { val = std::min(val, (*this)[i]); });
-    //   return val;
-    // }
-
-    template <typename U_ = vector_n<T_, n_>>
-    constexpr auto dot(const U_& r) const {
-      return (*this*r).sum();
-    }
-
-    // template <typename U_>
-    // constexpr auto cross(const U_& r) const {
-    //   return vector_n<T_, n_>{operation::cross{}, *this, r};
-    // }
-
-    constexpr auto length() const {
-      if constexpr (std::is_arithmetic_v<T_>)
-        return std::sqrt(this->dot(*this));
-      else
-        return sqrt(this->dot(*this));
-    }
-    
-    constexpr auto normalise() const {
-      return *this/this->length();
-    }
-    
-    constexpr auto operator+(const auto& r) const { return _binary_op_impl(r, operation::add); }
-    constexpr auto operator-(const auto& r) const { return _binary_op_impl(r, operation::diff); }
-    constexpr auto operator*(const auto& r) const { return _binary_op_impl(r, operation::mult); }
-    constexpr auto operator/(const auto& r) const { return _binary_op_impl(r, operation::div); }
-
-    constexpr auto min() const {
-      auto min = (*this)[0];
-      
-      for (auto i = 1; i < n_; ++i)
-        min = std::min(min, (*this)[i]);
-
-      return min;
-    }
-
-    template <typename U = vector_n<T_, n_>>
-    constexpr auto min(const U& r) const {
-      return _binary_op_impl(r, operation::min);
-    }
-
-    constexpr auto max() const {
-      auto min = (*this)[0];
-      
-      for (auto i = 1; i < n_; ++i)
-        min = std::max(min, (*this)[i]);
-
-      return min;
-    }
+    constexpr auto operator+(const auto& r) const { return _binary_op_impl(r, detail::op::add); }
+    constexpr auto operator-(const auto& r) const { return _binary_op_impl(r, detail::op::diff); }
+    constexpr auto operator*(const auto& r) const { return _binary_op_impl(r, detail::op::mult); }
+    constexpr auto operator/(const auto& r) const { return _binary_op_impl(r, detail::op::div); }
   };
 
-  template <typename T, int i>
-  constexpr auto cross(const vector_n<T, i>& l, const vector_n<T, i>& r) {
-    return vector_n<T, i>{operation::cross{}, l, r};
+  template <typename T, int n>
+  constexpr auto cross(const vector_n<T, n>& lhs, const vector_n<T, n>& rhs) {
+    return vector_n<T, n>{detail::op::cross{}, lhs, rhs};
   }
 
-  template <typename T, int n>
-  constexpr int non_zero_idx(const vector_n<T, n>& v) {
-    for (auto i = 0; i < n; ++i)
-      if (v[i])
-        return i;
-
+  template <typename T>
+  constexpr int non_zero_idx(const vector_n<T, 3>& v) {
+    if (v.x) return 0;
+    if (v.y) return 1;
+    if (v.z) return 2;
     return -1;
   }
 
@@ -240,121 +125,225 @@ namespace dpl
   template <typename Derived, int n>
   constexpr auto operator/(double l, const _vector_oper<Derived, double, n>& r) { // TODO
     vector_n<double, n> v;
-    sfor<n>([&](auto i) { v[i] = l/r[i]; });
+    dpl::sfor<n>([&](auto i) { v[i] = l/r[i]; });
     return v;
   }
   
   template <typename Derived, typename T, int n>
   std::ostream& operator<<(std::ostream& os, const _vector_oper<Derived, T, n>& v) {
-    os << v[0];
-    sfor<1, n>([&](auto i) { os << ", " << v[i]; });
+              os << v[std::integral_constant<int, 0>{}];
+    if constexpr (n > 1)
+      os << ", " << v[std::integral_constant<int, 1>{}];
+    if constexpr (n > 2)
+      os << ", " << v[std::integral_constant<int, 2>{}];
+
     return os;
   }
   
-  template <typename T, int n>
-  class vector_n : public _vector_oper<vector_n<T, n>, T, n>
+
+  
+
+  
+  template <typename T>
+  class vector_n<T, 2> : public _vector_oper<vector_n<T, 2>, T, 2>
   {
-    T ptr_[n];
-
-    template <typename V, typename... Rest>
-    constexpr void _assign(const V& val, Rest... args) {
-      _get<n - sizeof...(Rest) - 1>() = val;
-      if constexpr (has_any_v<Rest...>)
-        _assign<Rest...>(args...);
-    }
-
-    template <int i>
-    constexpr auto& _get() {
-      return ptr_[i];
-    }
-
-    template <int i>
-    constexpr auto& _get() const {
-      return ptr_[i];
-    }
-
-    constexpr auto& _get(int i) {
-      return ptr_[i];
-    }
-
-    constexpr auto& _get(int i) const {
-      return ptr_[i];
-    }
-
-    friend class _vector_oper<vector_n, T, n>;
-    friend class _vector_rec<vector_n, T, 0>;
-    friend class _vector_rec<vector_n, T, 1>;
-    friend class _vector_rec<vector_n, T, 2>;
-
   public:
-    operator T*() { return ptr_; }
-    operator const T*() const { return ptr_; }
+    T x, y;
+
+    template <int i>
+    constexpr auto& get() {
+           if constexpr (i == 0) return x;
+      else if constexpr (i == 1) return y;
+    }
+
+    template <int i>
+    constexpr auto& get() const {
+           if constexpr (i == 0) return x;
+      else if constexpr (i == 1) return y;
+    }
+
+  private:
+    static constexpr std::integral_constant<int, 0> _0;
+    static constexpr std::integral_constant<int, 1> _1;
+    static constexpr std::integral_constant<int, 2> _2;
+    
+  public:
+    operator T*() { return &x; }
+    operator const T*() const { return &x; }
+
+    //       T* ptr()       { return &x; }
+    // const T* ptr() const { return &x; }
     
     vector_n() = default;
 
     template <typename U> requires (std::is_same_v<U, T> || std::is_arithmetic_v<U>)
     constexpr vector_n(const U val) {
-      sfor<n>([&](auto i) { ptr_[i] = val; });
+      x = val;
+      y = val;
     }
 
-    template <typename ...Args> requires (sizeof...(Args) == n && are_assignable_v<T&, Args...>)
-    constexpr vector_n(Args... args) {
-      _assign<Args...>(args...);
+    template <typename X, typename Y> requires (std::is_assignable_v<T&, X> && std::is_assignable_v<T&, Y>)
+    constexpr vector_n(const X x0, const Y y0) {
+      x = x0;
+      y = y0;
     }
-
-    template <typename Func> requires std::is_invocable_v<Func, std::integral_constant<int, 0>>
-    explicit constexpr vector_n(const Func& f)/* : ptr_{}*/ {
-      sfor<n>([&](auto i) { ptr_[i] = f(i); });
-    }
+    
+    template <typename Func> requires std::is_invocable_v<Func, decltype(_0)>
+    explicit constexpr vector_n(const Func& f) : x{f(_0)}, y{f(_1)} {}
 
     template <typename U, typename V, typename Func>
       requires std::is_invocable_v<Func, typename U::ScalarType, typename V::ScalarType>
     constexpr vector_n(
       const Func& f,
-      const _vector_oper<U, typename U::ScalarType, n>& l,
-      const _vector_oper<V, typename V::ScalarType, n>& r) {
-      sfor<n>([&](auto i) { ptr_[i] = f(l[i], r[i]); });
-    }
+      const _vector_oper<U, typename U::ScalarType, 2>& l,
+      const _vector_oper<V, typename V::ScalarType, 2>& r
+    ) : x{f(l[_0], r[_0])}, y{f(l[_1], r[_1])} {}
 
     template <typename U, typename V, typename Func> requires std::is_arithmetic_v<V>
     constexpr vector_n(
       const Func& f,
-      const _vector_oper<U, typename U::ScalarType, n>& l,
-      const V r) {
-      sfor<n>([&](auto i) { ptr_[i] = f(l[i], r); });
-    }
+      const _vector_oper<U, typename U::ScalarType, 2>& lhs,
+      const V rhs) : x{f(lhs[_0], rhs)}, y{f(lhs[_1], rhs)} {}
 
     template <typename Derived, typename U>
-    constexpr vector_n(const _vector_oper<Derived, U, n>& v) {
-      sfor<n>([&](auto i) { ptr_[i] = static_cast<T>(v[i]); });
+    constexpr vector_n(const _vector_oper<Derived, U, 2>& v)
+      : x{static_cast<T>(v[_0])}, y{static_cast<T>(v[_1])} {}
+    
+    template <int i, typename U = int>
+    explicit constexpr vector_n(std::integral_constant<int, i>, const U v = 1) {
+           if constexpr (i == 0) { x = v; y = 0; }
+      else if constexpr (i == 1) { x = 0; y = v; }
     }
     
-    template <typename U, typename V> requires (n == 3)
-    constexpr vector_n(operation::cross, const U& l, const V& r) {
-      ptr_[0] = operation::cross::x(l, r);
-      ptr_[1] = operation::cross::y(l, r);
-      ptr_[2] = operation::cross::z(l, r);
+    vector_n(auto* ptr) : x{ptr[0]}, y{ptr[1]} {}
+    vector_n(const auto* ptr) : x{ptr[0]}, y{ptr[1]} {}
+
+    auto length() const { return std::sqrt(x*x + y*y); }
+
+    auto normalise() const {
+      auto l = length();
+      return vector_n{x/l, y/l};
     }
+
+    constexpr auto slope() const { return y/x; }
+
+    constexpr auto min() const { return std::min(x, y); }
+    constexpr auto sum() const { return x + y; }
+  };
+
+  template <typename T>
+  class vector_n<T, 3> : public _vector_oper<vector_n<T, 3>, T, 3>
+  {
+  public:
+    T x, y, z;
+
+    template <int i>
+    constexpr auto& get() {
+           if constexpr (i == 0) return x;
+      else if constexpr (i == 1) return y;
+      else if constexpr (i == 2) return z;
+    }
+
+    template <int i>
+    constexpr auto& get() const {
+           if constexpr (i == 0) return x;
+      else if constexpr (i == 1) return y;
+      else if constexpr (i == 2) return z;
+    }
+    
+  private:
+    static constexpr std::integral_constant<int, 0> _0;
+    static constexpr std::integral_constant<int, 1> _1;
+    static constexpr std::integral_constant<int, 2> _2;
+
+
+  public:
+    operator T*() { return &x; }
+    operator const T*() const { return &x; }
+    
+    //       T* ptr()       { return &x; }
+    // const T* ptr() const { return &x; }
+    
+    vector_n() = default;
+
+    template <typename U> requires (std::is_same_v<U, T> || std::is_arithmetic_v<U>)
+    constexpr vector_n(const U val) {
+      x = val;
+      y = val;
+      z = val;
+    }
+
+    template <typename X, typename Y, typename Z> requires (
+      std::is_assignable_v<T&, X> &&
+      std::is_assignable_v<T&, Y> &&
+      std::is_assignable_v<T&, Z>)
+    constexpr vector_n(const X x0, const Y y0, const Z z0) {
+      x = x0;
+      y = y0;
+      z = z0;
+    }
+
+    // template <typename ...Args> requires (sizeof...(Args) == 3 && are_assignable_v<T&, Args...>) // TODO
+    // constexpr vector_n(Args... args) {
+    //   _assign<Args...>(args...);
+    // }
+
+    template <typename Func> requires std::is_invocable_v<Func, decltype(_0)>
+    explicit constexpr vector_n(const Func& f) : x{f(_0)}, y{f(_1)}, z{f(_2)} {}
+
+    template <typename U, typename V, typename Func>
+      requires std::is_invocable_v<Func, typename U::ScalarType, typename V::ScalarType>
+    constexpr vector_n(
+      const Func& f,
+      const _vector_oper<U, typename U::ScalarType, 3>& l,
+      const _vector_oper<V, typename V::ScalarType, 3>& r
+    ) : x{f(l[_0], r[_0])}, y{f(l[_1], r[_1])}, z{f(l[_2], r[_2])} {}
+
+    template <typename U, typename V, typename Func> requires std::is_arithmetic_v<V>
+    constexpr vector_n(
+      const Func& f,
+      const _vector_oper<U, typename U::ScalarType, 3>& lhs,
+      const V rhs) : x{f(lhs[_0], rhs)}, y{f(lhs[_1], rhs)}, z{f(lhs[_2], rhs)} {}
+
+    template <typename Derived, typename U>
+    constexpr vector_n(const _vector_oper<Derived, U, 3>& v)
+      : x{static_cast<T>(v[_0])}, y{static_cast<T>(v[_1])}, z{static_cast<T>(v[_2])} {}
+
+    template <typename U, typename V>
+    constexpr vector_n(detail::op::cross, const U& l, const V& r)
+      : x{detail::op::cross::x(l, r)},
+        y{detail::op::cross::y(l, r)},
+        z{detail::op::cross::z(l, r)} {}
 
     template <int i, typename U = int>
     explicit constexpr vector_n(std::integral_constant<int, i>, const U v = 1) {
-      sfor<n>([v, this]<int j> {
-        if constexpr (i == j)
-          ptr_[j] = v;
-        else
-          ptr_[j] = 0;
-      });
+           if constexpr (i == 0) { x = v; y = 0; z = 0; }
+      else if constexpr (i == 1) { x = 0; y = v; z = 0; }
+      else if constexpr (i == 2) { x = 0; y = 0; z = v; }
     }
     
-    vector_n(auto* ptr) {
-      sfor<n>([&](auto i) { ptr_[i] = ptr[i]; });
+    vector_n(auto* ptr) : x{ptr[0]}, y{ptr[1]}, z{ptr[1]} {}
+    vector_n(const auto* ptr) : x{ptr[0]}, y{ptr[1]}, z{ptr[1]} {}
+
+    template <typename Rhs = vector_n>
+    constexpr auto dot(const Rhs& rhs) const { return x*rhs.x + y*rhs.y + z*rhs.z; }
+
+    T length() const {
+      if constexpr (std::is_arithmetic_v<T>)
+        return std::sqrt(x*x + y*y + z*z);
+      else
+        return sqrt(x*x + y*y + z*z);
     }
 
-    vector_n(const auto* ptr) {
-      sfor<n>([&](auto i) { ptr_[i] = ptr[i]; });
+    auto normalise() const {
+      auto l = length();
+      return vector_n{x/l, y/l, z/l};
     }
+
+    constexpr auto min() const { return std::min(std::min(x, y), z); }
+    constexpr auto max() const { return std::max(std::max(x, y), z); }
+    constexpr auto sum() const { return x + y + z; }
   };
-
   
   
   template <typename T, int n>
@@ -362,30 +351,14 @@ namespace dpl
   {
     T* ptr_;
 
-    template <int i>
-    auto& _get() {
-      return ptr_[i];
-    }
+    
 
-    template <int i>
-    const auto& _get() const {
-      return ptr_[i];
-    }
-
-    auto& _get(int i) {
-      return ptr_[i];
-    }
-
-    const auto& _get(int i) const {
-      return ptr_[i];
-    }
-
-    friend class _vector_oper<vector_n_map, T, n>;
-    friend class _vector_rec<vector_n_map, T, 0>;
-    friend class _vector_rec<vector_n_map, T, 1>;
-    friend class _vector_rec<vector_n_map, T, 2>;
+    // friend class _vector_oper<vector_n_map, T, n>;
 
   public:
+    template <int i>       auto& get()       { return ptr_[i]; }
+    template <int i> const auto& get() const { return ptr_[i]; }
+    
     operator T*() { return ptr_; }
     operator const T*() const { return ptr_; }
 
@@ -393,74 +366,96 @@ namespace dpl
   };
    
 
+  
 
+  
   using vector2i = vector_n<int, 2>;
+  using vector2f = vector_n<float, 2>;
   using vector2d = vector_n<double, 2>;
   using vector2i_map = vector_n_map<int, 2>;
   using vector3i = vector_n<int, 3>;
+  using vector3f = vector_n<float, 3>;
   using vector3d = vector_n<double, 3>;
   using vector3i_map = vector_n_map<int, 3>;
   using vector3d_map = vector_n_map<double, 3>;
 
-
+  // template <size_t i, typename T, int n>
+  //   decltype(auto) get(const dpl::vector_n<T, n>& v) {
+  //          if constexpr (i == 0) return v.x;
+  //     else if constexpr (i == 1) return v.y;
+  //     else if constexpr (i == 2) return v.z;
+  //   }
+  //
+  //   template <size_t i, typename T, int n>
+  //   decltype(auto) get(dpl::vector_n<T, n>& v) {
+  //          if constexpr (i == 0) return v.x;
+  //     else if constexpr (i == 1) return v.y;
+  //     else if constexpr (i == 2) return v.z;
+  //   }
+  //
+  //   template <size_t i, typename T, int n>
+  //   decltype(auto) get(dpl::vector_n<T, n>&& v) {
+  //          if constexpr (i == 0) return v.x;
+  //     else if constexpr (i == 1) return v.y;
+  //     else if constexpr (i == 2) return v.z;
+  //   }
 
   template <typename T>
   auto solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, const auto arg) {
-    return p0.y() + (p1 - p0).slope()*(arg - p0.x());
+    return p0.y + (p1 - p0).slope()*(arg - p0.x);
   }
 
   template <typename T>
-  auto solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, const auto arg, lerp_base::log10_t, lerp_base::linear_t) {
-
+  auto solve(const vector_n<T, 2>& p0, const vector_n<T, 2>& p1, const auto arg, loga_t, linear_t) {
     /* linear-log scale
      *
-     * auto log_p0_y = std::log10(p0.y());
-     * auto slope = (std::log10(p1.y()) - log_p0_y)/(p1.x() - p0.x());
-     * return std::pow(10, log_p0_y + slope*(arg - p0.x()));
+     * auto log_p0_y = std::log10(p0.y);
+     * auto slope = (std::log10(p1.y) - log_p0_y)/(p1.x - p0.x);
+     * return std::pow(10, log_p0_y + slope*(arg - p0.x));
      *
      *
      */
 
-    auto slope = (p1.y() - p0.y())/(std::log10(p1.x()) - std::log10(p0.x()));
-    return p0.y() + slope*(std::log10(arg) - std::log10(p0.x()));
+    auto slope = (p1.y - p0.y)/(std::log10(p1.x) - std::log10(p0.x));
+    return p0.y + slope*(std::log10(arg) - std::log10(p0.x));
 
-    // return p0.y() + (p1 - p0).slope()*(arg - p0.x());
+    // return p0.y + (p1 - p0).slope()*(arg - p0.x);
   }
 
   template <typename T, size_t Extent = std::dynamic_extent>
-  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, extrapolant::linear_t = extrapolant::linear) {
-    if (arg <= curve.front().x())
+  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, linear_t = linear) {
+    if (arg <= curve.front().x)
       return solve(curve[0], curve[1], arg);
 
-    if (arg > curve.back().x())
+    if (arg > curve.back().x)
       return solve(curve[curve.size() - 2], curve[curve.size() - 1], arg);
 
-    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x(); });
+    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x; });
     return solve(*(iter - 1), *iter, arg);
   }
 
   template <typename T, size_t Extent = std::dynamic_extent>
-  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, extrapolant::flat_t) {
-    if (arg <= curve.front().x())
-      return curve.front().y();
+  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, flat_t) {
+    if (arg <= curve.front().x)
+      return curve.front().y;
 
-    if (arg > curve.back().x())
-      return curve.back().y();
+    if (arg > curve.back().x)
+      return curve.back().y;
 
-    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x(); });
+    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x; });
     return solve(*(iter - 1), *iter, arg);
   }
 
   template <typename T, size_t Extent = std::dynamic_extent>
-  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, extrapolant::flat_t, lerp_base::log10_t, lerp_base::linear_t) {
-    if (arg <= curve.front().x())
-      return curve.front().y();
+  auto solve(std::span<const vector_n<T, 2>, Extent> curve, const auto arg, flat_t, loga_t, linear_t) {
+    if (arg <= curve.front().x)
+      return curve.front().y;
 
-    if (arg > curve.back().x())
-      return curve.back().y();
+    if (arg > curve.back().x)
+      return curve.back().y;
 
-    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x(); });
-    return solve(*(iter - 1), *iter, arg, lerp_base::log10, lerp_base::linear);
+    auto iter = std::ranges::lower_bound(curve, arg, {}, [](const vector_n<T, 2>& p) { return p.x; });
+    return solve(*(iter - 1), *iter, arg, loga, linear);
   }
 
   // template <typename T>
@@ -475,26 +470,76 @@ namespace std
 {
   template <typename Type, int n>
   struct tuple_size<dpl::vector_n<Type, n>> : integral_constant<size_t, n> {};
+  
+  template <size_t i, typename T, int n>
+  struct tuple_element<i, dpl::vector_n<T, n>> { using type = T; };
+  
+  template <typename T, int n>
+  struct tuple_size<dpl::vector_n_map<T, n>> : integral_constant<size_t, n> {};    
+  
+  template <size_t i, typename T, int n>
+  struct tuple_element<i, dpl::vector_n_map<T, n>> { using type = T; };
 
-  template <size_t i, typename Type, int n>
-  struct tuple_element<i, dpl::vector_n<Type, n>> {
-    using type = Type;
-  };
-
-  template <typename Type, int n>
-  struct tuple_size<dpl::vector_n_map<Type, n>> : integral_constant<size_t, n> {};    
-
-  template <size_t i, typename Type, int n>
-  struct tuple_element<i, dpl::vector_n_map<Type, n>> {
-    using type = Type;
-  };
-
-  template <size_t i, typename Type, int n>
-  auto& get(const dpl::vector_n<Type, n>& v) {
-    return v.template get<i>();
+  /* 
+   * fix to support std::ranges::views::elements_view in c++20
+   *
+   * 
+   * template< class T, std::size_t N >
+   * concept  =
+   *     requires(T t) {
+   *         typename std::tuple_size<T>::type;
+   *         requires N < std::tuple_size_v<T>;
+   *         typename std::tuple_element_t<N, T>;
+   *         { std::get<N>(t) } -> std::convertible_to<const std::tuple_element_t<N, T>&>;
+   *     };
+   *
+   */
+  template <size_t i, typename T, int n>
+  const T& get(const dpl::vector_n<T, n>& v) {
+         if constexpr (i == 0) return v.x;
+    else if constexpr (i == 1) return v.y;
+    else if constexpr (i == 2) return v.z;
   }
+
+  // template <size_t i, typename T, int n>
+  // T& get(dpl::vector_n<T, n>& v) {
+  //        if constexpr (i == 0) return v.x;
+  //   else if constexpr (i == 1) return v.y;
+  //   else if constexpr (i == 2) return v.z;
+  // }
+  //
+  // template <size_t i, typename T, int n>
+  // T&& get(dpl::vector_n<T, n>&& v) {
+  //        if constexpr (i == 0) return v.x;
+  //   else if constexpr (i == 1) return v.y;
+  //   else if constexpr (i == 2) return v.z;
+  // }
 }
 // NOLINTEND(cert-dcl58-cpp)
+
+// namespace std
+// {
+//   template <size_t i, typename T, int n>
+//   decltype(auto) get(const dpl::vector_n<T, n>& v) {
+//          if constexpr (i == 0) return v.x;
+//     else if constexpr (i == 1) return v.y;
+//     else if constexpr (i == 2) return v.z;
+//   }
+//
+//   template <size_t i, typename T, int n>
+//   decltype(auto) get(dpl::vector_n<T, n>& v) {
+//          if constexpr (i == 0) return v.x;
+//     else if constexpr (i == 1) return v.y;
+//     else if constexpr (i == 2) return v.z;
+//   }
+//
+//   template <size_t i, typename T, int n>
+//   decltype(auto) get(dpl::vector_n<T, n>&& v) {
+//          if constexpr (i == 0) return v.x;
+//     else if constexpr (i == 1) return v.y;
+//     else if constexpr (i == 2) return v.z;
+//   }
+// }
 
 
 namespace dpl
@@ -585,7 +630,7 @@ namespace dpl
 
     template <typename T>
     idx1d_map(const vector_n<T, 3>& dim)
-      : x_(dim.x()), xy_(static_cast<R>(dim.x())*dim.y()) {}
+      : x_(dim.x), xy_(static_cast<R>(dim.x)*dim.y) {}
 
     R operator()(auto x, auto y, auto z) const {
       return static_cast<R>(x) + x_*y + xy_*z;
@@ -593,7 +638,7 @@ namespace dpl
 
     template <typename T>
     R operator()(const vector_n<T, 3>& v) const {
-      return static_cast<R>(v.x()) + x_*v.y() + xy_*v.z();
+      return static_cast<R>(v.x) + x_*v.y + xy_*v.z;
     }
 
     constexpr auto operator()(std::integral_constant<int, 0>) const { return R{1}; }

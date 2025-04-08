@@ -682,7 +682,7 @@ namespace xpm
 
         return std::filesystem::path{
           fmt::format("{}_{:d}x{:d}x{:d}_{}um{}",
-            stem, size.x(), size.y(), size.z(), resol, path.extension())
+            stem, size.x, size.y, size.z, resol, path.extension())
         };
       }
 
@@ -877,9 +877,9 @@ namespace xpm
     auto& [i, j, k] = ijk;
     voxel_t idx1d{0};
 
-    for (k = 0; k < dst_size.z(); ++k)
-      for (j = 0; j < dst_size.y(); ++j)
-        for (i = 0; i < dst_size.x(); ++i, ++idx1d)
+    for (k = 0; k < dst_size.z; ++k)
+      for (j = 0; j < dst_size.y; ++j)
+        for (i = 0; i < dst_size.x; ++i, ++idx1d)
           dst[*idx1d] = proj(src[*src_mapper(src_origin + ijk)]);
 
     std::ofstream{dst_path, std::ios::binary}

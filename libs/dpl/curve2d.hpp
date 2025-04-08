@@ -49,32 +49,32 @@ namespace dpl
 
       auto vec = storage;
 
-      if (vec.front().y() > vec.back().y())
+      if (vec.front().y > vec.back().y)
         std::ranges::reverse(vec);
 
       vec.resize(
-        std::ranges::unique(vec, {}, [](const vector2d& p) { return p.y(); })
+        std::ranges::unique(vec, {}, [](const vector2d& p) { return p.y; })
         .begin() - vec.begin());
 
       for (auto& p : vec)
-        std::swap(p.x(), p.y());
+        std::swap(p.x, p.y);
       return curve2d{std::move(vec)};
     }
 
-    auto solve(double value) const {
-      return dpl::solve(std::span{storage}, value, extrapolant::flat);
+    double solve(double value) const {
+      return dpl::solve(std::span{storage}, value, flat);
     }
 
-    auto solve(double value, lerp_base::log10_t, lerp_base::linear_t) const {
-      return dpl::solve(std::span{storage}, value, extrapolant::flat, lerp_base::log10, lerp_base::linear);
+    double solve(double value, loga_t, linear_t) const {
+      return dpl::solve(std::span{storage}, value, flat, loga, linear);
     }
 
-    auto operator()(double value) const {
+    double operator()(double value) const {
       return solve(value);
     }
 
-    auto operator()(double value, lerp_base::log10_t, lerp_base::linear_t) const {
-      return solve(value, lerp_base::log10, lerp_base::linear);
+    double operator()(double value, loga_t, linear_t) const {
+      return solve(value, loga, linear);
     }
 
     auto begin() const {
@@ -104,6 +104,6 @@ namespace dpl
 
   // inline void unique(curve2d& curve) {
   //   auto& vec = curve.storage;
-  //   vec.resize(std::ranges::unique(vec, {}, [](const vector2d& p) { return p.x(); }).begin() - vec.begin());
+  //   vec.resize(std::ranges::unique(vec, {}, [](const vector2d& p) { return p.x; }).begin() - vec.begin());
   // }
 }

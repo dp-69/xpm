@@ -237,6 +237,7 @@ namespace dpl::qt::property_editor
   template <typename> struct PropertyItemTraits {};
   template <> struct PropertyItemTraits<std::string> : PropertyItemTextEdit<std::string> {};
   template <> struct PropertyItemTraits<int> : PropertyItemTextEdit<int> {};
+  template <> struct PropertyItemTraits<float> : PropertyItemTextEdit<float> {};
   template <> struct PropertyItemTraits<double> : PropertyItemTextEdit<double> {};
 
   template<> struct PropertyItemTraits<bool>

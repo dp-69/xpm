@@ -39,6 +39,18 @@ namespace dpl::qt::property_editor
     static auto ToQString(bool value) { return QString::number(value); }
     static auto ToString(bool value) { return std::to_string(value); } 
   };
+
+  template<> struct ScalarConvert<float> {
+    static bool FromString(const QString& str, float& value) {
+      bool valid;
+      auto str_copy = str;
+      value = str_copy.replace(",", "").toFloat(&valid);
+      return valid;
+    }
+
+    static auto ToQString(float value) { return QString::number(value); }
+    static auto ToString(float value) { return std::to_string(value); } 
+  };
   
   template<> struct ScalarConvert<double> {
     static bool FromString(const QString& str, double& value) {

@@ -545,11 +545,11 @@ namespace xpm
           [this] { return dpl::vector2i{viewport()->width(), viewport()->height()}; },
           [this](const dpl::vector2i& v) {
             if (isMaximized() || isFullScreen())
-              setViewportWidth(v.x());
+              setViewportWidth(v.x);
             else {
               QSize desired{
-                width() + v.x() - viewport()->width(),
-                height() + v.y() - viewport()->height()
+                width() + v.x - viewport()->width(),
+                height() + v.y - viewport()->height()
               };
 
               setGeometry(
@@ -571,11 +571,11 @@ namespace xpm
   //   Type Get_() { return {widget->ViewportWidth(), widget->ViewportHeight()}; }
   //   void Set_(const Type& v) {
   //     if (widget->isMaximized())
-  //       widget->SetOpenGLWidgetWidth(v.x());
+  //       widget->SetOpenGLWidgetWidth(v.x);
   //     else {
   //       QSize desired = {
-  //         widget->width() + v.x() - widget->ViewportWidth(),
-  //         widget->height() + v.y() - widget->ViewportHeight()
+  //         widget->width() + v.x - widget->ViewportWidth(),
+  //         widget->height() + v.y - widget->ViewportHeight()
   //       };
   //
   //       widget->setGeometry(
@@ -1025,7 +1025,7 @@ namespace xpm
         double max_pc = 1/(0.7*eq_tr::r_cap_piston_with_films_valvatne(0, min_r_cap_throat));
         if (*darcy.count)
           max_pc = max(max_pc,
-            ranges::max(transform(darcy.span(), [](const darcy_info& d) { return d.pc_to_sw[0].back().x(); }))
+            ranges::max(transform(darcy.span(), [](const darcy_info& d) { return d.pc_to_sw[0].back().x; }))
           );
 
         pc_axis_y_->setRange(
@@ -1135,10 +1135,10 @@ namespace xpm
               secondary_.kr1->clear();
 
               for (auto p : task.primary().pc)
-                primary_.pc->append(p.x(), p.y());
+                primary_.pc->append(p.x, p.y);
 
               for (auto p : task.secondary().pc)
-                secondary_.pc->append(p.x(), p.y());
+                secondary_.pc->append(p.x, p.y);
 
               for (auto [sw, kro, krg] : task.primary().kr) {
                 primary_.kr0->append(sw, kro);
@@ -1318,7 +1318,7 @@ namespace xpm
       if (model_.cfg().report.upscale_factor > 1) {
         auto UPSCALE_FACTOR = model_.cfg().report.upscale_factor;
 
-        auto original_cell_size = pn().physical_size.x()/img().dim().x();  // NOLINT(clang-diagnostic-implicit-int-float-conversion, cppcoreguidelines-narrowing-conversions)
+        auto original_cell_size = pn().physical_size.x/img().dim().x;  // NOLINT(clang-diagnostic-implicit-int-float-conversion, cppcoreguidelines-narrowing-conversions)
 
         auto new_dim = img().dim()/UPSCALE_FACTOR;
         auto new_size = new_dim.prod();
@@ -1338,9 +1338,9 @@ namespace xpm
             idx3d_t ijk_shift;
             auto& [ii, jj, kk] = ijk_shift;
       
-            for (k = 0; k < new_dim.z(); ++k)
-              for (j = 0; j < new_dim.y(); ++j)
-                for (i = 0; i < new_dim.x(); ++i, ++idx1d) {
+            for (k = 0; k < new_dim.z; ++k)
+              for (j = 0; j < new_dim.y; ++j)
+                for (i = 0; i < new_dim.x; ++i, ++idx1d) {
                   auto original_ijk = ijk*UPSCALE_FACTOR;
                   auto original_idx1d = img().idx_map(original_ijk);
 
@@ -1424,7 +1424,7 @@ namespace xpm
            *
            * needed for vtk 8.2 floating point arithmetics
            */
-          /*1.0*/pn().physical_size.x()/img().dim().x()  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
+          /*1.0*/pn().physical_size.x/img().dim().x  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
         );
 
 
@@ -1436,14 +1436,14 @@ namespace xpm
             auto& [i, j, k] = ijk;
             voxel_t idx1d{0};
 
-            for (k = 0; k < img().dim().z(); ++k)
-              for (j = 0; j < img().dim().y(); ++j)
-                for (i = 0; i < img().dim().x(); ++i, ++idx1d) {
+            for (k = 0; k < img().dim().z; ++k)
+              for (j = 0; j < img().dim().y; ++j)
+                for (i = 0; i < img().dim().x; ++i, ++idx1d) {
                   filter_cache[idx1d] = voxel_filter(idx1d);
                     // pni().connected(voxel_t{idx1d}) &&
-                    // !(i < img().dim().x()/2.*1.25 &&
-                    //   j > img().dim().y()/2./1.25 &&
-                    //   k > img().dim().z()/2./1.1) &&
+                    // !(i < img().dim().x/2.*1.25 &&
+                    //   j > img().dim().y/2./1.25 &&
+                    //   k > img().dim().z/2./1.1) &&
                 }
           }
 
@@ -1492,9 +1492,9 @@ namespace xpm
       tidy_axes_.SetScale(1.e-6);
 
       bounds_ = {
-        0., pn().physical_size.x(),
-        0., pn().physical_size.y(),
-        0., pn().physical_size.z()};
+        0., pn().physical_size.x,
+        0., pn().physical_size.y,
+        0., pn().physical_size.z};
     }
   };
 }

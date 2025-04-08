@@ -127,7 +127,7 @@ namespace dpl::vtk
     }
 
     void RefreshVisibility() {
-      const vector2i_map viewport_size{viewport_->GetSize()};
+      const vector2i viewport_size{viewport_->GetSize()[0], viewport_->GetSize()[1]};
       
       if (viewport_size.sum() == 0)
         return;
@@ -163,7 +163,7 @@ namespace dpl::vtk
       
       gridlines_actor_->SetVisibility(
         sface.non_zero_component*
-        operation::cross::z(
+        detail::op::cross::z(
           face_triangle_display[1] - face_triangle_display[0],
           face_triangle_display[2] - face_triangle_display[1]) < 0);
     }
@@ -214,7 +214,7 @@ namespace dpl::vtk
     static vector2i GetAlignment(vector2d v) {
       static constexpr auto vertical_narrow_factor = 1.2*PI/16;//PI/16;
       
-      auto angle = std::atan2(-v.y(), -v.x()) + PI;
+      auto angle = std::atan2(-v.y, -v.x) + PI;
       
       if (angle < PI/8) // Left
         return {VTK_TEXT_LEFT, VTK_TEXT_CENTERED};
@@ -310,7 +310,7 @@ namespace dpl::vtk
         // auto viewport_p01 = (viewport_coord[1] - viewport_coord[0]);
         // auto viewport_p01_length = viewport_p01.length();
         auto viewport_axis_dir = (viewport_coord[1] - viewport_coord[0]).normalise(); //viewport_p01/viewport_p01_length;
-        auto viewport_tick_dir = vector2d{-viewport_axis_dir.y(), viewport_axis_dir.x()};
+        auto viewport_tick_dir = vector2d{-viewport_axis_dir.y, viewport_axis_dir.x};
 
         auto alignment = GetAlignment(viewport_tick_dir);
 
@@ -349,8 +349,8 @@ namespace dpl::vtk
           auto last_tick_step_viewport = t3 - t2;
 
           auto tick_step_viewport = vector2d{
-            std::min(std::abs(first_tick_step_viewport.x()), std::abs(last_tick_step_viewport.x())),
-            std::min(std::abs(first_tick_step_viewport.y()), std::abs(last_tick_step_viewport.y()))
+            std::min(std::abs(first_tick_step_viewport.x), std::abs(last_tick_step_viewport.x)),
+            std::min(std::abs(first_tick_step_viewport.y), std::abs(last_tick_step_viewport.y))
           };
           
           auto& text_actor = label_actors_[500 - 1]; // last text to test size
@@ -375,8 +375,8 @@ namespace dpl::vtk
           mapper->GetSize(renderer_, label_size);
 
           label_skip = std::min(
-            std::ceil((label_size.x() + 4)/tick_step_viewport.x()),
-            std::ceil((label_size.y() + 4)/tick_step_viewport.y()));
+            std::ceil((label_size.x + 4)/tick_step_viewport.x),
+            std::ceil((label_size.y + 4)/tick_step_viewport.y));
         }
         
         for (auto i = 0; i < count; i += label_skip) {
@@ -386,8 +386,8 @@ namespace dpl::vtk
           vector2d t0 = coord->GetComputedDoubleViewportValue(renderer_);
           auto t1 = t0 + viewport_tick_dir*tick_length;
           
-          axes_ticks_.points_->InsertNextPoint(t0.x(), t0.y(), 0.0);
-          axes_ticks_.points_->InsertNextPoint(t1.x(), t1.y(), 0.0);
+          axes_ticks_.points_->InsertNextPoint(t0.x, t0.y, 0.0);
+          axes_ticks_.points_->InsertNextPoint(t1.x, t1.y, 0.0);
           
           {
             auto& text_actor = label_actors_[visible_labels_++];
@@ -406,12 +406,12 @@ namespace dpl::vtk
             // mapper->SetInput((boost::format(format_ptr) % (r[run_dim]/scale_[run_dim])).str().c_str());
             #endif
             
-            mapper->GetTextProperty()->SetJustification(alignment.x());
-            mapper->GetTextProperty()->SetVerticalJustification(alignment.y());
+            mapper->GetTextProperty()->SetJustification(alignment.x);
+            mapper->GetTextProperty()->SetVerticalJustification(alignment.y);
             
             text_actor->GetPositionCoordinate()->SetValue(
-              t1.x() + viewport_tick_dir.x()*label_to_length,
-              t1.y() + viewport_tick_dir.y()*label_to_length);
+              t1.x + viewport_tick_dir.x*label_to_length,
+              t1.y + viewport_tick_dir.y*label_to_length);
             text_actor->VisibilityOn();
           }
         
@@ -424,42 +424,42 @@ namespace dpl::vtk
           auto& text_actor = title_actors_[visible_titles_++];
           auto* mapper = static_cast<vtkTextMapper*>(text_actor->GetMapper());
           mapper->SetInput(titles_[run_dim].c_str());
-          mapper->GetTextProperty()->SetJustification(alignment.x());
-          mapper->GetTextProperty()->SetVerticalJustification(alignment.y());
+          mapper->GetTextProperty()->SetJustification(alignment.x);
+          mapper->GetTextProperty()->SetVerticalJustification(alignment.y);
 
           coord->SetValue((p0 + p1)/2);
           vector2d axis_label_pos = coord->GetComputedDoubleViewportValue(renderer_);
         
           vector2d extra_shift{0};
 
-          if (alignment.x() == VTK_TEXT_LEFT)
-            extra_shift.x() = label_size.x() /*+ (run_dim == 1 ? 1 : 0)*/;
-          else if (alignment.x() == VTK_TEXT_RIGHT)
-            extra_shift.x() = -label_size.x() ;
+          if (alignment.x == VTK_TEXT_LEFT)
+            extra_shift.x = label_size.x /*+ (run_dim == 1 ? 1 : 0)*/;
+          else if (alignment.x == VTK_TEXT_RIGHT)
+            extra_shift.x = -label_size.x ;
 
-          if (alignment.y() == VTK_TEXT_BOTTOM)
-            extra_shift.y() = label_size.y() /*+ (run_dim == 1 ? 1 : 0)*/;
-          else if (alignment.y() == VTK_TEXT_TOP)
-            extra_shift.y() = -label_size.y();
+          if (alignment.y == VTK_TEXT_BOTTOM)
+            extra_shift.y = label_size.y /*+ (run_dim == 1 ? 1 : 0)*/;
+          else if (alignment.y == VTK_TEXT_TOP)
+            extra_shift.y = -label_size.y;
            
           // auto extra_label_length =
-          //   alignment.x() == VTK_TEXT_CENTERED ? /*1.5**/label_size.y() :
-          //   alignment.y() == VTK_TEXT_CENTERED ? /*1.5**/label_size.x() :
-          //   /*1.2**/std::max(label_size.x(), label_size.y());
+          //   alignment.x == VTK_TEXT_CENTERED ? /*1.5**/label_size.y :
+          //   alignment.y == VTK_TEXT_CENTERED ? /*1.5**/label_size.x :
+          //   /*1.2**/std::max(label_size.x, label_size.y);
           
           
           axis_label_pos =
             axis_label_pos
             + viewport_tick_dir * (tick_length + label_to_length)
             + extra_shift*(
-                alignment.x() != VTK_TEXT_CENTERED && alignment.y() != VTK_TEXT_CENTERED ? 1.2 /* Diagonal */ : 
-                alignment.x() == VTK_TEXT_CENTERED ? 1.5 /* Top/Bottom */ : 
+                alignment.x != VTK_TEXT_CENTERED && alignment.y != VTK_TEXT_CENTERED ? 1.2 /* Diagonal */ : 
+                alignment.x == VTK_TEXT_CENTERED ? 1.5 /* Top/Bottom */ : 
                 1.35 /* Left/Right */
               ); 
         
           text_actor->GetPositionCoordinate()->SetValue(
-            axis_label_pos.x(),
-            axis_label_pos.y());
+            axis_label_pos.x,
+            axis_label_pos.y);
           
           text_actor->VisibilityOn();
         }
@@ -721,7 +721,12 @@ namespace dpl::vtk
       vector3d min{bounds[0], bounds[2], bounds[4]};
 
       auto size = vector3d{bounds[1], bounds[3], bounds[5]} - min;
-      vector3i count = (size/size.min()*4).min(7.0);
+      vector3i count = size/size.min()*4;
+      count.x = std::min(7, count.x);
+      count.y = std::min(7, count.y);
+      count.z = std::min(7, count.z);
+      
+      
       auto step = size/(count - 1);
       
       min = min/scale_;
@@ -778,8 +783,8 @@ namespace dpl::vtk
 //
 // int on_screen = 0;
 // for (int i = 0; i < 4; ++i) {
-//   if (0 <= face_triangle_display[i].x() && face_triangle_display[i].x() <= viewport_size.x() &&
-//       0 <= face_triangle_display[i].y() && face_triangle_display[i].y() <= viewport_size.y())
+//   if (0 <= face_triangle_display[i].x && face_triangle_display[i].x <= viewport_size.x &&
+//       0 <= face_triangle_display[i].y && face_triangle_display[i].y <= viewport_size.y)
 //     ++on_screen;
 // }
 

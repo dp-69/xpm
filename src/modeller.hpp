@@ -64,7 +64,7 @@ namespace xpm
 
       ranges::transform(
         primary ? invasion_task_.primary().pc : invasion_task_.secondary().pc,
-        dst(rows), [f](const dpl::vector2d& p) { return fmt::format(f, p.x(), p.y()); });
+        dst(rows), [f](const dpl::vector2d& p) { return fmt::format(f, p.x, p.y); });
 
       stringstream ss;
       ss << begin << rows.front();
@@ -120,8 +120,8 @@ namespace xpm
             nlohmann::json ph1;
 
             for (const auto& p : invasion_task_.primary().kr | std::views::reverse) {
-              ph0.push_back(dpl::vector2d{p.x(), p.y()});
-              ph1.push_back(dpl::vector2d{p.x(), p.z()});
+              ph0.push_back(dpl::vector2d{p.x, p.y});
+              ph1.push_back(dpl::vector2d{p.x, p.z});
             }
                 
             k0.push_back(ph0);
@@ -135,8 +135,8 @@ namespace xpm
             nlohmann::json ph1;
 
             for (const auto& p : invasion_task_.secondary().kr) {
-              ph0.push_back(dpl::vector2d{p.x(), p.y()});
-              ph1.push_back(dpl::vector2d{p.x(), p.z()});
+              ph0.push_back(dpl::vector2d{p.x, p.y});
+              ph1.push_back(dpl::vector2d{p.x, p.z});
             }
 
             k1.push_back(ph0);
@@ -162,7 +162,7 @@ namespace xpm
 
       ranges::transform(
         primary ? invasion_task_.primary().kr : invasion_task_.secondary().kr,
-        dst(rows), [f](const dpl::vector3d& p) { return fmt::format(f, p.x(), p.y(), p.z()); });
+        dst(rows), [f](const dpl::vector3d& p) { return fmt::format(f, p.x, p.y, p.z); });
 
       stringstream ss;
       ss << begin << rows.front();
@@ -266,8 +266,8 @@ namespace xpm
       //   for (int c = 0; c < 2; ++c)
       //     for (auto& p : cfg_.image.darcy.info[i].pc_to_sw[c] /*cfg_.image.darcy.info[i].pc_to_sw*/)
       //       for (int k = 0; k < *i; ++k)
-      //         // p.x() *= 1.0;
-      //         p.x() *= 1.2;    
+      //         // p.x *= 1.0;
+      //         p.x *= 1.2;    
       // }
 
 
@@ -474,8 +474,8 @@ namespace xpm
         using namespace presets;
 
         petrophysics_summary_.perm_total = {
-          inlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000,
-          outlet*(pn_.physical_size.x()/(pn_.physical_size.y()*pn_.physical_size.z()))/darcy_to_m2*1000
+          inlet*(pn_.physical_size.x/(pn_.physical_size.y*pn_.physical_size.z))/darcy_to_m2*1000,
+          outlet*(pn_.physical_size.x/(pn_.physical_size.y*pn_.physical_size.z))/darcy_to_m2*1000
         };
 
         std::cout << fmt::format(

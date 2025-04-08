@@ -89,13 +89,13 @@ namespace dpl::vtk
       for (auto i = prev->first; i < curr->first; ++i) {          
         auto coef = (i - prev->first)/width;                  // NOLINT(clang-diagnostic-implicit-int-float-conversion, bugprone-narrowing-conversions)
         auto interp = dpl::lerp(prev->second, curr->second, coef);
-        lut->SetTableValue(i, interp.x(), interp.y(), interp.z());
+        lut->SetTableValue(i, interp.x, interp.y, interp.z);
       }
         
       prev = curr;
     }
 
-    lut->SetTableValue(prev->first, prev->second.x(), prev->second.y(), prev->second.z());           
+    lut->SetTableValue(prev->first, prev->second.x, prev->second.y, prev->second.z);           
   }
 
   inline void PopulateLutRedWhiteBlue(vtkLookupTable* lut, const int entries = 1000) {

@@ -63,9 +63,9 @@ namespace xpm
     auto norm = dir.normalise();
     
     return {
-      asin(norm.z())/std::numbers::pi*180.0, 
+      asin(norm.z)/std::numbers::pi*180.0, 
       0.0f,                                                  
-      (atan2(-norm.x(), norm.y())/std::numbers::pi*180.0)      
+      (atan2(-norm.x, norm.y)/std::numbers::pi*180.0)      
     };
   }
   

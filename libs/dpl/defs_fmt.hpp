@@ -58,7 +58,7 @@ struct fmt::formatter<dpl::vector_n<T, 3>>
 
   template <typename FormatContext>
   auto format(const dpl::vector_n<T, 3>& v, FormatContext& ctx) const {
-    return fmt::format_to(ctx.out(), "({}, {}, {})", v.x(), v.y(), v.z());
+    return fmt::format_to(ctx.out(), "({}, {}, {})", v.x, v.y, v.z);
   }
 };
 

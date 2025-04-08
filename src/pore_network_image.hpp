@@ -109,9 +109,9 @@ namespace xpm
     }
 
     static void parse_text(char* &ptr, dpl::vector3d& val) {
-      parse_text(ptr, val.x());
-      parse_text(ptr, val.y());
-      parse_text(ptr, val.z());
+      parse_text(ptr, val.x);
+      parse_text(ptr, val.y);
+      parse_text(ptr, val.z);
     }
 
     static void parse_bin(char* &src, auto& dst) {
@@ -291,7 +291,7 @@ namespace xpm
     //   for (size_t i = 0; i < throat_count; ++i) {
     //     dpl::vector2i pair;
     //     parse_bin(ptr, pair);
-    //     throat_[adj][i] = {{pair.x()}, {pair.y()}};
+    //     throat_[adj][i] = {{pair.x}, {pair.y}};
     //   }
     //
     //   parse_bin(ptr, throat_.ptr(r_ins), throat_count);
@@ -503,8 +503,8 @@ namespace xpm
       }
 
       std::array perm = {
-        macro_mult*inlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000,
-        macro_mult*outlet_flow*(physical_size.x()/(physical_size.y()*physical_size.z()))/presets::darcy_to_m2*1000
+        macro_mult*inlet_flow*(physical_size.x/(physical_size.y*physical_size.z))/presets::darcy_to_m2*1000,
+        macro_mult*outlet_flow*(physical_size.x/(physical_size.y*physical_size.z))/presets::darcy_to_m2*1000
       };
 
       std::cout << fmt::format(
@@ -733,14 +733,14 @@ namespace xpm
         boost::iostreams::mapped_file_source file(path.string() + "_VElems.raw");
         const auto* file_ptr = reinterpret_cast<const std::int32_t*>(file.data());
 
-        idx3d_t velems_factor{1, dim_.x() + 2, (dim_.x() + 2)*(dim_.y() + 2)};
+        idx3d_t velems_factor{1, dim_.x + 2, (dim_.x + 2)*(dim_.y + 2)};
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < dim_.z(); ++k)
-          for (j = 0; j < dim_.y(); ++j) 
-            for (i = 0; i < dim_.x(); ++i, ++idx1d)
+        for (k = 0; k < dim_.z; ++k)
+          for (j = 0; j < dim_.y; ++j) 
+            for (i = 0; i < dim_.x; ++i, ++idx1d)
               if (auto val = file_ptr[velems_factor.dot(ijk + 1)]; val > 0)
                 *velem[idx1d] = val - 2;
       }
@@ -751,9 +751,9 @@ namespace xpm
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < dim_.z(); ++k)
-          for (j = 0; j < dim_.y(); ++j) 
-            for (i = 0; i < dim_.x(); ++i, ++idx1d)
+        for (k = 0; k < dim_.z; ++k)
+          for (j = 0; j < dim_.y; ++j) 
+            for (i = 0; i < dim_.x; ++i, ++idx1d)
               if (is_darcy(idx1d)) {
                 velem_t adj{velem_t::invalid()};
 
@@ -870,9 +870,9 @@ namespace xpm
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j)
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (img_->is_darcy(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy
                   ds.union_set(
@@ -902,12 +902,12 @@ namespace xpm
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j) {
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j) {
             if (voxel_t inlet_idx1d{img_->idx_map(0, j, k)}; img_->is_darcy(inlet_idx1d)) // darcy-inlet
               inlet[ds.find_set(*total(inlet_idx1d))] = true;
 
-            if (voxel_t outlet_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; img_->is_darcy(outlet_idx1d)) // darcy-outlet
+            if (voxel_t outlet_idx1d{img_->idx_map(img_->dim().x - 1, j, k)}; img_->is_darcy(outlet_idx1d)) // darcy-outlet
               outlet[ds.find_set(*total(outlet_idx1d))] = true;
           }
       }
@@ -972,9 +972,9 @@ namespace xpm
         dpl::vector3i block_idx = pos/block_size;
 
         return block_idx1d(
-          std::clamp(block_idx.x(), 0, blocks.x() - 1), 
-          std::clamp(block_idx.y(), 0, blocks.y() - 1), 
-          std::clamp(block_idx.z(), 0, blocks.z() - 1));
+          std::clamp(block_idx.x, 0, blocks.x - 1), 
+          std::clamp(block_idx.y, 0, blocks.y - 1), 
+          std::clamp(block_idx.z, 0, blocks.z - 1));
       };
 
       {
@@ -992,9 +992,9 @@ namespace xpm
 
         auto cell_size = pn_->physical_size/img_->dim();
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j)
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (connected(idx1d)) { // darcy node
                 net_t net_idx = net(idx1d);
                 idx_to_block[*net_idx] = {net_idx, filter(idx1d)
@@ -1058,12 +1058,12 @@ namespace xpm
     //     auto& [i, j, k] = ijk;
     //     voxel_t idx1d{0};
     //
-    //     for (k = 0; k < img_->dim().z(); ++k)
-    //       for (j = 0; j < img_->dim().y(); ++j) {
-    //         if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d) && filter(adj_idx1d)) // darcy-outlet
+    //     for (k = 0; k < img_->dim().z; ++k)
+    //       for (j = 0; j < img_->dim().y; ++j) {
+    //         if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x - 1, j, k)}; connected(adj_idx1d) && filter(adj_idx1d)) // darcy-outlet
     //           gen.reserve(adj_idx1d, connected_count_);
     //
-    //         for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+    //         for (i = 0; i < img_->dim().x; ++i, ++idx1d)
     //           if (connected(idx1d) && filter(idx1d)) {
     //             if (img_->velem[idx1d]) // macro-darcy 
     //               if (macro_t macro{img_->velem[idx1d]}; filter(macro))
@@ -1095,12 +1095,12 @@ namespace xpm
     //     auto& [i, j, k] = ijk;
     //     voxel_t idx1d{0};
     //
-    //     for (k = 0; k < img_->dim().z(); ++k)
-    //       for (j = 0; j < img_->dim().y(); ++j) {
-    //         if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d) && filter(adj_idx1d)) // darcy-outlet
+    //     for (k = 0; k < img_->dim().z; ++k)
+    //       for (j = 0; j < img_->dim().y; ++j) {
+    //         if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x - 1, j, k)}; connected(adj_idx1d) && filter(adj_idx1d)) // darcy-outlet
     //           gen.set(adj_idx1d, connected_count_);
     //
-    //         for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+    //         for (i = 0; i < img_->dim().x; ++i, ++idx1d)
     //           if (connected(idx1d)) {
     //             if (img_->velem[idx1d]) { // macro-darcy
     //               if (macro_t macro{img_->velem[idx1d]}; filter(macro))
@@ -1142,12 +1142,12 @@ namespace xpm
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j) {
-            if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j) {
+            if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
               gen.reserve(adj_idx1d, connected_count_);
 
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
                   gen.reserve(macro_t{*img_->velem[idx1d]}, idx1d);
@@ -1183,12 +1183,12 @@ namespace xpm
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j) {
-            if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x() - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j) {
+            if (voxel_t adj_idx1d{img_->idx_map(img_->dim().x - 1, j, k)}; connected(adj_idx1d)) // darcy-outlet
               gen.set(adj_idx1d, connected_count_);
 
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (connected(idx1d)) {
                 if (img_->velem[idx1d]) // macro-darcy 
                   gen.set(macro_t{*img_->velem[idx1d]}, idx1d);
@@ -1223,9 +1223,9 @@ namespace xpm
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j)
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
                 if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{*velem})) // macro-darcy
                   builder.reserve(macro_t{*velem}, idx1d);
@@ -1265,36 +1265,36 @@ namespace xpm
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j) {
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j) {
             if (auto inlet_idx1d = img_->idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) { // darcy-inlet
-              auto coef = -2*cell_size.x()*term(inlet_idx1d);
+              auto coef = -2*cell_size.x*term(inlet_idx1d);
 
               builder.add_b(inlet_idx1d, coef/**1 Pa*/);
               builder.add_diag(inlet_idx1d, coef);
             }
 
-            if (auto outlet_idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) { // darcy-outlet
-              auto coef = -2*cell_size.x()*term(outlet_idx1d);
+            if (auto outlet_idx1d = img_->idx_map(img_->dim().x - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) { // darcy-outlet
+              auto coef = -2*cell_size.x*term(outlet_idx1d);
 
               // builder.add_b(outlet_idx1d), coef/**0 Pa*/);
               builder.add_diag(outlet_idx1d, coef);
             }
 
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (connected(idx1d) && filter(idx1d)) {
                 if (auto velem = img_->velem[idx1d]; velem && filter(macro_t{*velem})) { // macro-darcy
                   macro_t adj_macro_idx{*velem};
 
-                  // auto li = cell_size.x()/2;
+                  // auto li = cell_size.x/2;
                   auto gd = term(idx1d);
 
                   auto li = r_ins(pn_, adj_macro_idx);
                   auto gi = macro_term*term(adj_macro_idx);
 
-                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - cell_size.x()/2 - li);
+                  auto lt = std::max(0.0, (cell_size*(ijk + 0.5) - pos(pn_, adj_macro_idx)).length() - cell_size.x/2 - li);
                   
-                  auto coef = -1.0/(0.5/gd/cell_size.x() + lt/gi + li/gi);
+                  auto coef = -1.0/(0.5/gd/cell_size.x + lt/gi + li/gi);
 
                   builder.set(adj_macro_idx, idx1d, coef);
                 }
@@ -1302,7 +1302,7 @@ namespace xpm
                 dpl::sfor<3>([&](auto d) {
                   if (ijk[d] < img_->dim()[d] - 1)
                     if (auto adj_idx1d = idx1d + img_->idx_map(d); img_->is_darcy(adj_idx1d) && filter(adj_idx1d)) { // darcy-darcy
-                      auto coef = -cell_size.x()*(2/(1/term(idx1d) + 1/term(adj_idx1d)));
+                      auto coef = -cell_size.x*(2/(1/term(idx1d) + 1/term(adj_idx1d)));
                       builder.set(idx1d, adj_idx1d, coef);
                     }
                 });
@@ -1321,18 +1321,18 @@ namespace xpm
       auto inlet_flow = 0.0;
       auto outlet_flow = 0.0;
 
-      auto cell_x = (pn_->physical_size/img_->dim()).x();
+      auto cell_x = (pn_->physical_size/img_->dim()).x;
 
       {
         idx3d_t ijk;
         auto& [i, j, k] = ijk;
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j) {
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j) {
             if (auto inlet_idx1d = img_->idx_map(0, j, k); connected(inlet_idx1d) && filter(inlet_idx1d)) // darcy-inlet
               inlet_flow += -2*cell_x*term(inlet_idx1d)*(pressure[net(inlet_idx1d)] - 1);
 
-            if (auto outlet_idx1d = img_->idx_map(img_->dim().x() - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) // darcy-outlet
+            if (auto outlet_idx1d = img_->idx_map(img_->dim().x - 1, j, k); connected(outlet_idx1d) && filter(outlet_idx1d)) // darcy-outlet
               outlet_flow += -2*cell_x*term(outlet_idx1d)*(0 - pressure[net(outlet_idx1d)]);
           }
       }

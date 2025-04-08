@@ -84,9 +84,17 @@ namespace dpl
     else {
       auto size = j.size()/n;
       v.resize(size);
-      for (std::size_t i = 0; i < size; ++i)
-        for (int d = 0; d < n; ++d)
-          v[i][d] = j[i*n + d];
+      for (std::size_t i = 0; i < size; ++i) {
+        if constexpr (n == 2) {
+          v[i].x = j[i*2 + 0];
+          v[i].y = j[i*2 + 1];
+        } else if constexpr (n == 3) {
+          v[i].x = j[i*3 + 0];
+          v[i].y = j[i*3 + 1];
+          v[i].z = j[i*3 + 2];
+        }
+      }
+        
         // dpl::sfor<n>([&](auto d) {
         //   v[i][d] = j[i*n + d];
         // });

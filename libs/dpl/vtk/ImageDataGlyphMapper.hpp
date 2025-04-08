@@ -105,15 +105,11 @@ namespace dpl::vtk
       polydata->GetPointData()->SetScalars(this->color_arr_);
       polydata->SetPoints(this->points_);
 
-      // this->points_->SetDataTypeToUnsignedShort();
-
-      
-      
       this->glyph_mapper_->OrientOff();
-      this->glyph_mapper_->SetScaleFactor(half_length /*1.0*/); 
+      this->glyph_mapper_->SetScaleFactor(half_length); 
       this->glyph_mapper_->SetScaleModeToNoDataScaling();
       this->glyph_mapper_->SetInputData(polydata);
-      this->glyph_mapper_->SetSourceData(Quad( /*half_length/2*/ ));
+      this->glyph_mapper_->SetSourceData(Quad());
     }
 
     void Populate(const vector3i& cells, const vector3d& cell_size, const auto& filter) {
@@ -182,16 +178,13 @@ namespace dpl::vtk
 
           if constexpr (!sface.is_upper) {
             if (filter(idx1d)) {
-              pos[rel.i] = 0; //(0)*cell_size[e1_dim];
+              pos[rel.i] = 0;                            // (0)*cell_size[e1_dim];
               pos[rel.j] = (e1 + 0.5)*cell_size[rel.j];  // NOLINT(clang-diagnostic-implicit-int-float-conversion)
               pos[rel.k] = (e2 + 0.5)*cell_size[rel.k];  // NOLINT(clang-diagnostic-implicit-int-float-conversion) 
 
               this->points_->SetPoint(face_idx, pos);
               this->original_indices_[face_idx] = idx1d;
               ++face_idx;
-              
-              // this->points_->InsertNextPoint(pos);
-              // this->original_indices_.push_back(idx1d);
             }
           }
           
@@ -212,9 +205,6 @@ namespace dpl::vtk
                   this->points_->SetPoint(face_idx, pos);
                   this->original_indices_[face_idx] = idx1d;
                   ++face_idx;
-
-                  // this->points_->InsertNextPoint(pos);
-                  // this->original_indices_.push_back(idx1d);
                 }
               }
               else {
@@ -222,9 +212,6 @@ namespace dpl::vtk
                   this->points_->SetPoint(face_idx, pos);
                   this->original_indices_[face_idx] = adj_idx1d;
                   ++face_idx;
-                  
-                  // this->points_->InsertNextPoint(pos);
-                  // this->original_indices_.push_back(adj_idx1d);
                 }
               }
             }
@@ -242,15 +229,11 @@ namespace dpl::vtk
               this->points_->SetPoint(face_idx, pos);
               this->original_indices_[face_idx] = idx1d;
               ++face_idx;
-              
-              // this->points_->InsertNextPoint(pos);
-              // this->original_indices_.push_back(idx1d);
             }
           }
         }
 
       this->color_arr_->SetNumberOfTuples(faces_count);
-      // this->color_arr_->SetNumberOfTuples(this->points_->GetNumberOfPoints());
     }
   };
 

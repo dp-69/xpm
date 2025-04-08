@@ -104,9 +104,9 @@ namespace xpm {
       auto& [i, j, k] = ijk;
       voxel_t idx1d{0};
 
-      for (k = 0; k < dim.z(); ++k)
-        for (j = 0; j < dim.y(); ++j)
-          for (i = 0; i < dim.x(); ++i, ++idx1d)
+      for (k = 0; k < dim.z; ++k)
+        for (j = 0; j < dim.y; ++j)
+          for (i = 0; i < dim.x; ++i, ++idx1d)
             if (img.is_void(idx1d)) {
               if (auto velem = img.velem[idx1d]; velem)
                 if (macro_t macro{*velem}; pni.connected(macro))
@@ -418,7 +418,7 @@ namespace xpm {
       using eq_tr = hydraulic_properties::equilateral_triangle;
 
       auto darcy_span = cfg_->image.darcy.span();
-      auto darcy_r_cap = [](const darcy_info& d) { return 1/d.pc_to_sw[1].front().x(); };
+      auto darcy_r_cap = [](const darcy_info& d) { return 1/d.pc_to_sw[1].front().x; };
 
       so_uptr<net_t, bool> explored(pni_->connected_count());
       vector<bool> explored_throat(pn_->throat_count());
@@ -466,9 +466,9 @@ namespace xpm {
         auto& [i, j, k] = ijk;
         voxel_t idx1d{0};
 
-        for (k = 0; k < img_->dim().z(); ++k)
-          for (j = 0; j < img_->dim().y(); ++j)
-            for (i = 0; i < img_->dim().x(); ++i, ++idx1d)
+        for (k = 0; k < img_->dim().z; ++k)
+          for (j = 0; j < img_->dim().y; ++j)
+            for (i = 0; i < img_->dim().x; ++i, ++idx1d)
               if (pni_->connected(idx1d)) {
                 phase_t p = img_->phase[idx1d];
                 
@@ -572,8 +572,8 @@ namespace xpm {
             idx3d_t ijk;
             auto& [i, j, k] = ijk;
           
-            for (k = 0; k < img_->dim().z(); ++k)
-              for (j = 0; j < img_->dim().y(); ++j)
+            for (k = 0; k < img_->dim().z; ++k)
+              for (j = 0; j < img_->dim().y; ++j)
                 if (voxel_t v{img_->idx_map(0, j, k)}; pni_->connected(v)) // darcy-inlet
                   if (get_entry(vertex_t(*pni_->net(v)), g_))
                     return true;
@@ -595,7 +595,7 @@ namespace xpm {
       };
 
       if (darcy_span) {
-        const double max_pc = primary_.pc.back().y();
+        const double max_pc = primary_.pc.back().y;
 
         state_.r_cap_global = 1/max_pc;
         secondary_.pc.push_back(eval_pc_point());
@@ -612,12 +612,12 @@ namespace xpm {
           
           for (int i = 0; i < steps; ++i) {
             r_cap *= step;
-            if (auto p = eval_pc_point(); p.y() < cfg_->max_pc) {
+            if (auto p = eval_pc_point(); p.y < cfg_->max_pc) {
               state_.r_cap_global = r_cap;
               last_pc_point_ = p;
               secondary_.pc.push_back(last_pc_point_);
               if (i%2 != 0)
-                write_occupancy_image(last_pc_point_.x());
+                write_occupancy_image(last_pc_point_.x);
             }
           }
         }
@@ -657,11 +657,11 @@ namespace xpm {
       auto progress_percolation = [&]<typename Index>(Index i, double r_cap) {
         if (r_cap > state_.r_cap_global) {
           if (auto pc_point = eval_pc_point();
-            abs(last_pc_point_.x() - pc_point.x()) > cfg_->report.sw_of_pc ||
-            abs(log10(last_pc_point_.y()) - log10(pc_point.y())) > pc_max_log_step_) {
+            abs(last_pc_point_.x - pc_point.x) > cfg_->report.sw_of_pc ||
+            abs(log10(last_pc_point_.y) - log10(pc_point.y)) > pc_max_log_step_) {
             last_pc_point_ = pc_point;
             secondary_.pc.push_back(pc_point);
-            write_occupancy_image(pc_point.x());
+            write_occupancy_image(pc_point.x);
           }
 
           if (auto sw = eval_inv_volume(state_.r_cap_global)/total_pore_volume_;
@@ -818,7 +818,7 @@ namespace xpm {
       using eq_tr = hydraulic_properties::equilateral_triangle;
 
       auto darcy_span = cfg_->image.darcy.span();
-      auto darcy_r_cap = [this, darcy_span](voxel_t i) { return 1/darcy_span[img_->phase[i]].pc_to_sw[0].front().x(); };
+      auto darcy_r_cap = [this, darcy_span](voxel_t i) { return 1/darcy_span[img_->phase[i]].pc_to_sw[0].front().x; };
 
       // if (darcy_span)
       pc_max_log_step_ = 0.25;
@@ -899,17 +899,17 @@ namespace xpm {
           auto pc_point = eval_pc_point();
 
           if (
-            abs(last_pc_point_.x() - pc_point.x()) > cfg_->report.sw_of_pc ||
-            abs(log10(last_pc_point_.y()) - log10(pc_point.y())) > pc_max_log_step_)
+            abs(last_pc_point_.x - pc_point.x) > cfg_->report.sw_of_pc ||
+            abs(log10(last_pc_point_.y) - log10(pc_point.y)) > pc_max_log_step_)
           {
             last_pc_point_ = pc_point;
             primary_.pc.push_back(pc_point);
-            write_occupancy_image(pc_point.x());
+            write_occupancy_image(pc_point.x);
           }
 
-          if (last_kr_sw - pc_point.x() > cfg_->report.sw_of_kr) {
-            last_kr_sw = pc_point.x();
-            rel_calc_report(pc_point.x());
+          if (last_kr_sw - pc_point.x > cfg_->report.sw_of_kr) {
+            last_kr_sw = pc_point.x;
+            rel_calc_report(pc_point.x);
           }
 
           state_.r_cap_global = r_cap;
@@ -946,7 +946,7 @@ namespace xpm {
         if (1/r_cap > cfg_->max_pc) { /* terminating as max pc reached */
           last_pc_point_ = eval_pc_point();
           primary_.pc.push_back(last_pc_point_);
-          write_occupancy_image(last_pc_point_.x());
+          write_occupancy_image(last_pc_point_.x);
           rel_calc_report(1 - eval_inv_volume(state_.r_cap_global)/total_pore_volume_);
           break;
         }
@@ -1044,9 +1044,9 @@ namespace xpm {
       if (darcy_span) {
         auto last_pc = state_.pc_global();
 
-        if (auto pc_point = eval_pc_point(); primary_.pc.back().x() != pc_point.x()) {  // NOLINT(clang-diagnostic-float-equal)
+        if (auto pc_point = eval_pc_point(); primary_.pc.back().x != pc_point.x) {  // NOLINT(clang-diagnostic-float-equal)
           primary_.pc.push_back(pc_point);
-          write_occupancy_image(pc_point.x());
+          write_occupancy_image(pc_point.x);
         }
 
         { /* Capillary pressure */
@@ -1054,7 +1054,7 @@ namespace xpm {
 
           using views::transform;
 
-          auto darcy_max_pc = ranges::max(darcy_span | transform([](const darcy_info& d) { return d.pc_to_sw[0].back().x();  }));
+          auto darcy_max_pc = ranges::max(darcy_span | transform([](const darcy_info& d) { return d.pc_to_sw[0].back().x;  }));
 
           auto step = pow(10, (log10(darcy_max_pc) - log10(last_pc))/steps);
 
@@ -1075,7 +1075,7 @@ namespace xpm {
               primary_.pc.push_back(eval_pc_point());
             
               if (i%2 != 0)
-                write_occupancy_image(primary_.pc.back().x());
+                write_occupancy_image(primary_.pc.back().x);
 
               break;
             }
@@ -1084,7 +1084,7 @@ namespace xpm {
             primary_.pc.push_back(eval_pc_point());
           
             if (i%2 != 0) {
-              write_occupancy_image(primary_.pc.back().x());
+              write_occupancy_image(primary_.pc.back().x);
             }
           }
 
