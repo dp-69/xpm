@@ -463,7 +463,7 @@ namespace dpl
 
   template <int n, typename T = void, int i = 0> requires (n > 0)
   constexpr auto tail_aggregate(const auto& op, const auto& data) {
-    static constexpr std::integral_constant<int, i> _i; // NOLINT(CppInconsistentNaming);
+    constexpr std::integral_constant<int, i> _i{}; // NOLINT(CppInconsistentNaming);
     
     if constexpr (i == n - 1) {
       if constexpr (std::is_same_v<T, void>)

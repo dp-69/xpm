@@ -42,9 +42,9 @@ namespace dpl
       
       struct cross
       {
-        static constexpr std::integral_constant<int, 0> _0;
-        static constexpr std::integral_constant<int, 1> _1;
-        static constexpr std::integral_constant<int, 2> _2;
+        static constexpr std::integral_constant<int, 0> _0{};
+        static constexpr std::integral_constant<int, 1> _1{};
+        static constexpr std::integral_constant<int, 2> _2{};
         
         static constexpr auto x = [](const auto& a, const auto& b) { return a[_1]*b[_2] - a[_2]*b[_1]; };
         static constexpr auto y = [](const auto& a, const auto& b) { return a[_2]*b[_0] - a[_0]*b[_2]; };
@@ -60,7 +60,7 @@ namespace dpl
   template <typename Derived_, typename T_, int n_>
   class _vector_oper
   {
-    static constexpr std::integral_constant<int, 0> _0;
+    static constexpr std::integral_constant<int, 0> _0{};
     
     template <typename U_, typename Func_>
     constexpr auto _binary_op_impl_ptr(U_* r, const Func_& f) const {
@@ -163,9 +163,9 @@ namespace dpl
     }
 
   private:
-    static constexpr std::integral_constant<int, 0> _0;
-    static constexpr std::integral_constant<int, 1> _1;
-    static constexpr std::integral_constant<int, 2> _2;
+    static constexpr std::integral_constant<int, 0> _0{};
+    static constexpr std::integral_constant<int, 1> _1{};
+    static constexpr std::integral_constant<int, 2> _2{};
     
   public:
     operator T*() { return &x; }
@@ -252,9 +252,9 @@ namespace dpl
     }
     
   private:
-    static constexpr std::integral_constant<int, 0> _0;
-    static constexpr std::integral_constant<int, 1> _1;
-    static constexpr std::integral_constant<int, 2> _2;
+    static constexpr std::integral_constant<int, 0> _0{};
+    static constexpr std::integral_constant<int, 1> _1{};
+    static constexpr std::integral_constant<int, 2> _2{};
 
 
   public:
