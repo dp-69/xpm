@@ -57,23 +57,20 @@ message("VTK_VERSION: " ${VTK_VERSION})
 add_executable(xpm # WIN32
   "src/widget.hpp"  
   "src/main.cpp"
-  
-  
-  "libs/dpl/qt/property_editor/Editors.hpp"
-  "libs/dpl/qt/property_editor/PropertyEntities.hpp"
-  "libs/dpl/qt/property_editor/QPropertyTreeView.hpp"
 )
+
 
 target_include_directories(xpm PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_compile_features(xpm PUBLIC cxx_std_20)
 
-target_compile_definitions(xpm PRIVATE XPM_DEBUG_OUTPUT)
-
 
 add_subdirectory(libs/dpl)
 target_link_libraries(xpm PRIVATE dpl)
+target_sources(xpm PRIVATE ${DPL_PROPERTY_TREE_SOURCES})
+
 
 add_subdirectory(libs/pnextract)
+
 
 if(MSVC)  
   target_compile_options(pnextract PRIVATE -w)
@@ -90,6 +87,7 @@ endif()
 
 set_target_properties(pnextract
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pnextract")
+
 
 if(Qt6_FOUND)
   target_link_libraries(xpm PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets Qt6::Charts)

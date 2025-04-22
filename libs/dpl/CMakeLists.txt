@@ -23,4 +23,11 @@
 
 add_library(dpl INTERFACE)
 
-target_include_directories(dpl INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_include_directories(dpl INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+set(DPL_PROPERTY_TREE_SOURCES
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/dpl/qt/property_editor/Editors.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/dpl/qt/property_editor/PropertyEntities.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/dpl/qt/property_editor/QPropertyTreeView.hpp"
+  PARENT_SCOPE
+)

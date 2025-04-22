@@ -325,11 +325,9 @@ namespace xpm
 
       pn_.read_from_text_file(pnm_path);
 
-      #ifdef XPM_DEBUG_OUTPUT
-        std::cout
-          << fmt::format("network\n  nodes: {:L}\n  throats: {:L}\n", pn_.node_count(), pn_.throat_count())
-          << (pn_.eval_inlet_outlet_connectivity() ? "  (connected)" : "  (disconected)") << '\n';
-      #endif
+      std::cout
+        << fmt::format("network\n  nodes: {:L}\n  throats: {:L}\n", pn_.node_count(), pn_.throat_count())
+        << (pn_.eval_inlet_outlet_connectivity() ? "  (connected)" : "  (disconected)") << '\n';
 
         
       petrophysics_summary_.perm_macro = 
@@ -340,7 +338,6 @@ namespace xpm
       #endif
 
       std::cout << '\n';
-
       
 
       petrophysics_summary_.total_porosity = img_.read_image(cfg_.image);
